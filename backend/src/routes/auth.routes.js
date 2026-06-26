@@ -10,7 +10,7 @@ const router = Router();
 const registerSchema = Joi.object({
   full_name:        Joi.string().min(2).max(100).required(),
   email:            Joi.string().email().lowercase().required(),
-  phone:            Joi.string().pattern(/^\+?[0-9]{8,15}$/).optional().allow("", null),
+  phone:            Joi.string().pattern(/^\+?[\d\s\-]{8,20}$/).optional().allow("", null),
   password:         Joi.string().min(8).required(),
   role:             Joi.string().valid("client", "restaurateur").default("client"),
   restaurant_name:  Joi.when("role", { is: "restaurateur", then: Joi.string().min(2).required(), otherwise: Joi.optional() }),

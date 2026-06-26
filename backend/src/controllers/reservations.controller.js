@@ -1,0 +1,237 @@
+/**
+ * Reservations Controller — TablièreCI
+ * create | list | getOne | confirm | cancel
+ */
+
+import { query, withTransaction } from "../config/db.js";
+import { cache }  from "../config/redis.js";
+import { ok, created, notFound, forbidden, paginated } from "../utils/response.js";
+import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { notificationQueue }      from "../queues/index.js";
+import { logger }                 from "../utils/logger.js";
+
+// ── POST /reservations ────────────────────────────────────────────────────────
+export const create = asyncHandler(async (req, res) => {
+  const { restaurant_id, table_id, reserved_at, party_size, special_request } = req.body;
+
+  // Vérifier que le restaurant est actif
+  const { rows: [resto] } = await query(
+    "SELECT id, name, capacity FROM restaurants WHERE id = $1 AND status = 'actif'",
+    [restaurant_id]
+  );
+  if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
+  if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
+
+  // Vérifier que la table n'est pas déjà réservée sur ce créneau
+  if (table_id) {
+    const { rows: [conflict] } = await query(
+      `SELECT id FROM reservations
+       WHERE table_id = $1
+         AND reserved_at::date = $2::date
+         AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < 7200
+         AND status IN ('en_attente','confirme')`,
+      [table_id, reserved_at]
+    );
+    if (conflict) throw new AppError("Cette table est déjà réservée sur ce créneau", 409);
+  }
+
+  const resa = await withTransaction(async (client) => {
+    const { rows: [newResa] } = await client.query(
+      `INSERT INTO reservations
+         (restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'en_attente')
+       RETURNING *`,
+      [restaurant_id, req.user.id, table_id || null, reserved_at, party_size, special_request || null]
+    );
+
+    // Marquer la table comme réservée
+    if (table_id) {
+      await client.query(
+        "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1",
+        [table_id]
+      );
+    }
+
+    return newResa;
+  });
+
+  // Notification WhatsApp asynchrone
+  await notificationQueue.add("confirmation", {
+    userId:         req.user.id,
+    restoName:      resto.name,
+    reservedAt:     reserved_at,
+    partySize:      party_size,
+    reservationRef: resa.ref,
+  }).catch(() => {}); // ne pas bloquer si Redis absent
+
+  logger.info("Réservation créée", { resaId: resa.id, ref: resa.ref, userId: req.user.id });
+  return created(res, { reservation: resa }, "Réservation créée avec succès");
+});
+
+// ── GET /reservations ─────────────────────────────────────────────────────────
+export const list = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, status, date } = req.query;
+  const offset = (page - 1) * limit;
+  const isAdmin = req.user.role === "admin";
+  const isResto = req.user.role === "restaurateur";
+
+  const params = [];
+  const conditions = [];
+
+  if (isResto) {
+    params.push(req.user.restaurant_id);
+    conditions.push(`r.restaurant_id = $${params.length}`);
+  } else if (!isAdmin) {
+    params.push(req.user.id);
+    conditions.push(`r.client_id = $${params.length}`);
+  }
+
+  if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
+  if (date)   { params.push(date);   conditions.push(`r.reserved_at::date = $${params.length}::date`); }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const { rows } = await query(
+    `SELECT r.*, re.name AS resto_name, re.slug AS resto_slug,
+            u.full_name AS client_name, u.phone AS client_phone,
+            t.label AS table_label, t.zone AS table_zone
+     FROM reservations r
+     JOIN restaurants re ON re.id = r.restaurant_id
+     JOIN users u ON u.id = r.client_id
+     LEFT JOIN restaurant_tables t ON t.id = r.table_id
+     ${where}
+     ORDER BY r.reserved_at DESC
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+
+  const { rows: [{ count }] } = await query(
+    `SELECT COUNT(*) FROM reservations r ${where}`, params
+  );
+
+  return paginated(res, rows, +count, +page, +limit);
+});
+
+// ── GET /reservations/:id ─────────────────────────────────────────────────────
+export const getOne = asyncHandler(async (req, res) => {
+  const { rows: [resa] } = await query(
+    `SELECT r.*, re.name AS resto_name, re.slug AS resto_slug, re.address, re.phone AS resto_phone,
+            u.full_name AS client_name, u.phone AS client_phone,
+            t.label AS table_label, t.zone AS table_zone,
+            p.status AS payment_status, p.method AS payment_method, p.amount AS payment_amount
+     FROM reservations r
+     JOIN restaurants re ON re.id = r.restaurant_id
+     JOIN users u ON u.id = r.client_id
+     LEFT JOIN restaurant_tables t ON t.id = r.table_id
+     LEFT JOIN payments p ON p.reservation_id = r.id
+     WHERE r.id = $1`,
+    [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  // Vérifier droits d'accès
+  _assertAccess(req, resa);
+
+  return ok(res, { reservation: resa });
+});
+
+// ── PATCH /reservations/:id/confirm ──────────────────────────────────────────
+export const confirm = asyncHandler(async (req, res) => {
+  const { rows: [resa] } = await query(
+    "SELECT * FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
+    throw new AppError("Accès refusé", 403);
+  }
+  if (resa.status !== "en_attente") throw new AppError("Seules les réservations en attente peuvent être confirmées", 400);
+
+  const { rows: [updated] } = await query(
+    `UPDATE reservations
+     SET status = 'confirme', confirmed_at = NOW(), updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [req.params.id]
+  );
+
+  // Notifier le client
+  await notificationQueue.add("confirmation_client", {
+    reservationId: resa.id,
+  }).catch(() => {});
+
+  logger.info("Réservation confirmée", { resaId: resa.id, ref: resa.ref });
+  return ok(res, { reservation: updated }, "Réservation confirmée");
+});
+
+// ── PATCH /reservations/:id/cancel ───────────────────────────────────────────
+export const cancel = asyncHandler(async (req, res) => {
+  const { cancel_reason } = req.body;
+  const { rows: [resa] } = await query(
+    "SELECT * FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  _assertAccess(req, resa);
+
+  if (["annule","termine","no_show"].includes(resa.status)) {
+    throw new AppError("Cette réservation ne peut plus être annulée", 400);
+  }
+
+  // Vérifier délai d'annulation (au moins 2h avant)
+  const now = new Date();
+  const resaTime = new Date(resa.reserved_at);
+  const hoursLeft = (resaTime - now) / 3_600_000;
+  if (req.user.role === "client" && hoursLeft < 2) {
+    throw new AppError("Annulation impossible moins de 2h avant la réservation", 400);
+  }
+
+  const { rows: [updated] } = await query(
+    `UPDATE reservations
+     SET status = 'annule', cancelled_at = NOW(), cancel_reason = $1, updated_at = NOW()
+     WHERE id = $2 RETURNING *`,
+    [cancel_reason || null, req.params.id]
+  );
+
+  // Libérer la table si elle était réservée
+  if (resa.table_id) {
+    await query(
+      "UPDATE restaurant_tables SET status = 'libre' WHERE id = $1",
+      [resa.table_id]
+    );
+  }
+
+  logger.info("Réservation annulée", { resaId: resa.id, ref: resa.ref });
+  return ok(res, { reservation: updated }, "Réservation annulée");
+});
+
+// ── PATCH /reservations/:id/no-show ─────────────────────────────────────────
+export const noShow = asyncHandler(async (req, res) => {
+  const { rows: [resa] } = await query(
+    "SELECT * FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
+    throw new AppError("Accès refusé", 403);
+  }
+
+  const { rows: [updated] } = await query(
+    `UPDATE reservations SET status = 'no_show', no_show_at = NOW(), updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [req.params.id]
+  );
+
+  if (resa.table_id) {
+    await query("UPDATE restaurant_tables SET status = 'libre' WHERE id = $1", [resa.table_id]);
+  }
+
+  return ok(res, { reservation: updated }, "No-show enregistré");
+});
+
+// ── Helper ─────────────────────────────────────────────────────────────────────
+function _assertAccess(req, resa) {
+  if (req.user.role === "admin") return;
+  if (req.user.role === "restaurateur" && req.user.restaurant_id === resa.restaurant_id) return;
+  if (req.user.id === resa.client_id) return;
+  throw new AppError("Accès refusé", 403);
+}

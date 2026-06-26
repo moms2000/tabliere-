@@ -35,7 +35,14 @@ export default function Connexion() {
         navigate("/", { replace: true });
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Email ou mot de passe incorrect");
+      const status = err.response?.status;
+      if (status === 401 || status === 400) {
+        setError("Email ou mot de passe incorrect.");
+      } else if (status === 403) {
+        setError("Votre compte a été suspendu. Contactez le support.");
+      } else {
+        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez.");
+      }
     } finally {
       setLoading(false);
     }

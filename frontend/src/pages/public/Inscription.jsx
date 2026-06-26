@@ -31,11 +31,17 @@ export default function Inscription() {
         role:            type,
         restaurant_name: type === "restaurateur" ? form.resto : undefined,
       });
-      // Auto-login après inscription
-      await login(form.email, form.password);
+      try { await login(form.email, form.password); } catch (_) {}
       setStep(3);
     } catch (err) {
-      setError(err.response?.data?.message || "Une erreur est survenue lors de l'inscription");
+      const status = err.response?.status;
+      if (status === 409) {
+        setError("Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.");
+      } else if (status === 400) {
+        setError(err.response?.data?.message || "Vérifiez les informations saisies.");
+      } else {
+        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez.");
+      }
     } finally {
       setLoading(false);
     }
@@ -124,6 +130,13 @@ export default function Inscription() {
             </p>
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              {error && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#FEF2F2",
+                  border: "0.5px solid #FECACA", borderRadius: 8, padding: "10px 13px" }}>
+                  <AlertCircle size={15} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span style={{ fontSize: 13, color: "#DC2626", lineHeight: 1.4 }}>{error}</span>
+                </div>
+              )}
               <Field icon={User}  label="Nom complet"   type="text"     value={form.nom}      onChange={v => set("nom", v)}      placeholder="Ex : Fatou Amara" />
               <Field icon={Mail}  label="E-mail"        type="email"    value={form.email}    onChange={v => set("email", v)}    placeholder="vous@exemple.com" />
               <Field icon={Phone} label="WhatsApp"      type="tel"      value={form.tel}      onChange={v => set("tel", v)}      placeholder="+225 07 00 00 00 00" />
@@ -148,11 +161,11 @@ export default function Inscription() {
                 </div>
               </div>
 
-              <motion.button whileTap={{ scale: 0.97 }} type="submit"
-                style={{ background: G, color: "white", border: "none", borderRadius: 9,
-                  padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer",
-                  marginTop: 4 }}>
-                Créer mon compte
+              <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={loading}
+                style={{ background: loading ? "#a0cfbe" : G, color: "white", border: "none",
+                  borderRadius: 9, padding: "12px 0", fontSize: 14, fontWeight: 600,
+                  cursor: loading ? "not-allowed" : "pointer", marginTop: 4, transition: "background 0.2s" }}>
+                {loading ? "Création en cours..." : "Créer mon compte"}
               </motion.button>
             </form>
           </>

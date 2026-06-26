@@ -1,7 +1,7 @@
 import app           from "./app.js";
 import { env }       from "./config/env.js";
 import { connectDB } from "./config/db.js";
-import { redis }     from "./config/redis.js";
+import { redis, connectRedis } from "./config/redis.js";
 import { initQueues, closeQueues } from "./queues/index.js";
 import { logger }    from "./utils/logger.js";
 
@@ -12,12 +12,8 @@ async function start() {
     // Connexion PostgreSQL
     await connectDB();
 
-    // Connexion Redis (optionnelle en dev sans Redis)
-    try {
-      await redis.connect();
-    } catch (err) {
-      logger.warn("Redis non disponible — cache et queues désactivés", { error: err.message });
-    }
+    // Connexion Redis (optionnelle)
+    await connectRedis();
 
     // BullMQ workers
     try {
@@ -43,7 +39,7 @@ async function shutdown(signal) {
   logger.info(`Signal ${signal} — arrêt gracieux...`);
   try {
     await closeQueues();
-    await redis.quit();
+    if (redis) await redis.quit().catch(() => {});
     if (server) server.close(() => {
       logger.info("Serveur HTTP fermé");
       process.exit(0);

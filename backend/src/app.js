@@ -20,8 +20,22 @@ const app = express();
 
 // ── Sécurité ────────────────────────────────────────────────────────────────
 app.use(helmet());
+const allowedOrigins = env.isProd
+  ? [
+      env.FRONTEND_URL,
+      env.APP_URL,
+      /\.vercel\.app$/,          // tous les previews Vercel
+    ].filter(Boolean)
+  : "*";
+
 app.use(cors({
-  origin:      env.isProd ? [env.FRONTEND_URL, env.APP_URL] : "*",
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins === "*") return cb(null, true);
+    const ok = allowedOrigins.some((o) =>
+      o instanceof RegExp ? o.test(origin) : o === origin
+    );
+    cb(ok ? null : new Error("Not allowed by CORS"), ok);
+  },
   credentials: true,
 }));
 

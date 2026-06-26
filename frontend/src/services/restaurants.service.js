@@ -11,10 +11,15 @@ export const restaurantsService = {
     return res.data.data;
   },
 
-  async getSlots(slug, date, partySize) {
-    const res = await api.get(`/restaurants/${slug}/slots`, {
+  async getAvailability(slug, date, partySize) {
+    const res = await api.get(`/restaurants/${slug}/availability`, {
       params: { date, party_size: partySize },
     });
+    return res.data.data;
+  },
+
+  async getManage(id) {
+    const res = await api.get(`/restaurants/${id}/manage`);
     return res.data.data;
   },
 
@@ -23,8 +28,18 @@ export const restaurantsService = {
     return res.data.data;
   },
 
-  async toggleQR(id, enabled) {
-    const res = await api.patch(`/restaurants/${id}/qr`, { enabled });
+  async generateQR(id) {
+    const res = await api.post(`/restaurants/${id}/qr`);
+    return res.data.data;
+  },
+
+  async createTable(id, data) {
+    const res = await api.post(`/restaurants/${id}/tables`, data);
+    return res.data.data;
+  },
+
+  async updateTable(restoId, tableId, data) {
+    const res = await api.patch(`/restaurants/${restoId}/tables/${tableId}`, data);
     return res.data.data;
   },
 };

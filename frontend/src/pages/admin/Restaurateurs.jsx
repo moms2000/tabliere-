@@ -1,74 +1,81 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Utensils, Plus, Search, QrCode, CheckCircle, XCircle } from "lucide-react";
-import { Card, SectionHeader, PageTitle, Badge, Btn, Toggle, Table } from "../../components/ui";
-import { RESTAURATEURS, fmt } from "../../utils/data";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Utensils, Search } from "lucide-react";
+import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
+import { adminService } from "../../services/admin.service.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 
-const PLAN_BADGE = { Premium: "green", Standard: "blue", Gratuit: "gray" };
-const STATUS_BADGE = { actif: "green", suspendu: "red", "en attente": "amber" };
+const PLAN_BADGE   = { premium: "green", standard: "blue", gratuit: "gray" };
+const STATUS_BADGE = { actif: "green", suspendu: "red", en_attente: "amber", "en attente": "amber" };
+
+const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR") : "—";
 
 export default function Restaurateurs() {
-  const [search, setSearch] = useState("");
-  const [data, setData]     = useState(RESTAURATEURS);
+  const [data,    setData]    = useState([]);
+  const [total,   setTotal]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState("");
 
-  const toggleQr = (id) =>
-    setData(prev => prev.map(r => r.id === id ? { ...r, qrActive: !r.qrActive } : r));
+  useEffect(() => {
+    adminService.listRestaurants({ search: search || undefined, limit: 50 })
+      .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [search]);
 
-  const filtered = data.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.owner.toLowerCase().includes(search.toLowerCase()) ||
-    r.ville.toLowerCase().includes(search.toLowerCase())
-  );
+  const setStatus = async (id, status) => {
+    try {
+      await adminService.setRestaurantStatus(id, status);
+      setData(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    } catch (e) { console.error(e); }
+  };
 
   const cols = [
-    { key: "name",    label: "Restaurant",  render: r => (
+    { key: "name",   label: "Restaurant", render: r => (
       <div>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{r.name}</div>
-        <div style={{ fontSize: 11, color: "#aaa" }}>{r.ville}</div>
+        <div style={{ fontSize: 11, color: "#aaa" }}>{r.quartier ? `${r.quartier}, ` : ""}{r.ville}</div>
       </div>
     )},
-    { key: "owner",   label: "Gérant",      render: r => <span style={{ fontSize: 13 }}>{r.owner}</span> },
-    { key: "plan",    label: "Plan",         render: r => <Badge label={r.plan} variant={PLAN_BADGE[r.plan]} /> },
-    { key: "status",  label: "Statut",       render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status]} /> },
-    { key: "reserv",  label: "Réservations", align: "right", render: r => (
-      <span style={{ fontWeight: 500 }}>{r.reserv}</span>
-    )},
-    { key: "rating",  label: "Note",         align: "center", render: r => (
+    { key: "owner",  label: "Gérant",      render: r => <span style={{ fontSize: 13 }}>{r.owner_name || "—"}</span> },
+    { key: "plan",   label: "Plan",         render: r => <Badge label={r.plan || "gratuit"} variant={PLAN_BADGE[r.plan] || "gray"} /> },
+    { key: "status", label: "Statut",       render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status] || "gray"} /> },
+    { key: "reserv", label: "Réservations", align: "right", render: r => <span style={{ fontWeight: 500 }}>{r.resa_count || 0}</span> },
+    { key: "rating", label: "Note",         align: "center", render: r => (
       <span style={{ fontSize: 13 }}>{r.rating > 0 ? `${r.rating}/5` : "—"}</span>
     )},
-    { key: "qrActive",label: "Menu QR",      align: "center", render: r => {
-      const locked = r.plan === "Gratuit";
-      return (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          {locked
-            ? <span style={{ fontSize: 11, color: "#bbb" }}>Verrouillé</span>
-            : <Toggle value={r.qrActive} onChange={() => toggleQr(r.id)} />
-          }
-        </div>
-      );
-    }},
-    { key: "joined",  label: "Depuis",       render: r => <span style={{ fontSize: 11, color: "#999" }}>{r.joined}</span> },
+    { key: "joined", label: "Depuis",       render: r => <span style={{ fontSize: 11, color: "#999" }}>{fmtDate(r.created_at)}</span> },
+    { key: "actions",label: "",             align: "right", render: r => (
+      <div style={{ display: "flex", gap: 4 }}>
+        {r.status !== "actif" && (
+          <Btn onClick={() => setStatus(r.id, "actif")} variant="primary"
+            style={{ fontSize: 11, padding: "3px 8px" }}>Activer</Btn>
+        )}
+        {r.status !== "suspendu" && (
+          <Btn onClick={() => setStatus(r.id, "suspendu")} variant="danger"
+            style={{ fontSize: 11, padding: "3px 8px" }}>Suspendre</Btn>
+        )}
+      </div>
+    )},
   ];
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div variants={fadeUp}>
-        <PageTitle title="Restaurateurs" subtitle={`${data.length} restaurants inscrits`} />
+        <PageTitle title="Restaurateurs" subtitle={`${total} restaurants inscrits`} />
       </motion.div>
 
       <motion.div variants={fadeUp} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         {[
-          { label: "Actifs",      val: data.filter(r => r.status === "actif").length,      color: "#1D9E75" },
-          { label: "Suspendus",   val: data.filter(r => r.status === "suspendu").length,   color: "#993C1D" },
-          { label: "En attente",  val: data.filter(r => r.status === "en attente").length, color: "#854F0B" },
-          { label: "QR activé",   val: data.filter(r => r.qrActive).length,               color: "#185FA5" },
+          { label: "Actifs",     val: data.filter(r => r.status === "actif").length,                  color: "#1D9E75" },
+          { label: "Suspendus",  val: data.filter(r => r.status === "suspendu").length,               color: "#993C1D" },
+          { label: "En attente", val: data.filter(r => ["en_attente","en attente"].includes(r.status)).length, color: "#854F0B" },
+          { label: "Total",      val: total,                                                           color: "#1a1a1a" },
         ].map((s, i) => (
           <div key={i} style={{ flex: 1, background: "white", border: "0.5px solid #eee",
-            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center",
-            justifyContent: "space-between" }}>
+            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, color: "#888" }}>{s.label}</span>
             <span style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.val}</span>
           </div>
@@ -79,20 +86,21 @@ export default function Restaurateurs() {
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <SectionHeader title="Liste des restaurants" icon={Utensils} />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <div style={{ position: "relative" }}>
-                <Search size={13} style={{ position: "absolute", left: 9, top: "50%",
-                  transform: "translateY(-50%)", color: "#bbb" }} />
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Rechercher…"
-                  style={{ paddingLeft: 28, paddingRight: 10, height: 32, border: "0.5px solid #eee",
-                    borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 200 }} />
-              </div>
-              <Btn variant="primary" icon={Plus}>Ajouter</Btn>
+            <div style={{ position: "relative" }}>
+              <Search size={13} style={{ position: "absolute", left: 9, top: "50%",
+                transform: "translateY(-50%)", color: "#bbb" }} />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                style={{ paddingLeft: 28, paddingRight: 10, height: 32, border: "0.5px solid #eee",
+                  borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 200 }} />
             </div>
           </div>
-          <Table columns={cols} rows={filtered} />
-          {filtered.length === 0 && (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
+          ) : (
+            <Table columns={cols} rows={data} />
+          )}
+          {!loading && data.length === 0 && (
             <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>
               Aucun restaurant trouvé
             </div>

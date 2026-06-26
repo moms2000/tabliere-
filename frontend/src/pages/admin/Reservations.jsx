@@ -1,49 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CalendarCheck, Search, Users, Banknote } from "lucide-react";
+import { CalendarCheck, Search, Users } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Table } from "../../components/ui";
-import { RESERVATIONS, fmt } from "../../utils/data";
+import { adminService } from "../../services/admin.service.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 
-const STATUS_BADGE   = { confirmé: "green", "en attente": "amber", annulé: "red" };
-const PAYMENT_BADGE  = { "MTN MoMo": "amber", "Wave": "blue", "Orange Money": "amber", "Carte bancaire": "gray", "—": "gray" };
+const STATUS_BADGE = {
+  confirme: "green", en_attente: "amber", annule: "red",
+  confirmé: "green", "en attente": "amber", annulé: "red",
+};
+
+const fmt     = (n) => n ? Number(n).toLocaleString("fr-FR") + " F" : "—";
+const fmtDate = (dt) => dt
+  ? new Date(dt).toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+  : "—";
 
 export default function Reservations() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("tous");
+  const [data,    setData]    = useState([]);
+  const [total,   setTotal]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState("");
+  const [filter,  setFilter]  = useState("tous");
 
-  const filtered = RESERVATIONS.filter(r => {
-    const matchSearch = r.client.toLowerCase().includes(search.toLowerCase()) ||
-      r.resto.toLowerCase().includes(search.toLowerCase()) ||
-      r.id.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === "tous" || r.status === filter;
-    return matchSearch && matchFilter;
-  });
+  useEffect(() => {
+    const params = { limit: 50 };
+    if (filter !== "tous") params.status = filter;
+    adminService.listReservations(params)
+      .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [filter]);
 
-  const total = RESERVATIONS.reduce((a, r) => a + r.montant, 0);
+  const filtered = search
+    ? data.filter(r =>
+        (r.client_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (r.resto_name  || "").toLowerCase().includes(search.toLowerCase()) ||
+        (r.ref         || "").toLowerCase().includes(search.toLowerCase())
+      )
+    : data;
 
   const cols = [
-    { key: "id",      label: "ID",            render: r => (
-      <span style={{ fontFamily: "monospace", fontSize: 11, color: "#999" }}>{r.id}</span>
-    )},
-    { key: "client",  label: "Client",         render: r => <span style={{ fontWeight: 500 }}>{r.client}</span> },
-    { key: "resto",   label: "Restaurant",      render: r => <span style={{ fontSize: 12, color: "#666" }}>{r.resto}</span> },
-    { key: "date",    label: "Date & Heure",    render: r => <span style={{ fontSize: 12 }}>{r.date}</span> },
-    { key: "pers",    label: "Pers.",           align: "center", render: r => (
+    { key: "ref",    label: "Réf",           render: r => <span style={{ fontFamily: "monospace", fontSize: 11, color: "#999" }}>{r.ref}</span> },
+    { key: "client", label: "Client",          render: r => <span style={{ fontWeight: 500 }}>{r.client_name || "—"}</span> },
+    { key: "resto",  label: "Restaurant",      render: r => <span style={{ fontSize: 12, color: "#666" }}>{r.resto_name || "—"}</span> },
+    { key: "date",   label: "Date & Heure",    render: r => <span style={{ fontSize: 12 }}>{fmtDate(r.reserved_at)}</span> },
+    { key: "pers",   label: "Pers.",           align: "center", render: r => (
       <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
-        <Users size={12} color="#999" /><span style={{ fontSize: 12 }}>{r.pers}</span>
+        <Users size={12} color="#999" /><span style={{ fontSize: 12 }}>{r.party_size}</span>
       </div>
     )},
-    { key: "table",   label: "Table",          align: "center", render: r => (
-      <span style={{ fontWeight: 500, fontSize: 12 }}>{r.table}</span>
+    { key: "montant",label: "Arrhes",          align: "right", render: r => (
+      <span style={{ fontWeight: 500 }}>{fmt(r.arrhes_amount)}</span>
     )},
-    { key: "payment", label: "Paiement",        render: r => <Badge label={r.payment} variant={PAYMENT_BADGE[r.payment] || "gray"} /> },
-    { key: "montant", label: "Montant",         align: "right", render: r => (
-      <span style={{ fontWeight: 500 }}>{r.montant ? fmt(r.montant) : "—"}</span>
-    )},
-    { key: "status",  label: "Statut",          render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status]} /> },
+    { key: "status", label: "Statut",          render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status] || "gray"} /> },
   ];
 
   return (
@@ -54,16 +65,15 @@ export default function Reservations() {
 
       <motion.div variants={fadeUp} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         {[
-          { label: "Total",       val: RESERVATIONS.length,                                        color: "#1a1a1a" },
-          { label: "Confirmées",  val: RESERVATIONS.filter(r => r.status === "confirmé").length,   color: "#1D9E75" },
-          { label: "En attente",  val: RESERVATIONS.filter(r => r.status === "en attente").length, color: "#854F0B" },
-          { label: "Chiffre d'affaires", val: fmt(total),                                          color: "#185FA5" },
+          { label: "Total",       val: total,                                                              color: "#1a1a1a" },
+          { label: "Confirmées",  val: data.filter(r => ["confirme","confirmé"].includes(r.status)).length, color: "#1D9E75" },
+          { label: "En attente",  val: data.filter(r => ["en_attente","en attente"].includes(r.status)).length, color: "#854F0B" },
+          { label: "Annulées",    val: data.filter(r => ["annule","annulé"].includes(r.status)).length,    color: "#993C1D" },
         ].map((s, i) => (
           <div key={i} style={{ flex: 1, background: "white", border: "0.5px solid #eee",
-            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center",
-            justifyContent: "space-between" }}>
+            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, color: "#888" }}>{s.label}</span>
-            <span style={{ fontSize: i === 3 ? 14 : 20, fontWeight: 600, color: s.color }}>{s.val}</span>
+            <span style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.val}</span>
           </div>
         ))}
       </motion.div>
@@ -71,17 +81,15 @@ export default function Reservations() {
       <motion.div variants={fadeUp}>
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <SectionHeader title="Historique des réservations" icon={CalendarCheck} />
+            <SectionHeader title="Historique" icon={CalendarCheck} />
             <div style={{ display: "flex", gap: 8 }}>
-              {["tous", "confirmé", "en attente", "annulé"].map(f => (
+              {["tous","confirme","en_attente","annule"].map(f => (
                 <button key={f} onClick={() => setFilter(f)}
                   style={{ fontSize: 11, padding: "4px 12px", borderRadius: 8, cursor: "pointer",
-                    border: "0.5px solid",
-                    borderColor: filter === f ? "#1D9E75" : "#eee",
+                    border: "0.5px solid", borderColor: filter === f ? "#1D9E75" : "#eee",
                     background: filter === f ? "#E1F5EE" : "white",
-                    color: filter === f ? "#1D9E75" : "#666",
-                    textTransform: "capitalize" }}>
-                  {f}
+                    color: filter === f ? "#1D9E75" : "#666", textTransform: "capitalize" }}>
+                  {f.replace("_"," ")}
                 </button>
               ))}
               <div style={{ position: "relative" }}>
@@ -94,8 +102,12 @@ export default function Reservations() {
               </div>
             </div>
           </div>
-          <Table columns={cols} rows={filtered} />
-          {filtered.length === 0 && (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
+          ) : (
+            <Table columns={cols} rows={filtered} />
+          )}
+          {!loading && filtered.length === 0 && (
             <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>
               Aucune réservation trouvée
             </div>

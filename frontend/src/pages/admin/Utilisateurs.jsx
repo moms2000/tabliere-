@@ -1,45 +1,54 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Users, Search, ShieldOff, ShieldCheck } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
-import { UTILISATEURS } from "../../utils/data";
+import { adminService } from "../../services/admin.service.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 
-const STATUS_BADGE = { actif: "green", bloqué: "red" };
+const STATUS_BADGE = { actif: "green", bloque: "red", bloqué: "red", suspendu: "red" };
+
+const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR") : "—";
 
 export default function Utilisateurs() {
-  const [search, setSearch] = useState("");
-  const [data, setData]     = useState(UTILISATEURS);
+  const [data,    setData]    = useState([]);
+  const [total,   setTotal]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState("");
 
-  const toggleBlock = (id) =>
-    setData(prev => prev.map(u =>
-      u.id === id ? { ...u, status: u.status === "actif" ? "bloqué" : "actif" } : u
-    ));
+  const load = () => {
+    adminService.listUsers({ search: search || undefined, role: "client", limit: 50 })
+      .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
 
-  const filtered = data.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.ville.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => { load(); }, [search]);
+
+  const toggleBlock = async (user) => {
+    const newStatus = user.status === "actif" ? "bloque" : "actif";
+    try {
+      await adminService.setUserStatus(user.id, newStatus);
+      setData(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
+    } catch (e) { console.error(e); }
+  };
 
   const cols = [
-    { key: "name",    label: "Utilisateur",  render: u => (
+    { key: "name",    label: "Utilisateur", render: u => (
       <div>
-        <div style={{ fontWeight: 500, fontSize: 13 }}>{u.name}</div>
+        <div style={{ fontWeight: 500, fontSize: 13 }}>{u.full_name}</div>
         <div style={{ fontSize: 11, color: "#aaa" }}>{u.email}</div>
       </div>
     )},
-    { key: "ville",   label: "Ville",        render: u => <span style={{ fontSize: 13 }}>{u.ville}</span> },
-    { key: "reserv",  label: "Réservations", align: "center", render: u => (
-      <span style={{ fontWeight: 500 }}>{u.reserv}</span>
+    { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize: 12, color: "#888" }}>{u.phone || "—"}</span> },
+    { key: "reserv", label: "Réservations", align: "center", render: u => (
+      <span style={{ fontWeight: 500 }}>{u.resa_count || 0}</span>
     )},
-    { key: "lastRes", label: "Dernière résa",render: u => <span style={{ fontSize: 12, color: "#999" }}>{u.lastRes}</span> },
-    { key: "status",  label: "Statut",       render: u => <Badge label={u.status} variant={STATUS_BADGE[u.status]} /> },
-    { key: "joined",  label: "Inscrit",      render: u => <span style={{ fontSize: 11, color: "#bbb" }}>{u.joined}</span> },
-    { key: "actions", label: "",             align: "right", render: u => (
-      <Btn onClick={() => toggleBlock(u.id)}
+    { key: "status", label: "Statut",   render: u => <Badge label={u.status} variant={STATUS_BADGE[u.status] || "gray"} /> },
+    { key: "joined", label: "Inscrit",  render: u => <span style={{ fontSize: 11, color: "#bbb" }}>{fmtDate(u.created_at)}</span> },
+    { key: "actions",label: "",         align: "right", render: u => (
+      <Btn onClick={() => toggleBlock(u)}
         variant={u.status === "actif" ? "danger" : "default"}
         icon={u.status === "actif" ? ShieldOff : ShieldCheck}
         style={{ fontSize: 11, padding: "4px 10px" }}>
@@ -51,19 +60,17 @@ export default function Utilisateurs() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div variants={fadeUp}>
-        <PageTitle title="Utilisateurs" subtitle={`${data.length} comptes enregistrés`} />
+        <PageTitle title="Utilisateurs" subtitle={`${total} comptes enregistrés`} />
       </motion.div>
 
       <motion.div variants={fadeUp} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         {[
-          { label: "Total",    val: data.length,                                    color: "#1a1a1a" },
-          { label: "Actifs",   val: data.filter(u => u.status === "actif").length,  color: "#1D9E75" },
-          { label: "Bloqués",  val: data.filter(u => u.status === "bloqué").length, color: "#993C1D" },
-          { label: "Ce mois",  val: 214,                                            color: "#185FA5" },
+          { label: "Total",   val: total,                                                           color: "#1a1a1a" },
+          { label: "Actifs",  val: data.filter(u => u.status === "actif").length,                  color: "#1D9E75" },
+          { label: "Bloqués", val: data.filter(u => ["bloque","bloqué"].includes(u.status)).length, color: "#993C1D" },
         ].map((s, i) => (
           <div key={i} style={{ flex: 1, background: "white", border: "0.5px solid #eee",
-            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center",
-            justifyContent: "space-between" }}>
+            borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, color: "#888" }}>{s.label}</span>
             <span style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.val}</span>
           </div>
@@ -83,8 +90,12 @@ export default function Utilisateurs() {
                   borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 200 }} />
             </div>
           </div>
-          <Table columns={cols} rows={filtered} />
-          {filtered.length === 0 && (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
+          ) : (
+            <Table columns={cols} rows={data} />
+          )}
+          {!loading && data.length === 0 && (
             <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>
               Aucun utilisateur trouvé
             </div>

@@ -1,0 +1,43 @@
+import api from "./api.js";
+
+export const adminService = {
+  async getStats() {
+    const res = await api.get("/admin/stats");
+    return res.data.data;
+  },
+
+  async listRestaurants(params = {}) {
+    const res = await api.get("/admin/restaurants", { params });
+    return res.data;
+  },
+
+  async setRestaurantStatus(id, status) {
+    const res = await api.patch(`/admin/restaurants/${id}/status`, { status });
+    return res.data.data;
+  },
+
+  async setRestaurantPlan(id, plan) {
+    const res = await api.patch(`/admin/restaurants/${id}/plan`, { plan });
+    return res.data.data;
+  },
+
+  async listUsers(params = {}) {
+    const res = await api.get("/admin/users", { params });
+    return res.data;
+  },
+
+  async setUserStatus(id, status) {
+    const res = await api.patch(`/admin/users/${id}/status`, { status });
+    return res.data.data;
+  },
+
+  async listReservations(params = {}) {
+    const res = await api.get("/admin/reservations", { params });
+    return res.data;
+  },
+
+  async listPayments(params = {}) {
+    const res = await api.get("/admin/payments", { params });
+    return res.data;
+  },
+};

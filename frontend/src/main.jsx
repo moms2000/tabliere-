@@ -37,7 +37,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/"                element={<Home />} />
           <Route path="/connexion"       element={<Connexion />} />
           <Route path="/inscription"     element={<Inscription />} />
-          <Route path="/restaurants/:id" element={<RestaurantDetail />} />
+          <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
 
           {/* ── Admin ────────────────────────────────────────────────────── */}
           <Route path="/admin" element={

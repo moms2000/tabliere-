@@ -18,6 +18,7 @@ import paymentsRoutes     from "./routes/payments.routes.js";
 import adminRoutes        from "./routes/admin.routes.js";
 import chatRoutes         from "./routes/chat.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
+import ordersRoutes        from "./routes/orders.routes.js";
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use(`${v1}/payments`,     paymentsRoutes);
 app.use(`${v1}/admin`,         adminRoutes);
 app.use(`${v1}/chat`,          chatRoutes);
 app.use(`${v1}/notifications`, notificationsRoutes);
+app.use(`${v1}/orders`,        ordersRoutes);
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

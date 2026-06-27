@@ -41,7 +41,7 @@ export default function RestMenu() {
   const [editItem,   setEditItem]   = useState(null);
   const [editCat,    setEditCat]    = useState(null);
   const [formCat,    setFormCat]    = useState({ name: "" });
-  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", is_active: true });
+  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true });
 
   const menuUrl = `${window.location.origin}/menu/${user?.resto_slug || ""}`;
 
@@ -114,7 +114,7 @@ export default function RestMenu() {
         setCategories(prev => prev.map(c => c.id === activeTab
           ? { ...c, items: c.items.map(i => i.id === editItem.id ? { ...i, ...payload } : i) } : c));
       } else {
-        const res = await menuService.createItem(activeTab, payload);
+        const res = await menuService.createItem({ ...payload, category_id: activeTab });
         const n = res.item || { id: Date.now(), ...payload };
         setCategories(prev => prev.map(c => c.id === activeTab
           ? { ...c, items: [...(c.items || []), n] } : c));
@@ -137,11 +137,11 @@ export default function RestMenu() {
   const openNewCat   = ()     => { setEditCat(null); setFormCat({ name: "" }); setModalCat(true); };
   const openEditItem = (item) => {
     setEditItem(item);
-    setFormItem({ name: item.name, description: item.description || "", price: item.price, is_active: item.is_active });
+    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active });
     setModalItem(true);
   };
   const openNewItem  = ()     => {
-    setEditItem(null); setFormItem({ name: "", description: "", price: "", is_active: true }); setModalItem(true);
+    setEditItem(null); setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true }); setModalItem(true);
   };
 
   const activeCategory = categories.find(c => c.id === activeTab);
@@ -311,8 +311,14 @@ export default function RestMenu() {
                     <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12,
                       padding: "11px 0", borderBottom: `0.5px solid ${BG}`,
                       opacity: item.is_active ? 1 : 0.45 }}>
-                      <div style={{ width: 4, height: 38, borderRadius: 2,
-                        background: item.is_active ? P : BORDER, flexShrink: 0 }} />
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name}
+                          style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                          onError={e => { e.target.style.display = "none"; }} />
+                      ) : (
+                        <div style={{ width: 4, height: 38, borderRadius: 2,
+                          background: item.is_active ? P : BORDER, flexShrink: 0 }} />
+                      )}
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.name}</div>
                         {item.description && (
@@ -384,6 +390,21 @@ export default function RestMenu() {
               style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
                 padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
                 outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
+          </FormField>
+          <FormField label="Photo du plat (URL)">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {formItem.image_url && (
+                <img src={formItem.image_url} alt="preview"
+                  style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                  onError={e => { e.target.style.display = "none"; }} />
+              )}
+              <Input value={formItem.image_url}
+                onChange={e => setFormItem(p => ({ ...p, image_url: e.target.value }))}
+                placeholder="https://cdn.exemple.com/plat.jpg" style={{ flex: 1 }} />
+            </div>
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
+              Hébergez l'image sur Cloudinary, ImgBB, etc. et collez l'URL ici.
+            </div>
           </FormField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <FormField label="Prix (FCFA)">

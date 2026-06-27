@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
@@ -26,11 +26,12 @@ function Logo({ size = 28 }) {
 }
 
 const NAV = [
-  { to: "/restaurant",              label: "Tableau de bord", icon: LayoutDashboard, end: true },
-  { to: "/restaurant/reservations", label: "Réservations",    icon: CalendarCheck },
-  { to: "/restaurant/plan",         label: "Plan de salle",   icon: LayoutTemplate },
-  { to: "/restaurant/menu",         label: "Menu & QR Code",  icon: Notebook },
-  { to: "/restaurant/profil",       label: "Mon restaurant",  icon: Store },
+  { to: "/restaurant",               label: "Tableau de bord", icon: LayoutDashboard, end: true },
+  { to: "/restaurant/reservations",  label: "Réservations",    icon: CalendarCheck },
+  { to: "/restaurant/plan",          label: "Plan de salle",   icon: LayoutTemplate },
+  { to: "/restaurant/menu",          label: "Menu & QR Code",  icon: Notebook },
+  { to: "/restaurant/commandes",     label: "Commandes QR",    icon: ShoppingBag },
+  { to: "/restaurant/profil",        label: "Mon restaurant",  icon: Store },
 ];
 
 function useIsMobile() {

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { CalendarCheck, Users, Star, TrendingUp, QrCode, CheckCircle, ExternalLink } from "lucide-react";
-import { StatCard, Card, SectionHeader, Badge, PageTitle, DateFilter } from "../../components/ui";
+import { StatCard, Card, SectionHeader, Badge, PageTitle } from "../../components/ui";
+import { Calendar } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -39,7 +40,9 @@ export default function RestDashboard() {
   const [resto,    setResto]    = useState(null);
   const [resas,    setResas]    = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [dateMode, setDateMode] = useState("Mois");
+  const [dateMode,      setDateMode]      = useState("Mois");
+  const [customDate,    setCustomDate]    = useState("");   // YYYY-MM-DD pour mode "Date"
+  const [showDatePick,  setShowDatePick]  = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -81,7 +84,8 @@ export default function RestDashboard() {
     if (dateMode === "Jour")  return d.toDateString() === now.toDateString();
     if (dateMode === "Mois")  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     if (dateMode === "Année") return d.getFullYear() === now.getFullYear();
-    return true;
+    if (dateMode === "Date" && customDate) return d.toISOString().slice(0,10) === customDate;
+    return true; // "Tout"
   });
 
   const todayResas  = resas.filter(r => r.reserved_at && new Date(r.reserved_at).toDateString() === now.toDateString());
@@ -98,7 +102,38 @@ export default function RestDashboard() {
             title="Tableau de bord"
             subtitle={`${resto.name} · ${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`}
           />
-          <DateFilter value={dateMode} onChange={setDateMode} />
+          {/* Filtre date avancé */}
+          <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+            {["Jour","Mois","Année","Tout"].map(m => (
+              <button key={m} onClick={() => { setDateMode(m); setShowDatePick(false); }}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+                  border: `0.5px solid ${dateMode === m && !showDatePick ? P : BORDER}`,
+                  background: dateMode === m && !showDatePick ? PL : "white",
+                  color: dateMode === m && !showDatePick ? "#C47D1A" : MUTED,
+                  fontWeight: dateMode === m && !showDatePick ? 600 : 400, fontFamily: FONT }}>
+                {m}
+              </button>
+            ))}
+            <button onClick={() => { setShowDatePick(p => !p); if (!showDatePick) setDateMode("Date"); }}
+              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 5,
+                border: `0.5px solid ${showDatePick ? P : BORDER}`,
+                background: showDatePick ? PL : "white",
+                color: showDatePick ? "#C47D1A" : MUTED,
+                fontWeight: showDatePick ? 600 : 400, fontFamily: FONT }}>
+              <Calendar size={11} />
+              {customDate && dateMode === "Date"
+                ? new Date(customDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})
+                : "Choisir"}
+            </button>
+            {showDatePick && (
+              <input type="date" value={customDate}
+                onChange={e => { setCustomDate(e.target.value); setDateMode("Date"); }}
+                style={{ fontSize: 12, padding: "3px 8px", borderRadius: 8,
+                  border: `0.5px solid ${BORDER}`, fontFamily: FONT,
+                  color: DARK, background: "white" }} />
+            )}
+          </div>
         </div>
       </motion.div>
 

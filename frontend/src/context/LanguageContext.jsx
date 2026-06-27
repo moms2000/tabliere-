@@ -14,9 +14,15 @@ const TRANSLATIONS = {
 
     // ── Hero ─────────────────────────────────────────────────────────────────
     hero_title:       "Réservez votre table en Côte d'Ivoire",
-    hero_sub:         "Abidjan · Yamoussoukro · Bouaké · et toute la Côte d'Ivoire",
+    hero_title_1:     "La table parfaite,",
+    hero_title_2:     "à portée de main.",
+    hero_live:        "tables disponibles ce soir · Abidjan",
+    hero_sub:         "Les meilleures adresses de Côte d'Ivoire. Confirmation immédiate, zéro frais.",
     search_placeholder: "Restaurant, cuisine, quartier...",
     search_btn:       "Trouver",
+    filter_date:      "Date",
+    filter_time:      "Heure",
+    filter_guests:    "Personnes",
 
     // ── Tabs filtre ──────────────────────────────────────────────────────────
     tab_all:          "Tous",
@@ -179,8 +185,14 @@ const TRANSLATIONS = {
     nav_logout:       "Sign out",
 
     hero_title:         "Book your table in Côte d'Ivoire",
-    hero_sub:           "Abidjan · Yamoussoukro · Bouaké · and all of Ivory Coast",
+    hero_title_1:       "The perfect table,",
+    hero_title_2:       "right at your fingertips.",
+    hero_live:          "tables available tonight · Abidjan",
+    hero_sub:           "Ivory Coast's best restaurants. Instant confirmation, zero fees.",
     search_placeholder: "Restaurant, cuisine, neighbourhood...",
+    filter_date:        "Date",
+    filter_time:        "Time",
+    filter_guests:      "Guests",
     search_btn:         "Find",
 
     tab_all:       "All",
@@ -330,8 +342,14 @@ const TRANSLATIONS = {
     nav_logout:       "تسجيل الخروج",
 
     hero_title:         "احجز طاولتك في كوت ديفوار",
-    hero_sub:           "أبيدجان · ياموسوكرو · بواكي · وسائر أرجاء كوت ديفوار",
+    hero_title_1:       "الطاولة المثالية،",
+    hero_title_2:       "في متناول يدك.",
+    hero_live:          "طاولة متاحة الليلة · أبيدجان",
+    hero_sub:           "أفضل مطاعم كوت ديفوار. تأكيد فوري، بدون رسوم.",
     search_placeholder: "مطعم، مطبخ، حي...",
+    filter_date:        "التاريخ",
+    filter_time:        "الوقت",
+    filter_guests:      "الأشخاص",
     search_btn:         "بحث",
 
     tab_all:       "الكل",

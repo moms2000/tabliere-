@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Star, MapPin, Clock, Users, Calendar,
   UtensilsCrossed, CheckCircle, X, CalendarCheck, Phone,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
@@ -19,7 +20,41 @@ const BORDER = "#E4DFD8";
 const MUTED  = "#9BA89F";
 const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
 
-const TIME_SLOTS = ["12h00","12h30","13h00","13h30","19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
+const LUNCH_SLOTS  = ["12h00","12h30","13h00","13h30","14h00"];
+const DINNER_SLOTS = ["19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
+const ALL_SLOTS    = [...LUNCH_SLOTS, ...DINNER_SLOTS];
+
+const PARTY_OPTIONS = [1,2,3,4,5,6,7,8,9,10,12];
+
+const DAYS_FR = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const MONTHS_FR = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
+
+/** Génère les 14 prochains jours */
+function buildDays() {
+  const days = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push({
+      iso: d.toISOString().slice(0, 10),
+      dayName: DAYS_FR[d.getDay()],
+      dayNum: d.getDate(),
+      month: MONTHS_FR[d.getMonth()],
+      isToday: i === 0,
+    });
+  }
+  return days;
+}
+
+function toDatetime(isoDate, timeStr) {
+  const match = timeStr.match(/^(\d+)h(\d*)$/);
+  if (!match) return new Date().toISOString();
+  const dt = new Date(isoDate + "T00:00:00");
+  dt.setHours(parseInt(match[1]), parseInt(match[2] || "0"), 0, 0);
+  return dt.toISOString();
+}
 
 function Stars({ rating }) {
   return (
@@ -33,20 +68,145 @@ function Stars({ rating }) {
   );
 }
 
-function toDatetime(dateStr, timeStr) {
-  const today    = new Date();
-  const base     = new Date(today);
-  if (dateStr === "Demain") base.setDate(today.getDate() + 1);
-  else if (dateStr === "Ce weekend") {
-    const day = today.getDay();
-    const diff = day <= 5 ? 6 - day : 7;
-    base.setDate(today.getDate() + diff);
-  }
-  const match = timeStr.match(/^(\d+)h(\d*)$/);
-  if (!match) return new Date().toISOString();
-  const dt = new Date(base);
-  dt.setHours(parseInt(match[1]), parseInt(match[2] || "0"), 0, 0);
-  return dt.toISOString();
+/** Sidebar / widget de réservation style OpenTable */
+function BookingWidget({ onBook }) {
+  const DAYS = buildDays();
+  const [selDate, setSelDate] = useState(DAYS[0].iso);
+  const [selSlot, setSelSlot] = useState(null);
+  const [pers,    setPers]    = useState(2);
+  const [carouselStart, setCarouselStart] = useState(0);
+  const VISIBLE = 5;
+
+  const visibleDays = DAYS.slice(carouselStart, carouselStart + VISIBLE);
+
+  return (
+    <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 14,
+      padding: "22px 20px", boxShadow: "0 2px 16px rgba(30,46,40,.06)",
+      position: "sticky", top: 70, fontFamily: FONT }}>
+
+      <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 18 }}>
+        Faire une réservation
+      </div>
+
+      {/* ── Carousel de dates ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Date</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => setCarouselStart(s => Math.max(0, s - 1))}
+            disabled={carouselStart === 0}
+            style={{ background: "transparent", border: "none", cursor: carouselStart === 0 ? "default" : "pointer",
+              color: carouselStart === 0 ? BORDER : MUTED, padding: "0 2px", display: "flex" }}>
+            <ChevronLeft size={16} />
+          </button>
+          <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${VISIBLE}, 1fr)`, gap: 4 }}>
+            {visibleDays.map(d => {
+              const sel = selDate === d.iso;
+              return (
+                <button key={d.iso} onClick={() => { setSelDate(d.iso); setSelSlot(null); }}
+                  style={{ padding: "7px 2px", borderRadius: 9, cursor: "pointer", textAlign: "center",
+                    border: `0.5px solid ${sel ? P : BORDER}`,
+                    background: sel ? PL : "white",
+                    transition: "all .15s" }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: sel ? P : MUTED,
+                    textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {d.isToday ? "Auj." : d.dayName}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: sel ? P : DARK, lineHeight: 1.2 }}>
+                    {d.dayNum}
+                  </div>
+                  <div style={{ fontSize: 9, color: sel ? P : MUTED }}>{d.month}</div>
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => setCarouselStart(s => Math.min(DAYS.length - VISIBLE, s + 1))}
+            disabled={carouselStart + VISIBLE >= DAYS.length}
+            style={{ background: "transparent", border: "none",
+              cursor: carouselStart + VISIBLE >= DAYS.length ? "default" : "pointer",
+              color: carouselStart + VISIBLE >= DAYS.length ? BORDER : MUTED, padding: "0 2px", display: "flex" }}>
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Nombre de personnes ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Personnes</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {PARTY_OPTIONS.map(n => {
+            const sel = pers === n;
+            return (
+              <button key={n} onClick={() => setPers(n)}
+                style={{ minWidth: 32, height: 32, padding: "0 8px", borderRadius: 8, cursor: "pointer",
+                  border: `0.5px solid ${sel ? P : BORDER}`,
+                  background: sel ? PL : "white",
+                  color: sel ? P : DARK,
+                  fontWeight: sel ? 700 : 500, fontSize: 13, fontFamily: FONT,
+                  transition: "all .15s" }}>
+                {n}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Créneaux ── */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Créneau</div>
+
+        <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+          letterSpacing: "0.6px", marginBottom: 5 }}>Déjeuner</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+          {LUNCH_SLOTS.map(s => {
+            const sel = selSlot === s;
+            return (
+              <button key={s} onClick={() => setSelSlot(s)}
+                style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8,
+                  cursor: "pointer", fontFamily: FONT,
+                  border: `0.5px solid ${sel ? P : BORDER}`,
+                  background: sel ? PL : "white",
+                  color: sel ? P : DARK, transition: "all .15s" }}>
+                {s}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+          letterSpacing: "0.6px", marginBottom: 5 }}>Dîner</div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {DINNER_SLOTS.map(s => {
+            const sel = selSlot === s;
+            return (
+              <button key={s} onClick={() => setSelSlot(s)}
+                style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8,
+                  cursor: "pointer", fontFamily: FONT,
+                  border: `0.5px solid ${sel ? P : BORDER}`,
+                  background: sel ? PL : "white",
+                  color: sel ? P : DARK, transition: "all .15s" }}>
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <motion.button whileTap={{ scale: 0.97 }}
+        onClick={() => selSlot && onBook({ date: selDate, slot: selSlot, pers })}
+        style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
+          background: selSlot ? P : BORDER, color: "white", fontSize: 14, fontWeight: 700,
+          cursor: selSlot ? "pointer" : "not-allowed", fontFamily: FONT, transition: "background .2s" }}>
+        {selSlot ? `Réserver — ${selSlot}` : "Choisir un créneau"}
+      </motion.button>
+
+      <p style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+        Confirmation immédiate · Annulation gratuite 24h avant
+      </p>
+    </div>
+  );
 }
 
 export default function RestaurantDetail() {
@@ -54,18 +214,28 @@ export default function RestaurantDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [resto,     setResto]     = useState(null);
+  const [resto,   setResto]   = useState(null);
   usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
-  const [loading,   setLoading]   = useState(true);
-  const [modal,     setModal]     = useState(false);
-  const [selSlot,   setSelSlot]   = useState(null);
-  const [pers,      setPers]      = useState(2);
-  const [date,      setDate]      = useState("Aujourd'hui");
-  const [step,      setStep]      = useState(1);
-  const [booking,   setBooking]   = useState(false);
-  const [error,     setError]     = useState("");
-  const [special,   setSpecial]   = useState("");
-  const [resaRef,   setResaRef]   = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [modal,    setModal]    = useState(false);
+
+  // Booking state
+  const [selSlot,  setSelSlot]  = useState(null);
+  const [selDate,  setSelDate]  = useState(buildDays()[0].iso);
+  const [pers,     setPers]     = useState(2);
+  const [step,     setStep]     = useState(1);
+  const [booking,  setBooking]  = useState(false);
+  const [error,    setError]    = useState("");
+  const [special,  setSpecial]  = useState("");
+  const [resaRef,  setResaRef]  = useState(null);
+
+  // Responsive
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     restaurantsService.getBySlug(slug)
@@ -74,11 +244,16 @@ export default function RestaurantDetail() {
       .finally(() => setLoading(false));
   }, [slug]);
 
-  const openModal = (slot) => {
-    setSelSlot(slot); setModal(true); setStep(1);
-    setError(""); setSpecial(""); setResaRef(null);
-  };
+  const openModal = useCallback(({ date, slot, pers: p }) => {
+    setSelDate(date); setSelSlot(slot); setPers(p);
+    setModal(true); setStep(1); setError(""); setSpecial(""); setResaRef(null);
+  }, []);
   const closeModal = () => { setModal(false); setStep(1); setError(""); };
+
+  const fmtDate = (iso) => {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  };
 
   const handleBook = async () => {
     if (step === 1) { setStep(2); return; }
@@ -86,8 +261,8 @@ export default function RestaurantDetail() {
       if (!user) { navigate("/connexion?redirect=" + encodeURIComponent(window.location.pathname)); return; }
       setBooking(true); setError("");
       try {
-        const reserved_at = toDatetime(date, selSlot);
-        const dateOnly    = reserved_at.split("T")[0];
+        const reserved_at = toDatetime(selDate, selSlot);
+        const dateOnly    = selDate;
         const avail       = await restaurantsService.getAvailability(slug, dateOnly, pers).catch(() => null);
         const table       = avail?.available_tables?.[0];
         const payload     = {
@@ -155,8 +330,11 @@ export default function RestaurantDetail() {
         ))}
       </div>
 
+      {/* Body */}
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "28px 20px",
-        display: "grid", gridTemplateColumns: "1fr 320px", gap: 28, alignItems: "start" }}>
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
+        gap: 28, alignItems: "start" }}>
 
         {/* Main */}
         <div>
@@ -201,7 +379,6 @@ export default function RestaurantDetail() {
             </p>
           )}
 
-          {/* Price */}
           {resto.price_range && (
             <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12,
               padding: "14px 18px", marginBottom: 22, display: "inline-flex",
@@ -211,16 +388,16 @@ export default function RestaurantDetail() {
             </div>
           )}
 
-          {/* Time slots */}
+          {/* Créneaux rapides (visible aussi sur mobile) */}
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: DARK,
               marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              <CalendarCheck size={15} color={P} /> Créneaux disponibles
+              <CalendarCheck size={15} color={P} /> Créneaux disponibles aujourd'hui
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {TIME_SLOTS.map((s, i) => (
+              {ALL_SLOTS.map((s, i) => (
                 <motion.button key={i} whileTap={{ scale: 0.95 }}
-                  onClick={() => openModal(s)}
+                  onClick={() => openModal({ date: buildDays()[0].iso, slot: s, pers: 2 })}
                   style={{ fontSize: 13, fontWeight: 500, padding: "8px 14px",
                     borderRadius: 8, border: `0.5px solid ${P}66`,
                     background: PL, color: DARK, cursor: "pointer", fontFamily: FONT }}>
@@ -229,110 +406,55 @@ export default function RestaurantDetail() {
               ))}
             </div>
           </div>
+
+          {/* Sur mobile, le widget de réservation apparaît ici aussi */}
+          {isMobile && (
+            <div style={{ marginTop: 28 }}>
+              <BookingWidget onBook={openModal} />
+            </div>
+          )}
         </div>
 
-        {/* Sidebar */}
-        <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 14,
-          padding: "22px", boxShadow: "0 2px 16px rgba(30,46,40,.06)",
-          position: "sticky", top: 70 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 18 }}>
-            Faire une réservation
-          </div>
-
-          {/* Date */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 10, color: MUTED, fontWeight: 700,
-              textTransform: "uppercase", letterSpacing: "0.8px", display: "block", marginBottom: 6 }}>
-              Date
-            </label>
-            <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px",
-              display: "flex", alignItems: "center", gap: 8 }}>
-              <Calendar size={13} color={MUTED} />
-              <select value={date} onChange={e => setDate(e.target.value)}
-                style={{ border: "none", background: "transparent", fontSize: 13,
-                  color: DARK, outline: "none", flex: 1, fontFamily: FONT }}>
-                <option>Aujourd'hui</option>
-                <option>Demain</option>
-                <option>Ce weekend</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Personnes */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 10, color: MUTED, fontWeight: 700,
-              textTransform: "uppercase", letterSpacing: "0.8px", display: "block", marginBottom: 6 }}>
-              Personnes
-            </label>
-            <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 14px",
-              display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Users size={13} color={MUTED} />
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <button onClick={() => setPers(p => Math.max(1, p - 1))}
-                  style={{ width: 24, height: 24, borderRadius: "50%",
-                    border: `1px solid ${BORDER}`, background: "white",
-                    color: DARK, cursor: "pointer", fontSize: 16,
-                    display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-                <span style={{ fontSize: 14, fontWeight: 700, color: DARK, minWidth: 20, textAlign: "center" }}>
-                  {pers}
-                </span>
-                <button onClick={() => setPers(p => Math.min(12, p + 1))}
-                  style={{ width: 24, height: 24, borderRadius: "50%",
-                    border: "none", background: P, color: "white",
-                    cursor: "pointer", fontSize: 16,
-                    display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-              </div>
-            </div>
-          </div>
-
-          {/* Créneaux */}
-          <div style={{ marginBottom: 18 }}>
-            <label style={{ fontSize: 10, color: MUTED, fontWeight: 700,
-              textTransform: "uppercase", letterSpacing: "0.8px", display: "block", marginBottom: 8 }}>
-              Créneau
-            </label>
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-              {TIME_SLOTS.map((s, i) => (
-                <button key={i} onClick={() => setSelSlot(s)}
-                  style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px",
-                    borderRadius: 8, cursor: "pointer", fontFamily: FONT,
-                    border: `0.5px solid ${selSlot === s ? P : BORDER}`,
-                    background: selSlot === s ? PL : "white",
-                    color: selSlot === s ? "#C47D1A" : MUTED }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <motion.button whileTap={{ scale: 0.97 }}
-            onClick={() => selSlot && openModal(selSlot)}
-            style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
-              background: selSlot ? P : BORDER, color: "white", fontSize: 14, fontWeight: 700,
-              cursor: selSlot ? "pointer" : "not-allowed", fontFamily: FONT }}>
-            {selSlot ? `Réserver — ${selSlot}` : "Choisir un créneau"}
-          </motion.button>
-
-          <p style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
-            Confirmation immédiate · Annulation gratuite 24h avant
-          </p>
-        </div>
+        {/* Sidebar — desktop seulement */}
+        {!isMobile && <BookingWidget onBook={openModal} />}
       </div>
 
-      {/* Modal réservation */}
+      {/* ── Modal réservation ── */}
       <AnimatePresence>
         {modal && (
           <>
+            {/* Overlay */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={closeModal}
-              style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.4)", zIndex: 50 }} />
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }} transition={{ type: "spring", stiffness: 360, damping: 32 }}
-              style={{ position: "fixed", top: "50%", left: "50%",
-                transform: "translate(-50%,-50%)",
+              style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.45)", zIndex: 50 }} />
+
+            {/* Panel — bottom sheet sur mobile, modal centré sur desktop */}
+            <motion.div
+              initial={isMobile ? { y: "100%" } : { opacity: 0, y: 20, scale: 0.97 }}
+              animate={isMobile ? { y: 0 }       : { opacity: 1, y: 0,  scale: 1 }}
+              exit   ={isMobile ? { y: "100%" }   : { opacity: 0, y: 20, scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 340, damping: 32 }}
+              style={isMobile ? {
+                position: "fixed", bottom: 0, left: 0, right: 0,
+                background: "white", borderRadius: "18px 18px 0 0",
+                padding: "24px 24px 36px",
+                zIndex: 51, fontFamily: FONT,
+                maxHeight: "92vh", overflowY: "auto",
+                boxShadow: "0 -8px 40px rgba(0,0,0,.18)",
+              } : {
+                position: "fixed",
+                top: "50%", left: "50%", transform: "translate(-50%, -50%)",
                 background: "white", borderRadius: 16, padding: "32px",
-                zIndex: 51, width: 420, maxWidth: "calc(100vw - 32px)",
-                boxShadow: "0 12px 48px rgba(0,0,0,.2)", fontFamily: FONT }}>
+                zIndex: 51, width: 440, maxWidth: "calc(100vw - 32px)",
+                boxShadow: "0 12px 48px rgba(0,0,0,.2)", fontFamily: FONT,
+                maxHeight: "90vh", overflowY: "auto",
+              }}>
+
+              {/* Drag handle sur mobile */}
+              {isMobile && (
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER,
+                  margin: "0 auto 20px" }} />
+              )}
 
               <button onClick={closeModal}
                 style={{ position: "absolute", top: 16, right: 16, background: "transparent",
@@ -340,7 +462,7 @@ export default function RestaurantDetail() {
                 <X size={18} />
               </button>
 
-              {/* Étape 3 — Succès */}
+              {/* ── Étape 3 — Succès ── */}
               {step === 3 ? (
                 <div style={{ textAlign: "center", padding: "8px 0" }}>
                   <div style={{ width: 60, height: 60, borderRadius: "50%", background: PL,
@@ -352,12 +474,13 @@ export default function RestaurantDetail() {
                     Réservation envoyée !
                   </h3>
                   {resaRef && (
-                    <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace",
-                      marginBottom: 8 }}>Réf. {resaRef}</div>
+                    <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", marginBottom: 8 }}>
+                      Réf. {resaRef}
+                    </div>
                   )}
                   <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 26 }}>
                     <strong style={{ color: DARK }}>{resto.name}</strong><br />
-                    {date} · {selSlot} · {pers} personne{pers > 1 ? "s" : ""}
+                    {fmtDate(selDate)} · {selSlot} · {pers} personne{pers > 1 ? "s" : ""}
                   </p>
                   <p style={{ fontSize: 12, color: MUTED, marginBottom: 24, lineHeight: 1.5 }}>
                     Le restaurant confirmera votre réservation par SMS ou email.
@@ -377,25 +500,33 @@ export default function RestaurantDetail() {
                     </button>
                   </div>
                 </div>
+
               ) : step === 2 ? (
-                /* Étape 2 — Résumé + confirmation */
+                /* ── Étape 2 — Confirmation ── */
                 <>
                   <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 20 }}>
                     Confirmer la réservation
                   </h3>
-                  <div style={{ background: BG, borderRadius: 10, padding: "14px 16px", marginBottom: 18 }}>
-                    {[
-                      ["Restaurant", resto.name],
-                      ["Date",       date],
-                      ["Heure",      selSlot],
-                      ["Personnes",  `${pers} personne${pers > 1 ? "s" : ""}`],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{ display: "flex", justifyContent: "space-between",
-                        padding: "7px 0", borderBottom: `0.5px solid ${BORDER}`, fontSize: 13 }}>
-                        <span style={{ color: MUTED }}>{k}</span>
-                        <span style={{ fontWeight: 600, color: DARK }}>{v}</span>
-                      </div>
-                    ))}
+
+                  {/* Résumé visuel */}
+                  <div style={{ background: PL, borderRadius: 12, padding: "16px",
+                    marginBottom: 18, border: `0.5px solid ${P}44` }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 4 }}>
+                      {resto.name}
+                    </div>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+                      {[
+                        { icon: Calendar, label: fmtDate(selDate) },
+                        { icon: Clock,    label: selSlot },
+                        { icon: Users,    label: `${pers} personne${pers > 1 ? "s" : ""}` },
+                      ].map(({ icon: Icon, label }) => (
+                        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6,
+                          background: "white", borderRadius: 8, padding: "6px 10px",
+                          fontSize: 12, color: DARK, fontWeight: 600 }}>
+                          <Icon size={13} color={P} /> {label}
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Demande spéciale */}
@@ -443,8 +574,9 @@ export default function RestaurantDetail() {
                     </motion.button>
                   </div>
                 </>
+
               ) : (
-                /* Étape 1 — Choix créneau */
+                /* ── Étape 1 — Récap créneau sélectionné ── */
                 <>
                   <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 4 }}>
                     Réserver une table
@@ -453,37 +585,52 @@ export default function RestaurantDetail() {
 
                   {/* Résumé sélection */}
                   <div style={{ background: PL, borderRadius: 10, padding: "12px 16px",
-                    marginBottom: 20, display: "flex", gap: 16, fontSize: 13,
-                    alignItems: "center", flexWrap: "wrap" }}>
+                    marginBottom: 20, display: "flex", gap: 12, fontSize: 13,
+                    alignItems: "center", flexWrap: "wrap",
+                    border: `0.5px solid ${P}44` }}>
                     <span style={{ fontWeight: 700, color: P }}>{selSlot}</span>
-                    <span style={{ color: DARK }}>{date}</span>
+                    <span style={{ color: DARK }}>{fmtDate(selDate)}</span>
                     <span style={{ color: MUTED }}>{pers} pers.</span>
                   </div>
 
-                  {/* Modifier créneau */}
+                  {/* Changer de créneau inline */}
                   <div style={{ marginBottom: 18 }}>
                     <div style={{ fontSize: 10, color: MUTED, fontWeight: 700,
                       textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>
                       Changer de créneau
                     </div>
-                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                      {TIME_SLOTS.map((s, i) => (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                      letterSpacing: "0.6px", marginBottom: 5 }}>Déjeuner</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                      {LUNCH_SLOTS.map((s, i) => (
                         <button key={i} onClick={() => setSelSlot(s)}
-                          style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px",
+                          style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px",
                             borderRadius: 8, cursor: "pointer", fontFamily: FONT,
                             border: `0.5px solid ${selSlot === s ? P : BORDER}`,
                             background: selSlot === s ? PL : "white",
-                            color: selSlot === s ? "#C47D1A" : MUTED }}>
+                            color: selSlot === s ? P : MUTED }}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                      letterSpacing: "0.6px", marginBottom: 5 }}>Dîner</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {DINNER_SLOTS.map((s, i) => (
+                        <button key={i} onClick={() => setSelSlot(s)}
+                          style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px",
+                            borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+                            border: `0.5px solid ${selSlot === s ? P : BORDER}`,
+                            background: selSlot === s ? PL : "white",
+                            color: selSlot === s ? P : MUTED }}>
                           {s}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <p style={{ fontSize: 12, color: MUTED, marginBottom: 20, lineHeight: 1.5 }}>
-                    Annulation gratuite jusqu'à 24h avant la réservation. Aucun paiement requis.
-                  </p>
-                  <motion.button whileTap={{ scale: 0.97 }} onClick={handleBook}
+                  <motion.button whileTap={{ scale: 0.97 }}
+                    onClick={handleBook}
                     style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
                       background: P, color: "white", fontSize: 14, fontWeight: 700,
                       cursor: "pointer", fontFamily: FONT }}>

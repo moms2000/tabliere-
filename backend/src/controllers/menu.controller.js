@@ -9,6 +9,18 @@ import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger }  from "../utils/logger.js";
 
+// Migration automatique : ajouter la colonne options si elle n'existe pas
+let menuMigrated = false;
+async function ensureMenuColumns() {
+  if (menuMigrated) return;
+  try {
+    await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`);
+    menuMigrated = true;
+  } catch (e) {
+    logger.warn("ensureMenuColumns", { error: e?.message });
+  }
+}
+
 // ── GET /menu/:slug — Public, après scan QR ───────────────────────────────────
 export const getPublicMenu = asyncHandler(async (req, res) => {
   const cacheKey = `menu:public:${req.params.slug}`;
@@ -143,7 +155,8 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 
 // ── POST /menu/items ──────────────────────────────────────────────────────────
 export const createItem = asyncHandler(async (req, res) => {
-  const { category_id, name, description, price, image_url, is_active = true, position = 0 } = req.body;
+  await ensureMenuColumns();
+  const { category_id, name, description, price, image_url, is_active = true, position = 0, options } = req.body;
 
   // Vérifier que la catégorie appartient au restaurant
   const { rows: [cat] } = await query(
@@ -153,12 +166,18 @@ export const createItem = asyncHandler(async (req, res) => {
   if (!cat) return notFound(res, "Catégorie introuvable");
   _assertOwnerOrAdmin(req, { id: cat.restaurant_id });
 
+  // Sérialiser options (JSONB) si nécessaire
+  let optionsVal = null;
+  if (options !== undefined && options !== null && options !== "") {
+    optionsVal = typeof options === "object" ? JSON.stringify(options) : options;
+  }
+
   const { rows: [item] } = await query(
     `INSERT INTO menu_items
-       (category_id, restaurant_id, name, description, price, image_url, is_active, position)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (category_id, restaurant_id, name, description, price, image_url, is_active, position, options)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position]
+    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position, optionsVal]
   );
 
   await cache.delPattern(`menu:public:*`).catch(() => {});
@@ -168,19 +187,27 @@ export const createItem = asyncHandler(async (req, res) => {
 
 // ── PATCH /menu/items/:id ─────────────────────────────────────────────────────
 export const updateItem = asyncHandler(async (req, res) => {
+  await ensureMenuColumns();
   const { rows: [item] } = await query(
     "SELECT * FROM menu_items WHERE id = $1", [req.params.id]
   );
   if (!item) return notFound(res, "Plat introuvable");
   _assertOwnerOrAdmin(req, { id: item.restaurant_id });
 
-  const ALLOWED = ["name","description","price","image_url","is_active","is_available","position","category_id"];
+  const ALLOWED = ["name","description","price","image_url","is_active","is_available","position","category_id","options"];
   const updates = [];
   const values  = [];
 
   for (const field of ALLOWED) {
     if (req.body[field] === undefined) continue;
-    values.push(req.body[field]);
+    let val = req.body[field];
+    // options est JSONB — sérialiser si c'est un objet
+    if (field === "options") {
+      if (val === null || val === "") { val = null; }
+      else if (typeof val === "object") { val = JSON.stringify(val); }
+      else if (typeof val === "string") { try { JSON.parse(val); } catch(_) { val = null; } }
+    }
+    values.push(val);
     updates.push(`${field} = $${values.length}`);
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);

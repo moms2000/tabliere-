@@ -85,12 +85,178 @@ function buildDayStats(reservations) {
   return days;
 }
 
+// ── Helpers pour le sélecteur de date/heure style OpenTable ─────────────────
+const DAYS_FR  = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+const LUNCH_SLOTS  = ["11h30","12h00","12h30","13h00","13h30","14h00","14h30"];
+const DINNER_SLOTS = ["18h30","19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
+const PARTY_OPTIONS = [1,2,3,4,5,6,7,8,9,10,12,15,20];
+
+function buildDays14() {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+function slotToDatetime(dateObj, slot) {
+  // "19h30" → "2026-06-27T19:30"
+  const [h, m] = slot.replace("h",":").split(":").map(Number);
+  const d = new Date(dateObj);
+  d.setHours(h, m || 0, 0, 0);
+  return d.toISOString().slice(0, 16);
+}
+
+function CreateResaModal({ onClose, onCreate, form, setForm }) {
+  const days14 = buildDays14();
+  const [selectedDay, setSelectedDay] = useState(days14[0]);
+  const [selectedSlot, setSelectedSlot] = useState("");
+
+  const setField = (k) => (e) => setForm(p => ({ ...p, [k]: e.target?.value ?? e }));
+
+  const handleSlot = (slot) => {
+    setSelectedSlot(slot);
+    setForm(p => ({ ...p, reserved_at: slotToDatetime(selectedDay, slot) }));
+  };
+
+  const handleDay = (d) => {
+    setSelectedDay(d);
+    if (selectedSlot) setForm(p => ({ ...p, reserved_at: slotToDatetime(d, selectedSlot) }));
+  };
+
+  const canCreate = form.client_name?.trim() && form.reserved_at;
+
+  return (
+    <Modal open title="Nouvelle réservation" onClose={onClose} width={540}>
+      {/* ── Client ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <FormField label="Nom du client">
+          <Input value={form.client_name} onChange={setField("client_name")} placeholder="Jean Kouassi" />
+        </FormField>
+        <FormField label="Téléphone">
+          <Input value={form.client_phone} onChange={setField("client_phone")} placeholder="+225 07 00 00 00 00" />
+        </FormField>
+      </div>
+
+      {/* ── Nombre de personnes — chips ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Nombre de personnes</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {PARTY_OPTIONS.map(n => (
+            <button key={n} onClick={() => setForm(p => ({ ...p, party_size: n }))}
+              style={{ width: 38, height: 38, borderRadius: "50%", border: "none",
+                background: form.party_size === n ? P : BG,
+                color: form.party_size === n ? "white" : DARK,
+                fontWeight: form.party_size === n ? 700 : 400,
+                fontSize: 13, cursor: "pointer",
+                border: form.party_size === n ? "none" : `0.5px solid ${BORDER}`,
+              }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Carousel de dates ── */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Date</div>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+          {days14.map((d, i) => {
+            const isSelected = d.toDateString() === selectedDay.toDateString();
+            const isToday = i === 0;
+            return (
+              <button key={i} onClick={() => handleDay(d)}
+                style={{ flexShrink: 0, width: 56, padding: "8px 0", borderRadius: 10,
+                  border: "none", cursor: "pointer", textAlign: "center",
+                  background: isSelected ? P : BG,
+                  color: isSelected ? "white" : DARK,
+                  outline: isSelected ? "none" : `0.5px solid ${BORDER}`,
+                }}>
+                <div style={{ fontSize: 9, fontWeight: 600, opacity: 0.7 }}>
+                  {isToday ? "Auj." : DAYS_FR[d.getDay()]}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{d.getDate()}</div>
+                <div style={{ fontSize: 9, opacity: 0.6 }}>{MONTHS_FR[d.getMonth()]}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Créneaux ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+          letterSpacing: "0.8px", marginBottom: 8 }}>Heure</div>
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontWeight: 500 }}>Déjeuner</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {LUNCH_SLOTS.map(s => (
+              <button key={s} onClick={() => handleSlot(s)}
+                style={{ padding: "7px 12px", borderRadius: 8, border: "none",
+                  fontSize: 12, cursor: "pointer", fontFamily: FONT,
+                  background: selectedSlot === s ? P : BG,
+                  color: selectedSlot === s ? "white" : DARK,
+                  fontWeight: selectedSlot === s ? 600 : 400,
+                  outline: selectedSlot === s ? "none" : `0.5px solid ${BORDER}`,
+                }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontWeight: 500 }}>Dîner</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {DINNER_SLOTS.map(s => (
+              <button key={s} onClick={() => handleSlot(s)}
+                style={{ padding: "7px 12px", borderRadius: 8, border: "none",
+                  fontSize: 12, cursor: "pointer", fontFamily: FONT,
+                  background: selectedSlot === s ? P : BG,
+                  color: selectedSlot === s ? "white" : DARK,
+                  fontWeight: selectedSlot === s ? 600 : 400,
+                  outline: selectedSlot === s ? "none" : `0.5px solid ${BORDER}`,
+                }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        {!selectedSlot && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>Heure personnalisée</div>
+            <Input type="datetime-local" value={form.reserved_at}
+              onChange={e => { setSelectedSlot(""); setForm(p => ({ ...p, reserved_at: e.target.value })); }} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Notes ── */}
+      <FormField label="Notes (optionnel)">
+        <textarea value={form.notes} onChange={setField("notes")}
+          placeholder="Anniversaire, allergie, demande spéciale…" rows={2}
+          style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+            padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
+            outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
+      </FormField>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+        <Btn onClick={onClose}>Annuler</Btn>
+        <Btn variant="primary" onClick={onCreate} disabled={!canCreate}>
+          Créer la réservation
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 export default function RestReservations() {
   const { user } = useAuth();
   const [data,      setData]      = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [filter,    setFilter]    = useState("tous");
-  const [dateMode,  setDateMode]  = useState("Mois"); // "Jour" | "Mois" | "Année"
+  const [dateMode,  setDateMode]  = useState("Tout"); // "Tout" | "Jour" | "Mois" | "Année"
   const [mainTab,   setMainTab]   = useState("reservations");
   const [modalCreate, setModalCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -226,6 +392,7 @@ export default function RestReservations() {
 
   // Filtrage par mode date
   const filterByDate = (items) => {
+    if (dateMode === "Tout") return items;
     const now = new Date();
     return items.filter(r => {
       if (!r.reserved_at) return true;
@@ -772,53 +939,13 @@ export default function RestReservations() {
         </motion.div>
       )}
 
-      {/* ── Modal : Créer une réservation ─────────────────────────────────── */}
-      {modalCreate && (
-        <Modal open title="Nouvelle réservation" onClose={() => setModalCreate(false)} width={520}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Nom du client">
-              <Input value={createForm.client_name}
-                onChange={e => setCreateForm(p => ({ ...p, client_name: e.target.value }))}
-                placeholder="Jean Kouassi" />
-            </FormField>
-            <FormField label="Téléphone">
-              <Input value={createForm.client_phone}
-                onChange={e => setCreateForm(p => ({ ...p, client_phone: e.target.value }))}
-                placeholder="+225 07 00 00 00 00" />
-            </FormField>
-          </div>
-          <FormField label="Email (optionnel)">
-            <Input value={createForm.client_email} type="email"
-              onChange={e => setCreateForm(p => ({ ...p, client_email: e.target.value }))}
-              placeholder="client@exemple.com" />
-          </FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Date & heure">
-              <Input value={createForm.reserved_at} type="datetime-local"
-                onChange={e => setCreateForm(p => ({ ...p, reserved_at: e.target.value }))} />
-            </FormField>
-            <FormField label="Nombre de personnes">
-              <Input value={createForm.party_size} type="number"
-                onChange={e => setCreateForm(p => ({ ...p, party_size: e.target.value }))} />
-            </FormField>
-          </div>
-          <FormField label="Notes (optionnel)">
-            <textarea value={createForm.notes}
-              onChange={e => setCreateForm(p => ({ ...p, notes: e.target.value }))}
-              placeholder="Anniversaire, allergie, demande spéciale…" rows={2}
-              style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
-                padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
-                outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
-          </FormField>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn onClick={() => setModalCreate(false)}>Annuler</Btn>
-            <Btn variant="primary" onClick={createReservation}
-              disabled={!createForm.client_name || !createForm.reserved_at}>
-              Créer la réservation
-            </Btn>
-          </div>
-        </Modal>
-      )}
+      {/* ── Modal : Créer une réservation — style OpenTable ──────────────── */}
+      {modalCreate && <CreateResaModal
+        onClose={() => setModalCreate(false)}
+        onCreate={createReservation}
+        form={createForm}
+        setForm={setCreateForm}
+      />}
     </motion.div>
   );
 }

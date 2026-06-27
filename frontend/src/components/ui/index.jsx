@@ -158,7 +158,7 @@ export function Table({ columns, rows, onRowClick }) {
 
 // ── DateFilter (filtre jour/mois/année) ───────────────────────────────────────
 export function DateFilter({ value, onChange }) {
-  const modes = ["Jour", "Mois", "Année"];
+  const modes = ["Tout", "Jour", "Mois", "Année"];
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
       {modes.map(m => (
@@ -176,28 +176,43 @@ export function DateFilter({ value, onChange }) {
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
+// NOTE: On utilise un div statique pour le centrage (flexbox) et motion.div
+// uniquement pour l'animation — évite le conflit framer-motion / translate CSS.
 export function Modal({ open, onClose, title, children, width = 480 }) {
   if (!open) return null;
   return (
     <>
+      {/* Backdrop */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         onClick={onClose}
         style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.35)", zIndex: 100 }} />
-      <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        style={{ position: "fixed", top: "50%", left: "50%",
-          transform: "translate(-50%,-50%)", zIndex: 101,
-          background: "white", borderRadius: 16, padding: 24, width,
-          maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto",
-          fontFamily: FONT, boxShadow: "0 24px 64px rgba(30,46,40,.18)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, color: DARK }}>{title}</h2>
-          <button onClick={onClose} style={{ border: "none", background: "transparent",
-            cursor: "pointer", color: MUTED, fontSize: 22, lineHeight: 1, padding: 0 }}>×</button>
-        </div>
-        {children}
-      </motion.div>
+      {/* Centrage via flexbox — ne peut pas être écrasé par framer-motion */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 101,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "16px", pointerEvents: "none",
+      }}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 20 }}
+          transition={{ type: "spring", stiffness: 340, damping: 30 }}
+          style={{
+            background: "white", borderRadius: 16, padding: 24,
+            width: "100%", maxWidth: width,
+            maxHeight: "90vh", overflowY: "auto",
+            fontFamily: FONT, boxShadow: "0 24px 64px rgba(30,46,40,.18)",
+            pointerEvents: "auto",
+          }}>
+          <div style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: 20 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: DARK, margin: 0 }}>{title}</h2>
+            <button onClick={onClose} style={{ border: "none", background: "transparent",
+              cursor: "pointer", color: MUTED, fontSize: 24, lineHeight: 1, padding: 0 }}>×</button>
+          </div>
+          {children}
+        </motion.div>
+      </div>
     </>
   );
 }

@@ -41,7 +41,7 @@ export default function RestMenu() {
   const [editItem,   setEditItem]   = useState(null);
   const [editCat,    setEditCat]    = useState(null);
   const [formCat,    setFormCat]    = useState({ name: "" });
-  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true });
+  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
 
   const menuUrl = `${window.location.origin}/menu/${user?.resto_slug || ""}`;
 
@@ -137,11 +137,13 @@ export default function RestMenu() {
   const openNewCat   = ()     => { setEditCat(null); setFormCat({ name: "" }); setModalCat(true); };
   const openEditItem = (item) => {
     setEditItem(item);
-    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active });
+    let parsedOpts = { cuissons: [], accompagnements: [] };
+    try { parsedOpts = typeof item.options === "string" ? JSON.parse(item.options) : (item.options || parsedOpts); } catch(_) {}
+    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active, options: parsedOpts });
     setModalItem(true);
   };
   const openNewItem  = ()     => {
-    setEditItem(null); setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true }); setModalItem(true);
+    setEditItem(null); setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } }); setModalItem(true);
   };
 
   const activeCategory = categories.find(c => c.id === activeTab);
@@ -419,6 +421,31 @@ export default function RestMenu() {
               </label>
             </FormField>
           </div>
+
+          {/* Options cuisson et accompagnements */}
+          <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 14, marginTop: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+              letterSpacing: "0.8px", marginBottom: 10 }}>Options client (optionnel)</div>
+            <FormField label="Cuissons disponibles (séparées par des virgules)">
+              <Input
+                value={(formItem.options?.cuissons || []).join(", ")}
+                onChange={e => setFormItem(p => ({
+                  ...p, options: { ...p.options,
+                    cuissons: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }
+                }))}
+                placeholder="Saignant, À point, Bien cuit" />
+            </FormField>
+            <FormField label="Accompagnements disponibles (séparés par des virgules)">
+              <Input
+                value={(formItem.options?.accompagnements || []).join(", ")}
+                onChange={e => setFormItem(p => ({
+                  ...p, options: { ...p.options,
+                    accompagnements: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }
+                }))}
+                placeholder="Frites, Riz, Attiéké, Salade" />
+            </FormField>
+          </div>
+
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={() => { setModalItem(false); setEditItem(null); }}>Annuler</Btn>
             <Btn variant="primary" onClick={saveItem} disabled={!formItem.name || !formItem.price}>

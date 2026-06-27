@@ -114,7 +114,18 @@ export const update = asyncHandler(async (req, res) => {
 
   for (const field of ALLOWED) {
     if (req.body[field] === undefined) continue;
-    values.push(req.body[field]);
+    let val = req.body[field];
+    // opening_hours est JSONB — s'assurer d'envoyer une valeur JSON valide
+    if (field === "opening_hours") {
+      if (val === null || val === "") {
+        val = null;
+      } else if (typeof val === "string") {
+        try { JSON.parse(val); } catch (_) { val = JSON.stringify(val); }
+      } else if (typeof val === "object") {
+        val = JSON.stringify(val);
+      }
+    }
+    values.push(val);
     updates.push(`${field} = $${values.length}`);
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);

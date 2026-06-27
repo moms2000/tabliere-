@@ -14,6 +14,8 @@ const INIT_SQL = `
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     table_label   VARCHAR(50),
+    client_name   VARCHAR(255),
+    client_phone  VARCHAR(50),
     items         JSONB NOT NULL DEFAULT '[]',
     total         INTEGER NOT NULL DEFAULT 0,
     status        VARCHAR(20) NOT NULL DEFAULT 'en_attente'
@@ -26,17 +28,24 @@ const INIT_SQL = `
   CREATE INDEX IF NOT EXISTS qr_orders_created_at_idx    ON qr_orders(created_at DESC);
 `;
 
+// Migration pour tables existantes
+const MIGRATE_SQL = `
+  ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_name  VARCHAR(255);
+  ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_phone VARCHAR(50);
+`;
+
 let tableReady = false;
 async function ensureTable() {
   if (tableReady) return;
   await query(INIT_SQL);
+  await query(MIGRATE_SQL).catch(() => {}); // migration silencieuse si colonnes existent déjà
   tableReady = true;
 }
 
 // ── POST /orders — passer commande (client via QR) ─────────────────────────
 export const createOrder = asyncHandler(async (req, res) => {
   await ensureTable();
-  const { restaurant_id, table_label, items, note } = req.body;
+  const { restaurant_id, table_label, items, note, client_name, client_phone } = req.body;
   if (!restaurant_id) throw new AppError("restaurant_id requis", 400);
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
@@ -52,12 +61,13 @@ export const createOrder = asyncHandler(async (req, res) => {
   const total = items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
 
   const { rows: [order] } = await query(
-    `INSERT INTO qr_orders (restaurant_id, table_label, items, total, note)
-     VALUES ($1, $2, $3::jsonb, $4, $5) RETURNING *`,
-    [restaurant_id, table_label || null, JSON.stringify(items), total, note || null]
+    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING *`,
+    [restaurant_id, table_label || null, client_name || null, client_phone || null,
+     JSON.stringify(items), total, note || null]
   );
 
-  logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label });
+  logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });
   return created(res, { order }, "Commande envoyée avec succès");
 });
 

@@ -17,7 +17,7 @@ const G = "#1D9E75";
 const DARK = "#0F6E56";
 
 const LANG_LABELS = { fr: "Français", en: "English", ar: "العربية" };
-const LANG_FLAGS  = { fr: "🇫🇷", en: "🇬🇧", ar: "🇸🇦" };
+const LANG_SHORT  = { fr: "FR", en: "EN", ar: "AR" };
 
 const LEVELS = [
   { name: "Bronze",   min: 0,    color: "#CD7F32", bg: "#FDF0E6" },
@@ -218,7 +218,7 @@ export default function Profil() {
                 borderRadius: 8, padding: "6px 10px", background: "white",
                 cursor: "pointer", fontSize: 12, color: "#555" }}>
               <Globe size={13} color={G} />
-              {LANG_FLAGS[lang]}
+              {LANG_SHORT[lang]}
             </button>
             <AnimatePresence>
               {showLang && (
@@ -234,7 +234,7 @@ export default function Profil() {
                         background: l === lang ? "#E1F5EE" : "white",
                         cursor: "pointer", fontSize: 13,
                         color: l === lang ? G : "#444", fontWeight: l === lang ? 500 : 400 }}>
-                      {LANG_FLAGS[l]} {LANG_LABELS[l]}
+                      {LANG_SHORT[l]} · {LANG_LABELS[l]}
                       {l === lang && <CheckCircle size={12} color={G} style={{ marginLeft: "auto" }} />}
                     </button>
                   ))}
@@ -368,7 +368,7 @@ export default function Profil() {
                       border: `1.5px solid ${l === lang ? G : "#eee"}`,
                       background: l === lang ? "#E1F5EE" : "white",
                       color: l === lang ? G : "#555", fontWeight: l === lang ? 600 : 400, fontSize: 12 }}>
-                    {LANG_FLAGS[l]} {LANG_LABELS[l]}
+                    {LANG_SHORT[l]} · {LANG_LABELS[l]}
                   </button>
                 ))}
               </div>

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, Music, Sunrise, Gift, UtensilsCrossed,
   Heart, User, LogOut, Globe, CheckCircle, ChevronDown, BookOpen, Sparkles,
-  Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus,
+  Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus, Bell,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -25,7 +25,7 @@ const CARD_ACCENT = [P, S, DARK, "#B07A3A", "#5A8A6A", "#2E4A3A"];
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DAYS_FR   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const LANG_LABELS = { fr: "Français", en: "English", ar: "العربية" };
-const LANG_FLAGS  = { fr: "🇫🇷", en: "🇬🇧", ar: "🇸🇦" };
+const LANG_SHORT  = { fr: "FR", en: "EN", ar: "AR" };
 
 /* ── Logo SVG ────────────────────────────────────────────────────────────────── */
 function Logo({ size = 28 }) {
@@ -452,7 +452,7 @@ export default function Home() {
                 padding: "6px 10px", background: WHITE, cursor: "pointer",
                 fontSize: 12, color: MUTED, fontFamily: FONT }}>
               <Globe size={13} color={P} />
-              {LANG_FLAGS[lang]}
+              {LANG_SHORT[lang]}
             </button>
             <AnimatePresence>
               {showLang && (
@@ -470,7 +470,7 @@ export default function Home() {
                         background: l === lang ? "#FEF6EC" : WHITE,
                         cursor: "pointer", fontSize: 13, fontFamily: FONT,
                         color: l === lang ? P : "#444", fontWeight: l === lang ? 600 : 400 }}>
-                      {LANG_FLAGS[l]} {LANG_LABELS[l]}
+                      {LANG_SHORT[l]} · {LANG_LABELS[l]}
                       {l === lang && <CheckCircle size={12} color={P} style={{ marginLeft: "auto" }} />}
                     </button>
                   ))}
@@ -478,6 +478,16 @@ export default function Home() {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Cloche notifications — client connecté */}
+          {user && (
+            <button onClick={() => navigate("/profil?tab=notifications")}
+              style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                padding: "6px 10px", background: WHITE, cursor: "pointer", display: "flex",
+                alignItems: "center" }}>
+              <Bell size={15} color={MUTED} />
+            </button>
+          )}
 
           {user ? (
             <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>

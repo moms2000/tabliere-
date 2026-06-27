@@ -164,6 +164,19 @@ function StepForm({ type, onBack }) {
     setLoading(true);
     try {
       const user = await login(email, password, remember);
+
+      // Vérification du rôle selon l'espace choisi
+      if (type === "client" && user.role === "restaurateur") {
+        setError("Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur.");
+        setLoading(false);
+        return;
+      }
+      if (type === "restaurateur" && user.role === "client") {
+        setError("Ce compte est un compte client. Utilisez l'espace Client.");
+        setLoading(false);
+        return;
+      }
+
       if (from) {
         navigate(from, { replace: true });
       } else if (user.role === "admin") {

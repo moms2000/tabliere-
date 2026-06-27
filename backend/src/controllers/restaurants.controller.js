@@ -107,7 +107,7 @@ export const update = asyncHandler(async (req, res) => {
 
   const ALLOWED = [
     "name","description","cuisine_type","address","quartier","ville",
-    "phone","email","website","opening_hours","price_range","capacity","theme_color",
+    "phone","email","website","opening_hours","price_range","capacity","theme_color","logo_url",
   ];
   const updates = [];
   const values  = [];

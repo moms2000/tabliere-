@@ -36,13 +36,18 @@ export const create = asyncHandler(async (req, res) => {
     if (conflict) throw new AppError("Cette table est déjà réservée sur ce créneau", 409);
   }
 
+  // Générer un ref unique RES-XXXX
+  const { rows: [{ nextref }] } = await query(
+    "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
+  );
+
   const resa = await withTransaction(async (client) => {
     const { rows: [newResa] } = await client.query(
       `INSERT INTO reservations
-         (restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'en_attente')
+         (ref, restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'en_attente')
        RETURNING *`,
-      [restaurant_id, req.user.id, table_id || null, reserved_at, party_size, special_request || null]
+      [nextref, restaurant_id, req.user.id, table_id || null, reserved_at, party_size, special_request || null]
     );
 
     // Marquer la table comme réservée

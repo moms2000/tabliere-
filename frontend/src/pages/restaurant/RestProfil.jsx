@@ -66,7 +66,17 @@ export default function RestProfil() {
     if (!user?.resto_id) return;
     setSaving(true); setError(""); setSaved(false);
     try {
-      await restaurantsService.update(user.resto_id, form);
+      const payload = { ...form };
+      if (payload.capacity === "" || payload.capacity === undefined) {
+        delete payload.capacity;
+      } else {
+        payload.capacity = Number(payload.capacity);
+      }
+      // Garder les optionnels même vides (null OK en DB)
+      Object.keys(payload).forEach(k => {
+        if (payload[k] === "") payload[k] = null;
+      });
+      await restaurantsService.update(user.resto_id, payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {

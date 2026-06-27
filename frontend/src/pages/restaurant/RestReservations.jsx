@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarCheck, CheckCircle, XCircle, AlertTriangle,
-  Clock, Users, MessageCircle, X, Plus,
+  Clock, Users, MessageCircle, X, Plus, LayoutTemplate,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
 import { reservationsService } from "../../services/reservations.service.js";
+import { restaurantsService } from "../../services/restaurants.service.js";
 import { chatService } from "../../services/chat.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Chat from "../../components/Chat.jsx";
@@ -87,6 +88,27 @@ export default function RestReservations() {
   const [conversations, setConversations] = useState([]);
   const [showAddWait, setShowAddWait] = useState(false);
   const [newWait,   setNewWait]   = useState({ name: "", phone: "", party: 2 });
+  // Modale assignation de table
+  const [confirmModal, setConfirmModal] = useState(null); // { resa }
+  const [tables,       setTables]       = useState([]);   // tables libres du resto
+  const [selectedTable, setSelectedTable] = useState("");
+  const [loadingTables, setLoadingTables] = useState(false);
+  // Modale changement de table (résa déjà confirmée)
+  const [assignModal, setAssignModal] = useState(null); // { resa }
+
+  // Charger les tables libres + réservées du resto
+  const loadTables = async () => {
+    if (!user?.resto_id) return;
+    setLoadingTables(true);
+    try {
+      const d = await restaurantsService.getManage(user.resto_id);
+      const ts = (d.restaurant?.tables || []).filter(t =>
+        ["libre","free","reserve","réservé","reserved"].includes(t.status)
+      );
+      setTables(ts);
+    } catch (_) {}
+    setLoadingTables(false);
+  };
 
   useEffect(() => {
     reservationsService.list({ limit: 100 })
@@ -104,10 +126,45 @@ export default function RestReservations() {
     } catch { setWaitlist([]); }
   }, []);
 
-  const confirm = async (id) => {
+  // Ouvre la modale de confirmation avec sélection de table
+  const openConfirmModal = (resa) => {
+    setConfirmModal(resa);
+    setSelectedTable(resa.table_id || "");
+    loadTables();
+  };
+
+  const confirmWithTable = async () => {
+    if (!confirmModal) return;
     try {
-      await reservationsService.confirm(id);
-      setData(prev => prev.map(r => r.id === id ? { ...r, status: "confirme" } : r));
+      await reservationsService.confirm(confirmModal.id, selectedTable || null);
+      setData(prev => prev.map(r => r.id === confirmModal.id
+        ? { ...r, status: "confirme", table_id: selectedTable || r.table_id,
+            table_label: tables.find(t => t.id === selectedTable)?.label || r.table_label }
+        : r
+      ));
+      setConfirmModal(null);
+      setSelectedTable("");
+    } catch (e) { console.error(e); }
+  };
+
+  // Ouvre la modale pour changer/assigner une table à une résa déjà confirmée
+  const openAssignModal = (resa) => {
+    setAssignModal(resa);
+    setSelectedTable(resa.table_id || "");
+    loadTables();
+  };
+
+  const assignTable = async () => {
+    if (!assignModal || !selectedTable) return;
+    try {
+      await reservationsService.assignTable(assignModal.id, selectedTable);
+      const tbl = tables.find(t => t.id === selectedTable);
+      setData(prev => prev.map(r => r.id === assignModal.id
+        ? { ...r, table_id: selectedTable, table_label: tbl?.label || r.table_label }
+        : r
+      ));
+      setAssignModal(null);
+      setSelectedTable("");
     } catch (e) { console.error(e); }
   };
 
@@ -192,19 +249,44 @@ export default function RestReservations() {
     )},
     { key: "date",    label: "Date",   render: r => <span style={{ fontSize: 12 }}>{fmtDate(r.reserved_at)}</span> },
     { key: "pers",    label: "Pers.",  align: "center", render: r => r.party_size },
+    { key: "table",   label: "Table",  align: "center", render: r => {
+      const confirmed = ["confirme","confirmé"].includes(r.status);
+      return r.table_label ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
+          <span style={{ fontWeight: 600, color: G, fontSize: 13 }}>{r.table_label}</span>
+          {confirmed && (
+            <button onClick={() => openAssignModal(r)}
+              style={{ border: "none", background: "transparent", cursor: "pointer",
+                color: "#bbb", fontSize: 10, padding: 0, lineHeight: 1 }}
+              title="Changer de table">✎</button>
+          )}
+        </div>
+      ) : (
+        confirmed ? (
+          <button onClick={() => openAssignModal(r)}
+            style={{ border: `0.5px dashed ${G}`, borderRadius: 6, padding: "2px 7px",
+              background: "#E1F5EE", color: G, cursor: "pointer", fontSize: 11 }}>
+            + Table
+          </button>
+        ) : <span style={{ color: "#ccc", fontSize: 11 }}>—</span>
+      );
+    }},
     { key: "montant", label: "Arrhes", align: "right",  render: r => <span style={{ fontWeight: 500 }}>{fmt(r.arrhes_amount)}</span> },
     { key: "status",  label: "Statut", render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status] || "gray"} /> },
     { key: "actions", label: "",       align: "right", render: r => {
-      const pending = ["en_attente","en attente"].includes(r.status);
+      const pending   = ["en_attente","en attente"].includes(r.status);
       const confirmed = ["confirme","confirmé"].includes(r.status);
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {pending && <>
-            <Btn onClick={() => confirm(r.id)} variant="primary" icon={CheckCircle} style={{ fontSize: 10, padding: "2px 7px" }}>OK</Btn>
-            <Btn onClick={() => cancel(r.id)} variant="danger" icon={XCircle} style={{ fontSize: 10, padding: "2px 7px" }}>Non</Btn>
+            <Btn onClick={() => openConfirmModal(r)} variant="primary" icon={CheckCircle}
+              style={{ fontSize: 10, padding: "2px 7px" }}>Confirmer</Btn>
+            <Btn onClick={() => cancel(r.id)} variant="danger" icon={XCircle}
+              style={{ fontSize: 10, padding: "2px 7px" }}>Refuser</Btn>
           </>}
           {confirmed && !r.is_noshow && (
-            <Btn onClick={() => markNoShow(r.id)} variant="default" style={{ fontSize: 10, padding: "2px 7px", color: "#DC2626" }}>No-show</Btn>
+            <Btn onClick={() => markNoShow(r.id)} variant="default"
+              style={{ fontSize: 10, padding: "2px 7px", color: "#DC2626" }}>No-show</Btn>
           )}
           {r.id && (
             <Btn onClick={() => { setChatRes({ id: r.id, name: r.client_name }); setMainTab("chat"); }}
@@ -464,6 +546,109 @@ export default function RestReservations() {
           </Card>
         </motion.div>
       )}
+
+      {/* ── MODALE CONFIRMATION + SÉLECTION TABLE ──────────────────────── */}
+      <AnimatePresence>
+        {(confirmModal || assignModal) && (() => {
+          const modal = confirmModal || assignModal;
+          const isConfirm = !!confirmModal;
+          return (
+            <>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 50 }} />
+              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+                style={{ position: "fixed", top: "50%", left: "50%",
+                  transform: "translate(-50%,-50%)", zIndex: 60,
+                  background: "white", borderRadius: 16, padding: 24,
+                  width: "min(460px, 92vw)", boxShadow: "0 20px 60px rgba(0,0,0,.2)" }}>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>
+                      {isConfirm ? "Confirmer la réservation" : "Assigner une table"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+                      {modal.client_name} · {modal.party_size} pers. · {fmtDate(modal.reserved_at)}
+                    </div>
+                  </div>
+                  <button onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                    style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb" }}>
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: "#555", display: "block", marginBottom: 8 }}>
+                    <LayoutTemplate size={13} style={{ verticalAlign: "middle", marginRight: 4, color: G }} />
+                    Choisir une table {isConfirm && "(optionnel)"}
+                  </label>
+
+                  {loadingTables ? (
+                    <div style={{ fontSize: 12, color: "#bbb", padding: "10px 0" }}>Chargement des tables…</div>
+                  ) : tables.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#bbb", padding: "10px 0" }}>
+                      Aucune table disponible. Configurez vos tables dans Plan de salle.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                      {isConfirm && (
+                        <button onClick={() => setSelectedTable("")}
+                          style={{ border: `1.5px solid ${!selectedTable ? "#ccc" : "#eee"}`,
+                            borderRadius: 9, padding: "10px 6px", cursor: "pointer", textAlign: "center",
+                            background: !selectedTable ? "#f8f8f8" : "white",
+                            color: !selectedTable ? "#888" : "#ccc", fontSize: 12 }}>
+                          Sans table
+                        </button>
+                      )}
+                      {tables.map(t => {
+                        const isFree = ["libre","free"].includes(t.status);
+                        const isSelected = selectedTable === t.id;
+                        return (
+                          <button key={t.id} onClick={() => setSelectedTable(t.id)}
+                            disabled={!isFree && !isSelected}
+                            style={{ border: `1.5px solid ${isSelected ? G : isFree ? "#eee" : "#fecaca"}`,
+                              borderRadius: 9, padding: "10px 6px", cursor: isFree ? "pointer" : "not-allowed",
+                              textAlign: "center", background: isSelected ? "#E1F5EE" : isFree ? "white" : "#fef2f2",
+                              opacity: !isFree && !isSelected ? 0.5 : 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14,
+                              color: isSelected ? G : isFree ? "#1a1a1a" : "#DC2626" }}>
+                              {t.label}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#aaa", marginTop: 2 }}>
+                              {t.capacity}p · {isFree ? "Libre" : "Occupée"}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                    style={{ flex: 1, border: "0.5px solid #eee", borderRadius: 9, padding: "11px 0",
+                      background: "white", cursor: "pointer", fontSize: 13, color: "#666" }}>
+                    Annuler
+                  </button>
+                  <button onClick={isConfirm ? confirmWithTable : assignTable}
+                    disabled={!isConfirm && !selectedTable}
+                    style={{ flex: 2, border: "none", borderRadius: 9, padding: "11px 0",
+                      background: (!isConfirm && !selectedTable) ? "#a0cfbe" : G,
+                      color: "white", cursor: (!isConfirm && !selectedTable) ? "not-allowed" : "pointer",
+                      fontSize: 13, fontWeight: 600 }}>
+                    {isConfirm
+                      ? selectedTable ? "✓ Confirmer et assigner" : "✓ Confirmer sans table"
+                      : "Assigner la table"
+                    }
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* ── CHAT ───────────────────────────────────────────────────────── */}
       {mainTab === "chat" && (

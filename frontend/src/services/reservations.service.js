@@ -16,8 +16,14 @@ export const reservationsService = {
     return res.data.data;
   },
 
-  async confirm(id) {
-    const res = await api.patch(`/reservations/${id}/confirm`);
+  async confirm(id, tableId = null) {
+    const body = tableId ? { table_id: tableId } : {};
+    const res = await api.patch(`/reservations/${id}/confirm`, body);
+    return res.data.data;
+  },
+
+  async assignTable(id, tableId) {
+    const res = await api.patch(`/reservations/${id}/assign-table`, { table_id: tableId });
     return res.data.data;
   },
 

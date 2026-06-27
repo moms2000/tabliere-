@@ -136,7 +136,10 @@ export const getOne = asyncHandler(async (req, res) => {
 });
 
 // ── PATCH /reservations/:id/confirm ──────────────────────────────────────────
+// Accepte un table_id optionnel dans le body pour assigner la table au moment de la confirmation
 export const confirm = asyncHandler(async (req, res) => {
+  const { table_id } = req.body; // optionnel
+
   const { rows: [resa] } = await query(
     "SELECT * FROM reservations WHERE id = $1", [req.params.id]
   );
@@ -147,20 +150,99 @@ export const confirm = asyncHandler(async (req, res) => {
   }
   if (resa.status !== "en_attente") throw new AppError("Seules les réservations en attente peuvent être confirmées", 400);
 
-  const { rows: [updated] } = await query(
-    `UPDATE reservations
-     SET status = 'confirme', confirmed_at = NOW(), updated_at = NOW()
-     WHERE id = $1 RETURNING *`,
-    [req.params.id]
-  );
+  // Vérifier que la table appartient bien au restaurant et est libre
+  if (table_id) {
+    const { rows: [tbl] } = await query(
+      "SELECT id, status FROM restaurant_tables WHERE id = $1 AND restaurant_id = $2",
+      [table_id, resa.restaurant_id]
+    );
+    if (!tbl) throw new AppError("Table introuvable dans ce restaurant", 404);
+    if (tbl.status === "occupe") throw new AppError("Cette table est déjà occupée", 409);
+  }
 
-  // Notifier le client
-  await notificationQueue.add("confirmation_client", {
-    reservationId: resa.id,
-  }).catch(() => {});
+  const updated = await withTransaction(async (client) => {
+    // Si on change de table, libérer l'ancienne
+    if (resa.table_id && resa.table_id !== table_id) {
+      await client.query(
+        "UPDATE restaurant_tables SET status = 'libre' WHERE id = $1",
+        [resa.table_id]
+      );
+    }
 
-  logger.info("Réservation confirmée", { resaId: resa.id, ref: resa.ref });
+    const { rows: [r] } = await client.query(
+      `UPDATE reservations
+       SET status = 'confirme', confirmed_at = NOW(), updated_at = NOW(),
+           table_id = COALESCE($2, table_id)
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, table_id || null]
+    );
+
+    // Marquer la nouvelle table comme réservée
+    if (table_id) {
+      await client.query(
+        "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1",
+        [table_id]
+      );
+    }
+
+    return r;
+  });
+
+  await notificationQueue.add("confirmation_client", { reservationId: resa.id }).catch(() => {});
+
+  logger.info("Réservation confirmée", { resaId: resa.id, ref: resa.ref, table_id });
   return ok(res, { reservation: updated }, "Réservation confirmée");
+});
+
+// ── PATCH /reservations/:id/assign-table ─────────────────────────────────────
+// Assigner ou changer la table d'une réservation déjà confirmée
+export const assignTable = asyncHandler(async (req, res) => {
+  const { table_id } = req.body;
+  if (!table_id) throw new AppError("table_id requis", 400);
+
+  const { rows: [resa] } = await query(
+    "SELECT * FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
+    throw new AppError("Accès refusé", 403);
+  }
+
+  // Vérifier la table
+  const { rows: [tbl] } = await query(
+    "SELECT id, label, capacity, status FROM restaurant_tables WHERE id = $1 AND restaurant_id = $2",
+    [table_id, resa.restaurant_id]
+  );
+  if (!tbl) throw new AppError("Table introuvable dans ce restaurant", 404);
+  if (tbl.status === "occupe") throw new AppError("Cette table est déjà occupée", 409);
+
+  const updated = await withTransaction(async (client) => {
+    // Libérer l'ancienne table
+    if (resa.table_id && resa.table_id !== table_id) {
+      await client.query(
+        "UPDATE restaurant_tables SET status = 'libre' WHERE id = $1",
+        [resa.table_id]
+      );
+    }
+
+    const { rows: [r] } = await client.query(
+      `UPDATE reservations SET table_id = $1, updated_at = NOW()
+       WHERE id = $2 RETURNING *`,
+      [table_id, req.params.id]
+    );
+
+    // Marquer la nouvelle table comme réservée
+    await client.query(
+      "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1",
+      [table_id]
+    );
+
+    return r;
+  });
+
+  logger.info("Table assignée", { resaId: resa.id, table_id, tableLabel: tbl.label });
+  return ok(res, { reservation: updated, table: tbl }, `Table ${tbl.label} assignée`);
 });
 
 // ── PATCH /reservations/:id/cancel ───────────────────────────────────────────

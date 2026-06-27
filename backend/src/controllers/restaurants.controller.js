@@ -83,6 +83,7 @@ export const getOne = asyncHandler(async (req, res) => {
 
 // ── GET /restaurants/:id/manage — restaurateur ────────────────────────────────
 export const getManage = asyncHandler(async (req, res) => {
+  await ensureTableColumns();
   const { rows: [resto] } = await query(
     "SELECT * FROM restaurants WHERE id = $1",
     [req.params.id]
@@ -176,8 +177,22 @@ export const generateQR = asyncHandler(async (req, res) => {
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 
+// Migration silencieuse : ajouter pos_x / pos_y si absent
+let tablesMigrated = false;
+async function ensureTableColumns() {
+  if (tablesMigrated) return;
+  try {
+    await query(`
+      ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_x INTEGER DEFAULT 20;
+      ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_y INTEGER DEFAULT 20;
+    `);
+  } catch (_) {}
+  tablesMigrated = true;
+}
+
 export const createTable = asyncHandler(async (req, res) => {
-  const { label, capacity, zone } = req.body;
+  await ensureTableColumns();
+  const { label, capacity, zone, pos_x, pos_y } = req.body;
   const { rows: [resto] } = await query(
     "SELECT id, owner_id FROM restaurants WHERE id = $1", [req.params.id]
   );
@@ -185,10 +200,10 @@ export const createTable = asyncHandler(async (req, res) => {
   _assertOwnerOrAdmin(req, resto);
 
   const { rows: [table] } = await query(
-    `INSERT INTO restaurant_tables (restaurant_id, label, capacity, zone)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO restaurant_tables (restaurant_id, label, capacity, zone, pos_x, pos_y)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [resto.id, label, capacity || 2, zone || "interieur"]
+    [resto.id, label, capacity || 2, zone || "interieur", pos_x ?? 20, pos_y ?? 20]
   );
 
   await cache.delPattern(`restaurant:*`).catch(() => {});
@@ -196,7 +211,8 @@ export const createTable = asyncHandler(async (req, res) => {
 });
 
 export const updateTable = asyncHandler(async (req, res) => {
-  const ALLOWED = ["label","capacity","zone","status","is_active"];
+  await ensureTableColumns();
+  const ALLOWED = ["label","capacity","zone","status","is_active","pos_x","pos_y"];
   const updates = [];
   const values  = [];
 

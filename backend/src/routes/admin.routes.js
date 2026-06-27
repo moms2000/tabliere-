@@ -14,6 +14,7 @@ router.patch("/restaurants/:id/plan",   ctrl.setRestaurantPlan);
 router.get ("/users",                   ctrl.listUsers);
 router.patch("/users/:id/status",       ctrl.setUserStatus);
 router.get ("/payments",                ctrl.listPayments);
-router.get ("/reservations",            ctrl.listReservations);
+router.get  ("/reservations",            ctrl.listReservations);
+router.patch("/reservations/:id",        ctrl.updateReservation);
 
 export default router;

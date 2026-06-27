@@ -328,7 +328,6 @@ export default function RestReservations() {
         ) : <span style={{ color: "#ccc", fontSize: 11 }}>—</span>
       );
     }},
-    { key: "montant", label: "Arrhes", align: "right",  render: r => <span style={{ fontWeight: 500 }}>{fmt(r.arrhes_amount)}</span> },
     { key: "status",  label: "Statut", render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status] || "gray"} /> },
     { key: "actions", label: "",       align: "right", render: r => {
       const pending   = ["en_attente","en attente"].includes(r.status);
@@ -463,7 +462,6 @@ export default function RestReservations() {
                   { label: "Taux de confirmation", val: data.length
                       ? Math.round(data.filter(r=>["confirme","confirmé"].includes(r.status)).length/data.length*100)+"%"
                       : "—", color: "#185FA5" },
-                  { label: "Revenus (arrhes)", val: data.reduce((a,r)=>a+(parseFloat(r.arrhes_amount)||0),0).toLocaleString("fr-FR")+" F", color: "#854F0B" },
                 ].map((s, i) => (
                   <div key={i} style={{ background: "#f8f8f8", borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{s.label}</div>

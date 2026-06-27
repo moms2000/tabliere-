@@ -1,6 +1,7 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P      = "#E8A045";
@@ -29,82 +30,151 @@ const NAV = [
   { to: "/restaurant/menu",         label: "Menu & QR Code",  icon: Notebook },
 ];
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return mobile;
+}
+
+function SidebarContent({ navigate, user, logout, onClose }) {
+  return (
+    <>
+      {/* Logo */}
+      <div style={{ padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)",
+        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+          onClick={() => { navigate("/restaurant"); onClose?.(); }}>
+          <Logo size={28} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "white", lineHeight: 1.2 }}>
+              Tablière<span style={{ color: P }}>CI</span>
+            </div>
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)",
+              textTransform: "uppercase", letterSpacing: "1px", marginTop: 2 }}>
+              {user?.resto_name || "Mon Restaurant"}
+            </div>
+          </div>
+        </div>
+        {onClose && (
+          <button onClick={onClose}
+            style={{ border: "none", background: "transparent",
+              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex" }}>
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: "10px 8px" }}>
+        {NAV.map(({ to, label, icon: Icon, end }) => (
+          <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
+            onClick={() => onClose?.()}>
+            {({ isActive }) => (
+              <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
+                  borderRadius: 9, marginBottom: 1, cursor: "pointer",
+                  background: isActive ? "rgba(232,160,69,.15)" : "transparent",
+                  borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
+                  color: isActive ? P : "rgba(255,255,255,.5)" }}>
+                <Icon size={16} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>{label}</span>
+              </motion.div>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* User */}
+      <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
+        display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: P + "33",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
+          {(user?.full_name || "RR").slice(0,2).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: "white",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {user?.full_name || "Gérant"}
+          </div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>Restaurateur</div>
+        </div>
+        <button onClick={() => logout()}
+          style={{ border: "none", background: "transparent",
+            cursor: "pointer", color: "rgba(255,255,255,.3)", display: "flex", padding: 4 }}>
+          <LogOut size={14} />
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function RestaurantLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   return (
     <div style={{ display: "flex", height: "100vh", background: BG,
       overflow: "hidden", fontFamily: FONT }}>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside style={{ width: 210, background: DARK, borderRight: "none",
-        display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      {/* ── Sidebar desktop ─────────────────────────────────────────────────── */}
+      {!isMobile && (
+        <aside style={{ width: 210, background: DARK, display: "flex",
+          flexDirection: "column", flexShrink: 0 }}>
+          <SidebarContent navigate={navigate} user={user} logout={logout} />
+        </aside>
+      )}
 
-        {/* Logo */}
-        <div style={{ padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-            onClick={() => navigate("/restaurant")}>
-            <Logo size={28} />
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "white", lineHeight: 1.2 }}>
-                Tablière<span style={{ color: P }}>CI</span>
-              </div>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)",
-                textTransform: "uppercase", letterSpacing: "1px", marginTop: 2 }}>
-                {user?.resto_name || "Mon Restaurant"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: "10px 8px" }}>
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}>
-              {({ isActive }) => (
-                <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
-                    borderRadius: 9, marginBottom: 1, cursor: "pointer",
-                    background: isActive ? "rgba(232,160,69,.15)" : "transparent",
-                    borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
-                    color: isActive ? P : "rgba(255,255,255,.5)" }}>
-                  <Icon size={16} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>{label}</span>
-                </motion.div>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* User */}
-        <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
-          display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: P + "33",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
-            {(user?.full_name || "RR").slice(0,2).toUpperCase()}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: "white",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {user?.full_name || "Gérant"}
-            </div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>Restaurateur</div>
-          </div>
-          <button onClick={() => logout()}
-            style={{ border: "none", background: "transparent",
-              cursor: "pointer", color: "rgba(255,255,255,.3)", display: "flex", padding: 4 }}>
-            <LogOut size={14} />
-          </button>
-        </div>
-      </aside>
+      {/* ── Drawer mobile ───────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isMobile && mobileOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100 }} />
+            <motion.aside
+              initial={{ x: -220 }} animate={{ x: 0 }} exit={{ x: -220 }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 210,
+                background: DARK, display: "flex", flexDirection: "column",
+                zIndex: 101 }}>
+              <SidebarContent navigate={navigate} user={user} logout={logout}
+                onClose={() => setMobileOpen(false)} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <main style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        {/* Topbar mobile */}
+        {isMobile && (
+          <div style={{ background: DARK, height: 50, display: "flex", alignItems: "center",
+            padding: "0 16px", gap: 12, flexShrink: 0 }}>
+            <button onClick={() => setMobileOpen(true)}
+              style={{ border: "none", background: "transparent", cursor: "pointer",
+                color: "rgba(255,255,255,.7)", display: "flex" }}>
+              <Menu size={20} />
+            </button>
+            <Logo size={22} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "white" }}>
+              Tablière<span style={{ color: P }}>CI</span>
+            </span>
+          </div>
+        )}
+
+        <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 14 : 20 }}>
           <AnimatePresence mode="wait">
-            <motion.div key={window.location.pathname}
+            <motion.div key={location.pathname}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
               <Outlet />

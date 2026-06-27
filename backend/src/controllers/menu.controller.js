@@ -124,6 +124,23 @@ export const updateCategory = asyncHandler(async (req, res) => {
   return ok(res, { category: cat }, "Catégorie mise à jour");
 });
 
+// ── DELETE /menu/categories/:id ───────────────────────────────────────────────
+export const deleteCategory = asyncHandler(async (req, res) => {
+  const { rows: [cat] } = await query(
+    "SELECT restaurant_id FROM menu_categories WHERE id = $1", [req.params.id]
+  );
+  if (!cat) return notFound(res, "Catégorie introuvable");
+  _assertOwnerOrAdmin(req, { id: cat.restaurant_id });
+
+  await query(
+    "UPDATE menu_categories SET is_active = FALSE WHERE id = $1",
+    [req.params.id]
+  );
+
+  await cache.delPattern(`menu:public:*`).catch(() => {});
+  return ok(res, null, "Catégorie supprimée");
+});
+
 // ── POST /menu/items ──────────────────────────────────────────────────────────
 export const createItem = asyncHandler(async (req, res) => {
   const { category_id, name, description, price, image_url, is_active = true, position = 0 } = req.body;

@@ -36,6 +36,11 @@ export const adminService = {
     return res.data;
   },
 
+  async updateReservation(id, fields) {
+    const res = await api.patch(`/admin/reservations/${id}`, fields);
+    return res.data.data;
+  },
+
   async listPayments(params = {}) {
     const res = await api.get("/admin/payments", { params });
     return res.data;

@@ -24,5 +24,7 @@ router.post  ("/items",           authenticate, authorize("restaurateur","admin"
 router.patch ("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.updateItem);
 router.delete("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.deleteItem);
 router.post  ("/categories",      authenticate, authorize("restaurateur","admin"), ctrl.createCategory);
+router.patch ("/categories/:id",  authenticate, authorize("restaurateur","admin"), ctrl.updateCategory);
+router.delete("/categories/:id",  authenticate, authorize("restaurateur","admin"), ctrl.deleteCategory);
 
 export default router;

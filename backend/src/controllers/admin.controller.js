@@ -243,3 +243,31 @@ export const listReservations = asyncHandler(async (req, res) => {
   );
   return paginated(res, rows, +count, +page, +limit);
 });
+
+// ---------------------------------------------------------------------------
+// PATCH /admin/reservations/:id
+// ---------------------------------------------------------------------------
+export const updateReservation = asyncHandler(async (req, res) => {
+  const { rows: [resa] } = await query(
+    "SELECT id FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+
+  const ALLOWED = ["reserved_at","party_size","status","notes","special_request","table_id"];
+  const updates = [];
+  const values  = [];
+  for (const field of ALLOWED) {
+    if (req.body[field] === undefined) continue;
+    values.push(req.body[field]);
+    updates.push(`${field} = $${values.length}`);
+  }
+  if (!updates.length) { return ok(res, null, "Aucun champ à mettre à jour"); }
+
+  values.push(req.params.id);
+  const { rows: [updated] } = await query(
+    `UPDATE reservations SET ${updates.join(", ")}, updated_at = NOW()
+     WHERE id = $${values.length} RETURNING *`,
+    values
+  );
+  return ok(res, { reservation: updated }, "Réservation mise à jour");
+});

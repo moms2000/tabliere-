@@ -310,6 +310,35 @@ export const noShow = asyncHandler(async (req, res) => {
   return ok(res, { reservation: updated }, "No-show enregistré");
 });
 
+// ── PATCH /reservations/:id — mise à jour générale (restaurateur/admin) ───────
+export const update = asyncHandler(async (req, res) => {
+  const { rows: [resa] } = await query(
+    "SELECT * FROM reservations WHERE id = $1", [req.params.id]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
+    throw new AppError("Accès refusé", 403);
+  }
+
+  const ALLOWED = ["reserved_at","party_size","status","notes","special_request","table_id"];
+  const updates = [];
+  const values  = [];
+  for (const field of ALLOWED) {
+    if (req.body[field] === undefined) continue;
+    values.push(req.body[field]);
+    updates.push(`${field} = $${values.length}`);
+  }
+  if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);
+
+  values.push(req.params.id);
+  const { rows: [updated] } = await query(
+    `UPDATE reservations SET ${updates.join(", ")}, updated_at = NOW()
+     WHERE id = $${values.length} RETURNING *`,
+    values
+  );
+  return ok(res, { reservation: updated }, "Réservation mise à jour");
+});
+
 // ── Helper ─────────────────────────────────────────────────────────────────────
 function _assertAccess(req, resa) {
   if (req.user.role === "admin") return;

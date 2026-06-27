@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import NotFound from "./pages/public/NotFound.jsx";
 import "./index.css";
 
 import { AuthProvider }     from "./context/AuthContext.jsx";
@@ -76,7 +77,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             {/* ── Client — accès via QR (public) ───────────────────────────── */}
             <Route path="/menu/:slug" element={<ClientMenu />} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
       </LanguageProvider>

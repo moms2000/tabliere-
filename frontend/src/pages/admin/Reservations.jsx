@@ -134,7 +134,6 @@ export default function Reservations() {
       <EditableCell value={r.party_size} type="number"
         onSave={v => updateInline(r.id, { party_size: Number(v) })} />
     )},
-    { key: "montant",label: "Arrhes", align: "right", render: r => <span style={{ fontWeight: 500 }}>{fmt(r.arrhes_amount)}</span> },
     { key: "status", label: "Statut", render: r => <Badge label={r.status} variant={STATUS_BADGE[r.status] || "gray"} /> },
     { key: "edit",   label: "",       align: "right", render: r => (
       <button onClick={() => openEdit(r)}

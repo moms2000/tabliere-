@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageMeta } from "../../hooks/usePageMeta.js";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -290,6 +291,7 @@ const fadeUp  = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, trans
 
 /* ══════════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
+  usePageMeta(null, "Réservez les meilleures tables d'Abidjan et de Côte d'Ivoire — confirmation immédiate, annulation gratuite.");
   const navigate  = useNavigate();
   const { user, logout } = useAuth();
   const { lang, t, changeLang, langs } = useLang();

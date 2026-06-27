@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import QRCode from "react-qr-code";
 import { Notebook, Plus, Pencil, Trash2, QrCode, ExternalLink, Copy, Check, Share2 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Btn, Toggle, Modal, FormField, Input } from "../../components/ui";
 import { menuService }        from "../../services/menu.service.js";
@@ -19,32 +20,12 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 const fmt = (n) => n ? Number(n).toLocaleString("fr-FR") + " F" : "—";
 
-/* ── QR Code SVG simplifié ───────────────────────────────────────────────────── */
-function QrSvg({ url, size = 140 }) {
-  const seed = url.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const N = 21; const cell = size / N;
-  const grid = Array.from({ length: N }, (_, r) =>
-    Array.from({ length: N }, (_, c) => {
-      const inTL = r < 8 && c < 8;
-      const inTR = r < 8 && c > N - 9;
-      const inBL = r > N - 9 && c < 8;
-      if (inTL || inTR || inBL) {
-        const lr = inBL ? r - (N - 8) : r;
-        const lc = inTR ? c - (N - 8) : c;
-        return (lr === 0 || lr === 6 || lc === 0 || lc === 6 ||
-               (lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4)) ? 1 : 0;
-      }
-      return ((seed * (r * 21 + c + 1) * 6364136223846793005) >>> 0) % 100 > 48 ? 1 : 0;
-    })
-  );
+/* ── QR Code réel (react-qr-code) ───────────────────────────────────────────── */
+function QrSvg({ url, size = 140, dark = DARK, light = "white" }) {
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <rect width={size} height={size} fill="white" />
-      {grid.flatMap((row, r) => row.map((v, c) => v
-        ? <rect key={`${r}-${c}`} x={c*cell} y={r*cell} width={cell} height={cell} fill={DARK} />
-        : null
-      ))}
-    </svg>
+    <div style={{ background: "white", padding: 8, borderRadius: 8, display: "inline-block" }}>
+      <QRCode value={url || "https://tabliereci.com"} size={size} fgColor={dark} bgColor={light} />
+    </div>
   );
 }
 

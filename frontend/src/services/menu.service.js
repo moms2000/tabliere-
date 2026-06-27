@@ -13,9 +13,18 @@ export const menuService = {
     return res.data.data;
   },
 
-  async createCategory(slug, name, position = 0) {
-    const res = await api.post("/menu/categories", { slug, name, position });
+  async createCategory(restoId, data) {
+    const res = await api.post("/menu/categories", data);
     return res.data.data;
+  },
+
+  async updateCategory(id, data) {
+    const res = await api.patch(`/menu/categories/${id}`, data);
+    return res.data.data;
+  },
+
+  async deleteCategory(id) {
+    await api.delete(`/menu/categories/${id}`);
   },
 
   async createItem(data) {

@@ -32,6 +32,16 @@ export const reservationsService = {
     return res.data.data;
   },
 
+  async update(id, fields) {
+    const res = await api.patch(`/reservations/${id}`, fields);
+    return res.data.data;
+  },
+
+  async noShow(id) {
+    const res = await api.patch(`/reservations/${id}/no-show`);
+    return res.data.data;
+  },
+
   // Réservations de l'utilisateur connecté
   async myReservations(params = {}) {
     const res = await api.get("/users/me/reservations", { params });

@@ -42,4 +42,8 @@ export const restaurantsService = {
     const res = await api.patch(`/restaurants/${restoId}/tables/${tableId}`, data);
     return res.data.data;
   },
+
+  async deleteTable(restoId, tableId) {
+    await api.delete(`/restaurants/${restoId}/tables/${tableId}`);
+  },
 };

@@ -28,5 +28,6 @@ router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"
 router.patch("/:id/assign-table", authenticate, authorize("restaurateur","admin"), ctrl.assignTable);
 router.patch("/:id/cancel",       authenticate,                                    ctrl.cancel);
 router.patch("/:id/no-show",      authenticate, authorize("restaurateur","admin"), ctrl.noShow);
+router.patch("/:id",              authenticate, authorize("restaurateur","admin"), ctrl.update);
 
 export default router;

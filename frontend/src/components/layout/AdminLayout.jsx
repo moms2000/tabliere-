@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Utensils, Users, CalendarCheck, CreditCard,
-  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut,
+  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -38,98 +38,151 @@ const NAV = [
   { to: "/admin/parametres",    label: "Paramètres",      icon: Settings },
 ];
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return mobile;
+}
+
+function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
+  return (
+    <>
+      {/* Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10,
+        padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)", minHeight: 54 }}>
+        <div onClick={() => { navigate("/admin"); onClose?.(); }} style={{ flexShrink: 0, cursor: "pointer" }}>
+          <Logo size={28} />
+        </div>
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "white", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                Tablière<span style={{ color: P }}>CI</span>
+              </div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)", letterSpacing: "1px",
+                textTransform: "uppercase", marginTop: 2 }}>Administration</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {onClose && (
+          <button onClick={onClose}
+            style={{ marginLeft: "auto", border: "none", background: "transparent",
+              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex" }}>
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
+        {NAV.map(({ to, label, icon: Icon, end }) => (
+          <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
+            onClick={() => onClose?.()}>
+            {({ isActive }) => (
+              <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
+                style={{ display: "flex", alignItems: "center", gap: 10,
+                  padding: "9px 10px", borderRadius: 9, marginBottom: 1,
+                  background: isActive ? "rgba(232,160,69,.15)" : "transparent",
+                  borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
+                  color: isActive ? P : "rgba(255,255,255,.5)",
+                  cursor: "pointer", overflow: "hidden" }}>
+                <Icon size={16} style={{ flexShrink: 0 }} />
+                <AnimatePresence>
+                  {!collapsed && (
+                    <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap" }}>
+                      {label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* User + logout */}
+      <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
+        display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%",
+          background: P + "33", display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
+          {(user?.full_name || "AD").slice(0,2).toUpperCase()}
+        </div>
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "white",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {user?.full_name || "Admin"}
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>Super Admin</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {!collapsed && (
+          <button onClick={() => logout()}
+            style={{ border: "none", background: "transparent", cursor: "pointer",
+              color: "rgba(255,255,255,.3)", display: "flex", padding: 4 }}>
+            <LogOut size={14} />
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function AdminLayout() {
-  const [collapsed, setCollapsed] = useState(false);
-  const navigate   = useNavigate();
+  const [collapsed,   setCollapsed]   = useState(false);
+  const [mobileOpen,  setMobileOpen]  = useState(false);
+  const isMobile  = useIsMobile();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { user, logout } = useAuth();
+
+  // Fermer le drawer mobile à chaque changement de route
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   return (
     <div style={{ display: "flex", height: "100vh", background: BG,
       overflow: "hidden", fontFamily: FONT }}>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <motion.aside
-        animate={{ width: collapsed ? 58 : 220 }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        style={{ background: DARK, display: "flex", flexDirection: "column",
-          overflow: "hidden", flexShrink: 0 }}>
+      {/* ── Sidebar desktop ─────────────────────────────────────────────────── */}
+      {!isMobile && (
+        <motion.aside
+          animate={{ width: collapsed ? 58 : 220 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          style={{ background: DARK, display: "flex", flexDirection: "column",
+            overflow: "hidden", flexShrink: 0 }}>
+          <SidebarContent collapsed={collapsed} navigate={navigate} user={user} logout={logout} />
+        </motion.aside>
+      )}
 
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10,
-          padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)", minHeight: 54 }}>
-          <div onClick={() => navigate("/admin")} style={{ flexShrink: 0, cursor: "pointer" }}>
-            <Logo size={28} />
-          </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "white", whiteSpace: "nowrap", lineHeight: 1.2 }}>
-                  Tablière<span style={{ color: P }}>CI</span>
-                </div>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)", letterSpacing: "1px",
-                  textTransform: "uppercase", marginTop: 2 }}>Administration</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}>
-              {({ isActive }) => (
-                <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
-                  style={{ display: "flex", alignItems: "center", gap: 10,
-                    padding: "9px 10px", borderRadius: 9, marginBottom: 1,
-                    background: isActive ? "rgba(232,160,69,.15)" : "transparent",
-                    borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
-                    color: isActive ? P : "rgba(255,255,255,.5)",
-                    cursor: "pointer", overflow: "hidden" }}>
-                  <Icon size={16} style={{ flexShrink: 0 }} />
-                  <AnimatePresence>
-                    {!collapsed && (
-                      <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0 }}
-                        style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap" }}>
-                        {label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* User + logout */}
-        <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
-          display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%",
-            background: P + "33", display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
-            {(user?.full_name || "AD").slice(0,2).toUpperCase()}
-          </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: "white",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {user?.full_name || "Admin"}
-                </div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>Super Admin</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {!collapsed && (
-            <button onClick={() => logout()}
-              style={{ border: "none", background: "transparent", cursor: "pointer",
-                color: "rgba(255,255,255,.3)", display: "flex", padding: 4 }}>
-              <LogOut size={14} />
-            </button>
-          )}
-        </div>
-      </motion.aside>
+      {/* ── Drawer mobile ───────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isMobile && mobileOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100 }} />
+            <motion.aside
+              initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 220,
+                background: DARK, display: "flex", flexDirection: "column",
+                zIndex: 101, overflow: "hidden" }}>
+              <SidebarContent collapsed={false} navigate={navigate} user={user} logout={logout}
+                onClose={() => setMobileOpen(false)} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -138,18 +191,21 @@ export default function AdminLayout() {
         <div style={{ background: "white", borderBottom: `0.5px solid ${BORDER}`,
           padding: "0 18px", height: 50, display: "flex", alignItems: "center",
           justifyContent: "space-between", flexShrink: 0 }}>
-          <motion.button whileTap={{ scale: 0.9 }} onClick={() => setCollapsed(p => !p)}
+          <motion.button whileTap={{ scale: 0.9 }}
+            onClick={() => isMobile ? setMobileOpen(p => !p) : setCollapsed(p => !p)}
             style={{ border: "none", background: "transparent", cursor: "pointer",
               color: MUTED, display: "flex", alignItems: "center" }}>
-            {collapsed ? <ChevronRight size={19} /> : <X size={19} />}
+            {isMobile ? <Menu size={20} /> : collapsed ? <ChevronRight size={19} /> : <X size={19} />}
           </motion.button>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => window.location.reload()}
-              style={{ display: "flex", alignItems: "center", gap: 6,
-                border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "5px 11px",
-                background: "white", cursor: "pointer", fontSize: 12, color: MUTED, fontFamily: FONT }}>
-              <RefreshCw size={13} />Actualiser
-            </button>
+            {!isMobile && (
+              <button onClick={() => window.location.reload()}
+                style={{ display: "flex", alignItems: "center", gap: 6,
+                  border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "5px 11px",
+                  background: "white", cursor: "pointer", fontSize: 12, color: MUTED, fontFamily: FONT }}>
+                <RefreshCw size={13} />Actualiser
+              </button>
+            )}
             <motion.button whileTap={{ scale: 0.9 }}
               style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
                 padding: "5px 10px", background: "white", cursor: "pointer",
@@ -161,9 +217,9 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <main style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 14 : 20 }}>
           <AnimatePresence mode="wait">
-            <motion.div key={window.location.pathname}
+            <motion.div key={location.pathname}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
               <Outlet />

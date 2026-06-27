@@ -111,17 +111,19 @@ export default function RestReservations() {
   // Modale changement de table (résa déjà confirmée)
   const [assignModal, setAssignModal] = useState(null); // { resa }
 
-  // Charger les tables libres + réservées du resto
+  // Charger toutes les tables du resto (pour assignation)
   const loadTables = async () => {
-    if (!user?.resto_id) return;
+    const restoId = user?.resto_id;
+    if (!restoId) return;
     setLoadingTables(true);
     try {
-      const d = await restaurantsService.getManage(user.resto_id);
-      const ts = (d.restaurant?.tables || []).filter(t =>
-        ["libre","free","reserve","réservé","reserved"].includes(t.status)
-      );
+      const d = await restaurantsService.getManage(restoId);
+      // On affiche toutes les tables — l'assignation est possible quelle que soit la dispo
+      const ts = d?.restaurant?.tables || d?.tables || [];
       setTables(ts);
-    } catch (_) {}
+    } catch (err) {
+      console.error("loadTables error", err);
+    }
     setLoadingTables(false);
   };
 

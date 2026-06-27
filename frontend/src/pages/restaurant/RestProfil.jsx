@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Save, Store, MapPin, Clock, Phone, Globe, DollarSign, Palette, Check } from "lucide-react";
-import { Card, SectionHeader, PageTitle, Btn, FormField, Input } from "../../components/ui";
+import { Card, SectionHeader, PageTitle, Btn, FormField, Input, PhotoUpload } from "../../components/ui";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -268,25 +268,16 @@ export default function RestProfil() {
             </Card>
           </motion.div>
 
-          {/* URL logo */}
+          {/* Logo upload */}
           <motion.div variants={fadeUp}>
             <Card>
-              <SectionHeader title="Logo" icon={Globe} />
-              {form.logo_url && (
-                <div style={{ marginBottom: 10, textAlign: "center" }}>
-                  <img src={form.logo_url} alt="logo"
-                    style={{ maxWidth: "100%", maxHeight: 80, borderRadius: 8,
-                      border: `0.5px solid ${BORDER}` }}
-                    onError={e => { e.target.style.display = "none"; }} />
-                </div>
-              )}
-              <FormField label="URL du logo (JPG/PNG)">
-                <Input value={form.logo_url} onChange={set("logo_url")}
-                  placeholder="https://cdn.exemple.com/logo.png" />
-              </FormField>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
-                Hébergez votre logo sur un service tiers (Cloudinary, ImgBB…) et collez l'URL ici.
-              </div>
+              <SectionHeader title="Logo du restaurant" icon={Globe} />
+              <PhotoUpload
+                label="Logo (depuis votre appareil)"
+                value={form.logo_url}
+                onChange={b64 => setForm(p => ({ ...p, logo_url: b64 }))}
+                height={130}
+              />
             </Card>
           </motion.div>
 

@@ -1,3 +1,4 @@
+import React from "react";
 import { motion } from "framer-motion";
 
 /* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
@@ -187,8 +188,8 @@ export function Modal({ open, onClose, title, children, width = 480 }) {
         style={{ position: "fixed", top: "50%", left: "50%",
           transform: "translate(-50%,-50%)", zIndex: 101,
           background: "white", borderRadius: 16, padding: 24, width,
-          maxWidth: "calc(100vw - 32px)", fontFamily: FONT,
-          boxShadow: "0 24px 64px rgba(30,46,40,.18)" }}>
+          maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto",
+          fontFamily: FONT, boxShadow: "0 24px 64px rgba(30,46,40,.18)" }}>
         <div style={{ display: "flex", justifyContent: "space-between",
           alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, color: DARK }}>{title}</h2>
@@ -236,5 +237,75 @@ export function Select({ value, onChange, options, style = {} }) {
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
     </select>
+  );
+}
+
+// ── PhotoUpload — sélecteur de photo depuis l'appareil ────────────────────────
+// Usage: <PhotoUpload value={url} onChange={base64orUrl => ...} label="Photo" />
+export function PhotoUpload({ value, onChange, label = "Photo", height = 120 }) {
+  const inputRef = React.useRef(null);
+
+  const compress = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 800;
+          let w = img.width, h = img.height;
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else       { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const b64 = await compress(file);
+    onChange(b64);
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ fontFamily: FONT }}>
+      {label && (
+        <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, marginBottom: 6,
+          textTransform: "uppercase", letterSpacing: "0.8px" }}>{label}</div>
+      )}
+      <div
+        onClick={() => inputRef.current?.click()}
+        style={{ height, borderRadius: 10, border: `1.5px dashed ${BORDER}`,
+          background: value ? "transparent" : BG, cursor: "pointer", overflow: "hidden",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          position: "relative" }}>
+        {value ? (
+          <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <div style={{ textAlign: "center", color: MUTED }}>
+            <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
+            <div style={{ fontSize: 11 }}>Choisir une photo</div>
+          </div>
+        )}
+        {value && (
+          <div style={{ position: "absolute", bottom: 6, right: 6,
+            background: "rgba(0,0,0,.55)", borderRadius: 6, padding: "3px 8px",
+            fontSize: 10, color: "white", cursor: "pointer" }}>
+            Changer
+          </div>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={handleFile} />
+    </div>
   );
 }

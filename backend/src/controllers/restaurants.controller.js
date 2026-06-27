@@ -139,19 +139,28 @@ export const generateQR = asyncHandler(async (req, res) => {
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
   _assertOwnerOrAdmin(req, resto);
-  if (resto.plan === "gratuit") throw new AppError("Le plan gratuit ne permet pas le QR menu", 403);
 
-  const theme = { primary: resto.theme_color || "#1D9E75" };
-  const { dataUrl, url } = await qrService.generateMenuQR(resto.slug, theme);
+  const frontendUrl = process.env.FRONTEND_URL || "https://tabliere.vercel.app";
+  const menuUrl = `${frontendUrl}/menu/${resto.slug}`;
+
+  // Tentative de génération QR graphique — non bloquante si le service échoue
+  let qrDataUrl = null;
+  try {
+    const theme = { primary: resto.theme_color || "#E8A045" };
+    const result = await qrService.generateMenuQR(resto.slug, theme);
+    qrDataUrl = result.dataUrl;
+  } catch (e) {
+    logger.warn("qrService indisponible, activation sans data URL", { error: e?.message });
+  }
 
   await query(
     "UPDATE restaurants SET qr_active = TRUE, qr_code_url = $1, updated_at = NOW() WHERE id = $2",
-    [url, resto.id]
+    [menuUrl, resto.id]
   );
 
   await cache.delPattern("restaurant:*").catch(() => {});
-  logger.info("QR généré", { restoId: resto.id });
-  return ok(res, { qr_data_url: dataUrl, qr_url: url });
+  logger.info("QR activé", { restoId: resto.id });
+  return ok(res, { qr_data_url: qrDataUrl, qr_url: menuUrl });
 });
 
 // ── Tables ────────────────────────────────────────────────────────────────────

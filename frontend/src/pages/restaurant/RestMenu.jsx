@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "react-qr-code";
 import { Notebook, Plus, Pencil, Trash2, QrCode, ExternalLink, Copy, Check, Share2 } from "lucide-react";
-import { Card, SectionHeader, PageTitle, Btn, Toggle, Modal, FormField, Input } from "../../components/ui";
+import { Card, SectionHeader, PageTitle, Btn, Toggle, Modal, FormField, Input, PhotoUpload } from "../../components/ui";
 import { menuService }        from "../../services/menu.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -391,19 +391,15 @@ export default function RestMenu() {
                 padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
                 outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
           </FormField>
-          <FormField label="Photo du plat (URL)">
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {formItem.image_url && (
-                <img src={formItem.image_url} alt="preview"
-                  style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                  onError={e => { e.target.style.display = "none"; }} />
-              )}
-              <Input value={formItem.image_url}
-                onChange={e => setFormItem(p => ({ ...p, image_url: e.target.value }))}
-                placeholder="https://cdn.exemple.com/plat.jpg" style={{ flex: 1 }} />
-            </div>
+          <PhotoUpload
+            label="Photo du plat"
+            value={formItem.image_url}
+            onChange={b64 => setFormItem(p => ({ ...p, image_url: b64 }))}
+            height={110}
+          />
+          <FormField label="">
             <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
-              Hébergez l'image sur Cloudinary, ImgBB, etc. et collez l'URL ici.
+              La photo est compressée automatiquement depuis votre appareil.
             </div>
           </FormField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

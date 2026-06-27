@@ -8,6 +8,7 @@ import {
   Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus, Bell,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
+import api from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
 
@@ -309,8 +310,11 @@ export default function Home() {
   const [favorites,   setFavorites]   = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
   });
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showLang,     setShowLang]     = useState(false);
+  const [showUserMenu,   setShowUserMenu]   = useState(false);
+  const [showLang,       setShowLang]       = useState(false);
+  const [showNotifs,     setShowNotifs]     = useState(false);
+  const [notifs,         setNotifs]         = useState([]);
+  const [notifsLoading,  setNotifsLoading]  = useState(false);
 
   // Filtres barre
   const todayStr = new Date().toISOString().split("T")[0];
@@ -360,7 +364,7 @@ export default function Home() {
 
   // Fermer menus + dropdowns au clic dehors
   useEffect(() => {
-    const close = () => { setShowUserMenu(false); setShowLang(false); setOpenFilter(null); };
+    const close = () => { setShowUserMenu(false); setShowLang(false); setOpenFilter(null); setShowNotifs(false); };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
@@ -481,12 +485,91 @@ export default function Home() {
 
           {/* Cloche notifications — client connecté */}
           {user && (
-            <button onClick={() => navigate("/profil?tab=notifications")}
-              style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
-                padding: "6px 10px", background: WHITE, cursor: "pointer", display: "flex",
-                alignItems: "center" }}>
-              <Bell size={15} color={MUTED} />
-            </button>
+            <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>
+              <button
+                onClick={async () => {
+                  const next = !showNotifs;
+                  setShowNotifs(next);
+                  setShowUserMenu(false);
+                  setShowLang(false);
+                  if (next && notifs.length === 0) {
+                    setNotifsLoading(true);
+                    try {
+                      const { data } = await api.get("/notifications");
+                      setNotifs(data.data?.notifications || data.data || []);
+                    } catch(_) {}
+                    setNotifsLoading(false);
+                  }
+                }}
+                style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                  padding: "6px 10px", background: WHITE, cursor: "pointer", display: "flex",
+                  alignItems: "center" }}>
+                <Bell size={15} color={MUTED} />
+                {notifs.filter(n => !n.read_at).length > 0 && (
+                  <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8,
+                    borderRadius: "50%", background: "#DC2626", border: "1.5px solid white" }} />
+                )}
+              </button>
+              <AnimatePresence>
+                {showNotifs && (
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}
+                    style={{ position: "absolute", top: "calc(100% + 8px)", right: 0,
+                      width: 320, background: WHITE, border: `0.5px solid ${BORDER}`,
+                      borderRadius: 12, boxShadow: "0 8px 32px rgba(30,46,40,.13)",
+                      zIndex: 200, overflow: "hidden" }}>
+                    <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${BORDER}`,
+                      display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: DARK }}>Notifications</span>
+                      {notifs.filter(n => !n.read_at).length > 0 && (
+                        <button onClick={async () => {
+                          try { await api.patch("/notifications/read-all"); setNotifs(p => p.map(n => ({ ...n, read_at: new Date().toISOString() }))); } catch(_) {}
+                        }} style={{ fontSize: 11, color: P, background: "none", border: "none",
+                          cursor: "pointer", fontFamily: FONT }}>
+                          Tout lire
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                      {notifsLoading ? (
+                        <div style={{ padding: 24, textAlign: "center", color: MUTED, fontSize: 13 }}>
+                          Chargement…
+                        </div>
+                      ) : notifs.length === 0 ? (
+                        <div style={{ padding: 24, textAlign: "center", color: MUTED, fontSize: 13 }}>
+                          Aucune notification
+                        </div>
+                      ) : notifs.map(n => (
+                        <div key={n.id}
+                          style={{ padding: "10px 16px", borderBottom: `0.5px solid ${BORDER}`,
+                            background: n.read_at ? "transparent" : "#FEF6EC",
+                            cursor: "pointer" }}
+                          onClick={async () => {
+                            if (!n.read_at) {
+                              try { await api.patch(`/notifications/${n.id}/read`); setNotifs(p => p.map(x => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)); } catch(_) {}
+                            }
+                          }}>
+                          <div style={{ fontSize: 12, color: DARK, fontWeight: n.read_at ? 400 : 600 }}>
+                            {n.title || n.message}
+                          </div>
+                          {n.body && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{n.body}</div>}
+                          <div style={{ fontSize: 10, color: MUTED, marginTop: 4 }}>
+                            {new Date(n.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ padding: "8px 16px", borderTop: `0.5px solid ${BORDER}`, textAlign: "center" }}>
+                      <button onClick={() => { setShowNotifs(false); navigate("/profil?tab=notifications"); }}
+                        style={{ fontSize: 12, color: P, background: "none", border: "none",
+                          cursor: "pointer", fontFamily: FONT }}>
+                        Voir toutes les notifications →
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
 
           {user ? (

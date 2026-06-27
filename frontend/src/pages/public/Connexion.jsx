@@ -144,7 +144,7 @@ function StepChoix({ onChoose }) {
 function StepForm({ type, onBack }) {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -167,11 +167,13 @@ function StepForm({ type, onBack }) {
 
       // Vérification du rôle selon l'espace choisi
       if (type === "client" && user.role === "restaurateur") {
+        await logout();
         setError("Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur.");
         setLoading(false);
         return;
       }
       if (type === "restaurateur" && user.role === "client") {
+        await logout();
         setError("Ce compte est un compte client. Utilisez l'espace Client.");
         setLoading(false);
         return;

@@ -13,3 +13,46 @@ body {
 
 button, input, select, textarea { font-family: inherit; }
 a { text-decoration: none; color: inherit; }
+
+/* ── Responsive mobile ──────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Home — masquer le panneau filtre latéral, passer en colonne unique */
+  .home-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .home-filters {
+    display: none !important;
+  }
+
+  /* Nav — masquer les liens centraux sur mobile */
+  .nav-links {
+    display: none !important;
+  }
+
+  /* Restaurant card — passer en layout vertical sur mobile */
+  .resto-card {
+    grid-template-columns: 1fr !important;
+  }
+  .resto-card-img {
+    height: 120px !important;
+    min-height: unset !important;
+  }
+
+  /* Admin grid 4 colonnes → 2 */
+  .admin-stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Profil header padding */
+  .profil-header {
+    padding: 20px 16px 48px !important;
+  }
+}
+
+/* Toujours scrollable horizontalement sur les onglets */
+.tabs-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }

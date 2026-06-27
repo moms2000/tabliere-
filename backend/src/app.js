@@ -15,6 +15,8 @@ import reservationsRoutes from "./routes/reservations.routes.js";
 import menuRoutes         from "./routes/menu.routes.js";
 import paymentsRoutes     from "./routes/payments.routes.js";
 import adminRoutes        from "./routes/admin.routes.js";
+import chatRoutes         from "./routes/chat.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
 
 const app = express();
 
@@ -59,7 +61,9 @@ app.use(`${v1}/restaurants`,  restaurantsRoutes);
 app.use(`${v1}/reservations`, reservationsRoutes);
 app.use(`${v1}/menu`,         menuRoutes);
 app.use(`${v1}/payments`,     paymentsRoutes);
-app.use(`${v1}/admin`,        adminRoutes);
+app.use(`${v1}/admin`,         adminRoutes);
+app.use(`${v1}/chat`,          chatRoutes);
+app.use(`${v1}/notifications`, notificationsRoutes);
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => res.json({ status: "ok", ts: new Date().toISOString() }));

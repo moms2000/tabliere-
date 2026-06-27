@@ -313,11 +313,11 @@ export default function Home() {
           Résultats — Abidjan
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "clamp(160px,22%,230px) 1fr", gap: 16 }}>
 
           {/* Filtres */}
           <div style={{ paddingBottom: 32 }}>
-            <div style={{ background: "white", border: "0.5px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ background: "white", border: "0.5px solid #eee", borderRadius: 12, padding: "14px 14px" }}>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#aaa",
                   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>

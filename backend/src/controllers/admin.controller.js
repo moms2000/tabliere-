@@ -22,6 +22,7 @@ export const getStats = asyncHandler(async (_req, res) => {
       (SELECT COUNT(*) FROM users WHERE role = 'client')                          AS total_clients,
       (SELECT COUNT(*) FROM restaurants WHERE status = 'actif')                   AS total_restos,
       (SELECT COUNT(*) FROM reservations WHERE DATE(created_at) = CURRENT_DATE)   AS resa_today,
+      (SELECT COUNT(*) FROM reservations WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)) AS resa_month,
       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'succes' AND DATE(created_at) = CURRENT_DATE) AS revenue_today,
       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'succes' AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)) AS revenue_month`),
 

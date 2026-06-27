@@ -6,6 +6,8 @@ import {
   Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useSSE } from "../../hooks/useSSE.js";
+import { useToast } from "../../components/ui/Toast.jsx";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -145,6 +147,11 @@ export default function AdminLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { user, logout } = useAuth();
+  const toast = useToast();
+
+  useSSE({
+    new_reservation: (d) => toast(`Nouvelle réservation ${d.ref} — ${d.client_name || ""}`, "reservation"),
+  }, !!user);
 
   // Fermer le drawer mobile à chaque changement de route
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);

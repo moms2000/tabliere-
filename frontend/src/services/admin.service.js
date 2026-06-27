@@ -45,4 +45,9 @@ export const adminService = {
     const res = await api.get("/admin/payments", { params });
     return res.data;
   },
+
+  async listTransactions(params = {}) {
+    const res = await api.get("/admin/payments", { params: { limit: 200, ...params } });
+    return res.data;
+  },
 };

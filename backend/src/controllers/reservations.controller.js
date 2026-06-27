@@ -9,6 +9,7 @@ import { ok, created, notFound, forbidden, paginated } from "../utils/response.j
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { notificationQueue }      from "../queues/index.js";
 import { logger }                 from "../utils/logger.js";
+import { emitToUser }             from "../utils/sse.js";
 
 // ── POST /reservations ────────────────────────────────────────────────────────
 export const create = asyncHandler(async (req, res) => {
@@ -54,6 +55,23 @@ export const create = asyncHandler(async (req, res) => {
 
     return newResa;
   });
+
+  // SSE temps réel → restaurateur (récupérer l'owner du resto)
+  try {
+    const { rows: [owner] } = await query(
+      "SELECT owner_id FROM restaurants WHERE id = $1", [restaurant_id]
+    );
+    if (owner?.owner_id) {
+      emitToUser(owner.owner_id, "new_reservation", {
+        ref:        resa.ref,
+        party_size: resa.party_size,
+        reserved_at: resa.reserved_at,
+        client_name: req.user.full_name || req.user.email,
+      });
+    }
+    // Notifier les admins aussi
+    emitToUser("admin", "new_reservation", { ref: resa.ref, resto: resto.name });
+  } catch (_) {}
 
   // Notification WhatsApp asynchrone
   await notificationQueue.add("confirmation", {
@@ -189,6 +207,14 @@ export const confirm = asyncHandler(async (req, res) => {
   });
 
   await notificationQueue.add("confirmation_client", { reservationId: resa.id }).catch(() => {});
+
+  // SSE temps réel → client
+  try {
+    emitToUser(resa.client_id, "reservation_confirmed", {
+      ref:        resa.ref,
+      reserved_at: resa.reserved_at,
+    });
+  } catch (_) {}
 
   logger.info("Réservation confirmée", { resaId: resa.id, ref: resa.ref, table_id });
   return ok(res, { reservation: updated }, "Réservation confirmée");

@@ -2,7 +2,7 @@ services:
   - type: web
     name: tabliereci-backend
     runtime: node
-    rootDir: .
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health

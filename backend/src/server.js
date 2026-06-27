@@ -10,7 +10,16 @@ let server;
 async function start() {
   try {
     // Connexion PostgreSQL
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (err) {
+      logger.error("PostgreSQL non disponible au démarrage", {
+        error: err?.message || String(err),
+        code:  err?.code,
+        hint:  "Vérifier DATABASE_URL dans les variables d'environnement Render",
+      });
+      // On ne quitte pas — le serveur démarre quand même pour exposer /health
+    }
 
     // Connexion Redis (optionnelle)
     await connectRedis();
@@ -19,7 +28,7 @@ async function start() {
     try {
       await initQueues();
     } catch (err) {
-      logger.warn("BullMQ non initialisé", { error: err.message });
+      logger.warn("BullMQ non initialisé", { error: err?.message || String(err) });
     }
 
     server = app.listen(env.PORT, () => {
@@ -30,7 +39,11 @@ async function start() {
       });
     });
   } catch (err) {
-    logger.error("Erreur au démarrage", { error: err.message });
+    logger.error("Erreur fatale au démarrage", {
+      error:   err?.message || String(err),
+      code:    err?.code,
+      stack:   err?.stack,
+    });
     process.exit(1);
   }
 }

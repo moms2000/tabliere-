@@ -25,26 +25,37 @@ const STATUS_BADGE = {
 
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
-/* Données mock (remplacées par API si disponible) */
-const MOCK_TXN = [
-  { id: "TXN-1028", type: "Abonnement",  resto: "Saveurs de Cocody",     montant: 60000, mode: "Wave",         date: new Date(), status: "succès" },
-  { id: "TXN-1027", type: "Réservation", resto: "Le Maquis du Plateau",  montant: 12000, mode: "MTN MoMo",     date: new Date(Date.now()-86400000), status: "succès" },
-  { id: "TXN-1026", type: "Abonnement",  resto: "La Terrasse d'Abidjan", montant: 25000, mode: "Orange Money", date: new Date(Date.now()-172800000), status: "succès" },
-  { id: "TXN-1025", type: "Réservation", resto: "Saveurs de Cocody",     montant: 24000, mode: "Orange Money", date: new Date(Date.now()-259200000), status: "en attente" },
-  { id: "TXN-1024", type: "Remboursem.", resto: "Le Maquis du Plateau",  montant: -8500, mode: "Wave",         date: new Date(Date.now()-345600000), status: "remboursé" },
-];
+/* Mapping API → display */
+function mapPayment(p) {
+  const STATUS_MAP = { success: "succès", pending: "en attente", refunded: "remboursé", failed: "échec" };
+  return {
+    id:      p.resa_ref || `#${p.id}`,
+    type:    "Paiement",
+    resto:   p.resto_name || "—",
+    montant: p.status === "refunded" ? -Math.abs(Number(p.amount)) : Number(p.amount),
+    mode:    p.method || "—",
+    date:    p.created_at,
+    status:  STATUS_MAP[p.status] || p.status,
+    client:  p.client_name || "",
+  };
+}
 
 export default function Finances() {
   const [dateMode,  setDateMode]  = useState("Mois");
   const [stats,     setStats]     = useState(null);
-  const [txns,      setTxns]      = useState(MOCK_TXN);
+  const [txns,      setTxns]      = useState([]);
   const [search,    setSearch]    = useState("");
-  const [loading,   setLoading]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
 
   useEffect(() => {
-    adminService.getStats?.()
-      .then(s => setStats(s))
-      .catch(() => {});
+    adminService.getStats?.().then(s => setStats(s)).catch(() => {});
+    adminService.listTransactions()
+      .then(data => {
+        const rows = data?.data ?? data?.payments ?? data ?? [];
+        setTxns(Array.isArray(rows) ? rows.map(mapPayment) : []);
+      })
+      .catch(() => setTxns([]))
+      .finally(() => setLoading(false));
   }, []);
 
   /* Filtre date */
@@ -74,13 +85,40 @@ export default function Finances() {
   const totalAbos      = filtered.filter(t => t.type === "Abonnement" && t.montant > 0).reduce((a, t) => a + t.montant, 0);
   const totalCommiss   = filtered.filter(t => t.type === "Réservation" && t.montant > 0).reduce((a, t) => a + t.montant, 0);
 
-  /* Chart mensuel basé sur stats API ou mock */
-  const g = stats?.global || {};
-  const chartData = MONTHS.map((m, i) => ({
-    label: m,
-    value: i < new Date().getMonth() + 1 ? Math.round(Math.random() * 3 + 1) * 1000000 : 0,
-  }));
+  /* Chart mensuel basé sur transactions réelles */
+  const currentYear = new Date().getFullYear();
+  const chartData = MONTHS.map((m, i) => {
+    const value = txns
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === currentYear && d.getMonth() === i && t.montant > 0;
+      })
+      .reduce((a, t) => a + t.montant, 0);
+    return { label: m, value };
+  });
   const maxChart = Math.max(...chartData.map(d => d.value), 1);
+
+  /* Répartition par mode de paiement */
+  const modeGroups = txns.filter(t => t.montant > 0).reduce((acc, t) => {
+    acc[t.mode] = (acc[t.mode] || 0) + t.montant;
+    return acc;
+  }, {});
+  const modeColors = { Wave: "#185FA5", "MTN MoMo": P, "Orange Money": "#EA580C" };
+  const modeTotal = Object.values(modeGroups).reduce((a, v) => a + v, 0) || 1;
+  const modePcts = Object.entries(modeGroups).map(([name, val]) => ({
+    name,
+    pct: Math.round((val / modeTotal) * 100),
+    color: modeColors[name] || MUTED,
+  })).sort((a, b) => b.pct - a.pct).slice(0, 4);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+        height: 200, color: MUTED, fontSize: 13, fontFamily: FONT }}>
+        Chargement des transactions…
+      </div>
+    );
+  }
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
@@ -132,12 +170,11 @@ export default function Finances() {
         <motion.div variants={fadeUp}>
           <Card>
             <SectionHeader title="Par mode de paiement" icon={CreditCard} />
-            {[
-              { name: "Wave",         pct: 38, color: "#185FA5" },
-              { name: "MTN MoMo",     pct: 29, color: P },
-              { name: "Orange Money", pct: 25, color: "#EA580C" },
-              { name: "Carte",        pct: 8,  color: MUTED },
-            ].map((p, i) => (
+            {(modePcts.length > 0 ? modePcts : [
+              { name: "Wave",         pct: 0, color: "#185FA5" },
+              { name: "MTN MoMo",     pct: 0, color: P },
+              { name: "Orange Money", pct: 0, color: "#EA580C" },
+            ]).map((p, i) => (
               <div key={i} style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, color: DARK }}>{p.name}</span>

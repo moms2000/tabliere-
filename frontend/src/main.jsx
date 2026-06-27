@@ -6,6 +6,7 @@ import "./index.css";
 
 import { AuthProvider }     from "./context/AuthContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
+import { ToastProvider }    from "./components/ui/Toast.jsx";
 import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
 
 import AdminLayout   from "./components/layout/AdminLayout";
@@ -23,6 +24,7 @@ import RestDashboard    from "./pages/restaurant/RestDashboard";
 import RestMenu         from "./pages/restaurant/RestMenu";
 import RestReservations from "./pages/restaurant/RestReservations";
 import RestPlanSalle    from "./pages/restaurant/RestPlanSalle";
+import RestProfil       from "./pages/restaurant/RestProfil";
 
 import ClientMenu       from "./pages/client/ClientMenu";
 import Profil           from "./pages/client/Profil";
@@ -35,6 +37,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <LanguageProvider>
+        <ToastProvider>
         <AuthProvider>
           <Routes>
             {/* ── Pages publiques ─────────────────────────────────────────── */}
@@ -72,6 +75,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="menu"         element={<RestMenu />} />
               <Route path="reservations" element={<RestReservations />} />
               <Route path="plan"         element={<RestPlanSalle />} />
+              <Route path="profil"       element={<RestProfil />} />
             </Route>
 
             {/* ── Client — accès via QR (public) ───────────────────────────── */}
@@ -80,6 +84,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
+        </ToastProvider>
       </LanguageProvider>
     </BrowserRouter>
   </React.StrictMode>

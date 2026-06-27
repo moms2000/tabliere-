@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useSSE } from "../../hooks/useSSE.js";
+import { useToast } from "../../components/ui/Toast.jsx";
 
 const P      = "#E8A045";
 const DARK   = "#1E2E28";
@@ -28,6 +30,7 @@ const NAV = [
   { to: "/restaurant/reservations", label: "Réservations",    icon: CalendarCheck },
   { to: "/restaurant/plan",         label: "Plan de salle",   icon: LayoutTemplate },
   { to: "/restaurant/menu",         label: "Menu & QR Code",  icon: Notebook },
+  { to: "/restaurant/profil",       label: "Mon restaurant",  icon: Store },
 ];
 
 function useIsMobile() {
@@ -119,6 +122,14 @@ export default function RestaurantLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
+
+  useSSE({
+    new_reservation: (d) => toast(
+      `Nouvelle réservation ${d.ref} — ${d.party_size} pers. · ${d.client_name || ""}`,
+      "reservation"
+    ),
+  }, !!user);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 

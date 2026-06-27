@@ -9,12 +9,15 @@ import { unauthorized, forbidden } from "../utils/response.js";
  */
 export const authenticate = async (req, res, next) => {
   try {
+    // Support token via query param pour EventSource (SSE)
     const header = req.headers.authorization;
-    if (!header?.startsWith("Bearer ")) {
+    const queryToken = req.query.token;
+
+    if (!header?.startsWith("Bearer ") && !queryToken) {
       return unauthorized(res, "Token manquant");
     }
 
-    const token = header.slice(7);
+    const token = queryToken || header.slice(7);
     // Vérifier si le token a été révoqué (logout)
     const revoked = await cache.get(`revoked:${token}`).catch(() => null);
     if (revoked) return unauthorized(res, "Session expirée, reconnectez-vous");

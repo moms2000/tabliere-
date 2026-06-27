@@ -44,7 +44,11 @@ export default function RestPlanSalle() {
   const [resto,    setResto]    = useState(null);
 
   useEffect(() => {
-    if (!user?.resto_id) return;
+    if (!user) return;
+    if (!user.resto_id) {
+      setLoading(false);
+      return;
+    }
     restaurantsService.getManage(user.resto_id)
       .then(d => {
         setResto(d.restaurant);
@@ -52,7 +56,7 @@ export default function RestPlanSalle() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [user?.resto_id]);
+  }, [user?.resto_id, user]);
 
   const updateTableStatus = async (tableId, newStatus) => {
     try {

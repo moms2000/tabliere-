@@ -94,8 +94,12 @@ export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const { rows: [user] } = await query(
-    `SELECT id, full_name, email, phone, role, status, password_hash, restaurant_id
-     FROM users WHERE email = $1`,
+    `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.status, u.password_hash,
+            r.id AS resto_id, r.name AS resto_name, r.slug AS resto_slug,
+            r.status AS resto_status, r.plan
+     FROM users u
+     LEFT JOIN restaurants r ON r.id = u.restaurant_id
+     WHERE u.email = $1`,
     [email]
   );
 

@@ -21,7 +21,11 @@ export default function RestDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.resto_id) return;
+    if (!user) return; // auth pas encore chargée
+    if (!user.resto_id) {
+      setLoading(false); // restaurateur sans resto configuré — ne pas rester en spinner
+      return;
+    }
     Promise.all([
       restaurantsService.getManage(user.resto_id),
       reservationsService.list({ limit: 10 }),
@@ -32,11 +36,15 @@ export default function RestDashboard() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [user?.resto_id]);
+  }, [user?.resto_id, user]);
 
-  if (loading) return (
-    <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa", fontSize: 13 }}>
-      Chargement…
+  if (loading) return <DashboardSkeleton />;
+
+  if (!resto) return (
+    <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa", fontSize: 14 }}>
+      <div style={{ fontSize: 30, marginBottom: 12 }}>🏪</div>
+      <div style={{ fontWeight: 600, color: "#555", marginBottom: 6 }}>Restaurant non configuré</div>
+      <div style={{ fontSize: 13 }}>Votre espace est en cours de validation par l'équipe TablièreCI.</div>
     </div>
   );
 
@@ -141,5 +149,62 @@ export default function RestDashboard() {
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+// ── Skeleton de chargement (remplace "Chargement...") ────────────────────────
+function Bone({ w = "100%", h = 16, r = 6, mb = 0 }) {
+  return (
+    <div style={{ width: w, height: h, borderRadius: r, marginBottom: mb,
+      background: "linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)",
+      backgroundSize: "200% 100%",
+      animation: "skeleton-shimmer 1.4s infinite" }} />
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div>
+      <style>{`@keyframes skeleton-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
+
+      {/* Titre */}
+      <div style={{ marginBottom: 20 }}>
+        <Bone w="220px" h={22} mb={8} />
+        <Bone w="320px" h={13} />
+      </div>
+
+      {/* 4 stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} style={{ background: "white", border: "0.5px solid #eee",
+            borderRadius: 12, padding: "16px 16px" }}>
+            <Bone w="40px" h={40} r={10} mb={12} />
+            <Bone w="60%" h={24} mb={6} />
+            <Bone w="80%" h={12} />
+          </div>
+        ))}
+      </div>
+
+      {/* Tableau + plan salle */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 14 }}>
+        <div style={{ background: "white", border: "0.5px solid #eee", borderRadius: 12, padding: 16 }}>
+          <Bone w="40%" h={18} mb={16} />
+          {[1,2,3,4].map(i => (
+            <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+              <Bone w="25%" h={12} />
+              <Bone w="30%" h={12} />
+              <Bone w="10%" h={12} />
+              <Bone w="20%" h={12} />
+            </div>
+          ))}
+        </div>
+        <div style={{ background: "white", border: "0.5px solid #eee", borderRadius: 12, padding: 16 }}>
+          <Bone w="60%" h={18} mb={16} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+            {[1,2,3,4,5,6].map(i => <Bone key={i} h={60} r={8} />)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

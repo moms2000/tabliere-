@@ -19,23 +19,24 @@ export default function RestMenu() {
   const [loading,    setLoading]    = useState(true);
 
   useEffect(() => {
-    if (!user?.resto_slug) return;
-    menuService.getFullMenu(user.resto_slug)
-      .then(d => {
-        const cats = d.categories || [];
+    if (!user) return;
+    if (!user.resto_slug) {
+      setLoading(false);
+      return;
+    }
+    Promise.all([
+      menuService.getFullMenu(user.resto_slug),
+      restaurantsService.getManage(user.resto_id),
+    ])
+      .then(([menuData, restoData]) => {
+        const cats = menuData.categories || [];
         setCategories(cats);
         if (cats.length > 0) setActiveTab(cats[0].id);
+        setQrActive(restoData.restaurant?.qr_active || false);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [user?.resto_slug]);
-
-  useEffect(() => {
-    if (!user?.resto_id) return;
-    restaurantsService.getManage(user.resto_id)
-      .then(d => setQrActive(d.restaurant?.qr_active || false))
-      .catch(console.error);
-  }, [user?.resto_id]);
+  }, [user?.resto_slug, user?.resto_id, user]);
 
   const toggleItem = async (catId, itemId, currentActive) => {
     try {

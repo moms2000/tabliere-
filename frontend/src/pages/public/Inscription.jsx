@@ -15,6 +15,7 @@ const DARK   = "#1E2E28";
 const BG     = "#F8F5EF";
 const BORDER = "#E4DFD8";
 const MUTED  = "#9BA89F";
+const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
 
 function Logo({ size = 28 }) {
   return (
@@ -165,7 +166,7 @@ export default function Inscription() {
   if (step === 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24,
-      direction: isRTL ? "rtl" : "ltr", fontFamily: "'Inter', sans-serif" }}>
+      direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
       <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         style={{ background: "#fff", borderRadius: 16, padding: "44px 40px",
           border: `0.5px solid ${BORDER}`, maxWidth: 400, width: "100%", textAlign: "center",
@@ -192,7 +193,7 @@ export default function Inscription() {
   if (step === 1) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: "24px 16px",
-      direction: isRTL ? "rtl" : "ltr", fontFamily: "'Inter', sans-serif" }}>
+      direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: "100%", maxWidth: 860, display: "grid",
@@ -287,7 +288,7 @@ export default function Inscription() {
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: "24px 16px",
-      direction: isRTL ? "rtl" : "ltr", fontFamily: "'Inter', sans-serif" }}>
+      direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: "100%", maxWidth: 860, display: "grid",

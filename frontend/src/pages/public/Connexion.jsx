@@ -11,6 +11,7 @@ const DARK   = "#1E2E28";
 const BG     = "#F8F5EF";
 const BORDER = "#E4DFD8";
 const MUTED  = "#9BA89F";
+const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
 
 function Logo({ size = 28 }) {
   return (
@@ -70,7 +71,7 @@ export default function Connexion() {
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: "24px 16px",
-      fontFamily: "'Inter', sans-serif" }}>
+      fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}

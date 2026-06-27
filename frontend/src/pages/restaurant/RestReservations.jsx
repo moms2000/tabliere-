@@ -145,12 +145,12 @@ function CreateResaModal({ onClose, onCreate, form, setForm }) {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {PARTY_OPTIONS.map(n => (
             <button key={n} onClick={() => setForm(p => ({ ...p, party_size: n }))}
-              style={{ width: 38, height: 38, borderRadius: "50%", border: "none",
+              style={{ width: 38, height: 38, borderRadius: "50%",
+                border: form.party_size === n ? "none" : `0.5px solid ${BORDER}`,
                 background: form.party_size === n ? P : BG,
                 color: form.party_size === n ? "white" : DARK,
                 fontWeight: form.party_size === n ? 700 : 400,
                 fontSize: 13, cursor: "pointer",
-                border: form.party_size === n ? "none" : `0.5px solid ${BORDER}`,
               }}>
               {n}
             </button>

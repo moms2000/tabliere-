@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, Music, Sunrise, Gift, UtensilsCrossed,
-  Heart, User, LogOut, Globe, CheckCircle, ChevronDown,
+  Heart, User, LogOut, Globe, CheckCircle, ChevronDown, BookOpen, Utensils, Sparkles,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -14,27 +14,7 @@ const DARK = "#0F6E56";
 
 const LANG_LABELS = { fr: "Français", en: "English", ar: "العربية" };
 const LANG_FLAGS  = { fr: "🇫🇷", en: "🇬🇧", ar: "🇸🇦" };
-
-const EXPERIENCES = [
-  { icon: Music,           bg: "#E1F5EE", name: "Dîner live jazz",    sub: "Vendredi & samedi soir"    },
-  { icon: Sunrise,         bg: "#FAEEDA", name: "Brunch du dimanche", sub: "Tables en bord de lagune"  },
-  { icon: Gift,            bg: "#E6F1FB", name: "Privatisation",      sub: "Anniversaire & évènements" },
-  { icon: UtensilsCrossed, bg: "#FBEAF0", name: "Menu spécial fête",  sub: "Tabaski · Noël · Nouvel An"},
-];
-
-// Tabs → paramètres API
-const TABS = [
-  { label: "Tous",               params: {} },
-  { label: "Gastronomique",      params: { cuisine_type: "Gastronomique" } },
-  { label: "Cuisine ivoirienne", params: { cuisine_type: "Ivoirienne" } },
-  { label: "Brunch",             params: { search: "brunch" } },
-  { label: "Terrasse",           params: { search: "terrasse" } },
-  { label: "Live musique",       params: { search: "jazz" } },
-];
-
-const CUISINES = ["Ivoirienne","Française","Libanaise","Sénégalaise","Internationale"];
-const SPECS    = ["Terrasse","Live music","Halal","Privatisable","Wifi"];
-const COLORS   = ["#E1F5EE","#FAEEDA","#E6F1FB","#FBEAF0","#FFF3E0","#E3F2FD"];
+const COLORS      = ["#E1F5EE","#FAEEDA","#E6F1FB","#FBEAF0","#FFF3E0","#E3F2FD"];
 
 function Stars({ rating }) {
   return (
@@ -52,17 +32,18 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
 
 export default function Home() {
-  const navigate          = useNavigate();
-  const { user, logout }  = useAuth();
+  const navigate              = useNavigate();
+  const { user, logout }      = useAuth();
   const { lang, t, changeLang, langs } = useLang();
-  const listRef           = useRef(null);
-  const experiencesRef    = useRef(null);
+  const listRef               = useRef(null);
+  const experiencesRef        = useRef(null);
+  const howRef                = useRef(null);
 
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [search,      setSearch]      = useState("");
-  const [activeTab,   setActiveTab]   = useState(0); // index dans TABS
+  const [activeTab,   setActiveTab]   = useState(0);
   const [sort,        setSort]        = useState("rating");
   const [checkedC,    setCheckedC]    = useState({});
   const [favorites,   setFavorites]   = useState(() => {
@@ -70,6 +51,44 @@ export default function Home() {
   });
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLang,     setShowLang]     = useState(false);
+
+  // Tabs traduits dynamiquement
+  const TABS = [
+    { key: "tab_all",      params: {} },
+    { key: "tab_gastro",   params: { cuisine_type: "Gastronomique" } },
+    { key: "tab_ivoirian", params: { cuisine_type: "Ivoirienne" } },
+    { key: "tab_brunch",   params: { search: "brunch" } },
+    { key: "tab_terrace",  params: { search: "terrasse" } },
+    { key: "tab_livemusic",params: { search: "jazz" } },
+  ];
+
+  const CUISINES = [
+    { key: "cuisine_ivoirian",     val: "Ivoirienne" },
+    { key: "cuisine_french",       val: "Française" },
+    { key: "cuisine_lebanese",     val: "Libanaise" },
+    { key: "cuisine_senegalese",   val: "Sénégalaise" },
+    { key: "cuisine_international",val: "Internationale" },
+  ];
+  const SPECS = [
+    { key: "spec_terrace",      val: "Terrasse" },
+    { key: "spec_livemusic",    val: "Live music" },
+    { key: "spec_halal",        val: "Halal" },
+    { key: "spec_privatizable", val: "Privatisable" },
+    { key: "spec_wifi",         val: "Wifi" },
+  ];
+
+  const EXPERIENCES = [
+    { icon: Music,           bg: "#E1F5EE", nameKey: "exp_jazz_name",   subKey: "exp_jazz_sub"   },
+    { icon: Sunrise,         bg: "#FAEEDA", nameKey: "exp_brunch_name", subKey: "exp_brunch_sub" },
+    { icon: Gift,            bg: "#E6F1FB", nameKey: "exp_event_name",  subKey: "exp_event_sub"  },
+    { icon: UtensilsCrossed, bg: "#FBEAF0", nameKey: "exp_feast_name",  subKey: "exp_feast_sub"  },
+  ];
+
+  const HOW_STEPS = [
+    { icon: Search,      titleKey: "how_1_title", descKey: "how_1_desc", num: "01" },
+    { icon: BookOpen,    titleKey: "how_2_title", descKey: "how_2_desc", num: "02" },
+    { icon: Sparkles,    titleKey: "how_3_title", descKey: "how_3_desc", num: "03" },
+  ];
 
   // Fermer menus au clic dehors
   useEffect(() => {
@@ -82,7 +101,7 @@ export default function Home() {
     const params = { ...TABS[activeTab].params };
     if (search) params.search = search;
     if (sort !== "rating") params.sort = sort;
-    const cuisineKeys = Object.keys(checkedC).filter(k => checkedC[k]);
+    const cuisineKeys = Object.entries(checkedC).filter(([,v]) => v).map(([k]) => k);
     if (cuisineKeys.length === 1) params.cuisine_type = cuisineKeys[0];
 
     setLoading(true);
@@ -108,20 +127,30 @@ export default function Home() {
     localStorage.setItem("tci_favorites", JSON.stringify(updated));
   };
 
-  const isFav = (slug) => favorites.some(f => f.slug === slug);
-
+  const isFav  = (slug) => favorites.some(f => f.slug === slug);
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const resultsText = loading
+    ? t("loading")
+    : total === 0
+      ? t("results_count_0")
+      : t("results_count").replace("{n}", total).replace(/{s}/g, total !== 1 ? "s" : "");
+
+  const isRTL = lang === "ar";
 
   return (
     <div style={{ fontFamily: "Inter, sans-serif", background: "#f7f7f5", minHeight: "100vh",
-      direction: lang === "ar" ? "rtl" : "ltr" }}>
+      direction: isRTL ? "rtl" : "ltr" }}>
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 28px", background: "white", borderBottom: "0.5px solid #eee",
-        position: "sticky", top: 0, zIndex: 30 }}>
+        position: "sticky", top: 0, zIndex: 30, gap: 16 }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 600, color: G }}>
+        {/* Logo */}
+        <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18,
+            fontWeight: 600, color: G, cursor: "pointer", flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: 7, background: G,
             display: "flex", alignItems: "center", justifyContent: "center" }}>
             <UtensilsCrossed size={15} color="white" />
@@ -129,30 +158,26 @@ export default function Home() {
           TablièreCI
         </div>
 
+        {/* Nav links */}
         <div style={{ display: "flex", gap: 24, fontSize: 13, color: "#666" }}>
-          <span style={{ cursor: "pointer" }}
-            onClick={() => scrollTo(listRef)}
-            onMouseEnter={e => e.target.style.color = G}
-            onMouseLeave={e => e.target.style.color = "#666"}>
-            {t("nav_restaurants")}
-          </span>
-          <span style={{ cursor: "pointer" }}
-            onClick={() => scrollTo(experiencesRef)}
-            onMouseEnter={e => e.target.style.color = G}
-            onMouseLeave={e => e.target.style.color = "#666"}>
-            {t("nav_experiences")}
-          </span>
-          <span style={{ cursor: "pointer" }}
-            onClick={() => navigate("/inscription")}
-            onMouseEnter={e => e.target.style.color = G}
-            onMouseLeave={e => e.target.style.color = "#666"}>
-            {t("nav_pros")}
-          </span>
+          {[
+            { key: "nav_restaurants", action: () => scrollTo(listRef) },
+            { key: "nav_experiences", action: () => scrollTo(experiencesRef) },
+            { key: "nav_how",         action: () => scrollTo(howRef) },
+          ].map(({ key, action }) => (
+            <span key={key} style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+              onClick={action}
+              onMouseEnter={e => e.target.style.color = G}
+              onMouseLeave={e => e.target.style.color = "#666"}>
+              {t(key)}
+            </span>
+          ))}
         </div>
 
+        {/* Right side */}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
 
-          {/* Sélecteur langue */}
+          {/* Language selector */}
           <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>
             <button onClick={() => { setShowLang(p => !p); setShowUserMenu(false); }}
               style={{ display: "flex", alignItems: "center", gap: 5, border: "0.5px solid #eee",
@@ -165,9 +190,11 @@ export default function Home() {
               {showLang && (
                 <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "white",
-                    border: "0.5px solid #eee", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,.1)",
-                    overflow: "hidden", minWidth: 140, zIndex: 100 }}>
+                  style={{ position: "absolute", top: "calc(100% + 6px)",
+                    [isRTL ? "left" : "right"]: 0,
+                    background: "white", border: "0.5px solid #eee", borderRadius: 10,
+                    boxShadow: "0 4px 20px rgba(0,0,0,.1)", overflow: "hidden",
+                    minWidth: 140, zIndex: 100 }}>
                   {langs.map(l => (
                     <button key={l} onClick={() => { changeLang(l); setShowLang(false); }}
                       style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
@@ -185,19 +212,16 @@ export default function Home() {
           </div>
 
           {user ? (
-            /* Menu utilisateur connecté */
             <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>
               <button onClick={() => { setShowUserMenu(p => !p); setShowLang(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 6, border: "0.5px solid #eee",
-                  borderRadius: 20, padding: "5px 10px 5px 5px", background: "white",
-                  cursor: "pointer" }}>
+                  borderRadius: 20, padding: "5px 10px 5px 5px", background: "white", cursor: "pointer" }}>
                 <div style={{ width: 28, height: 28, borderRadius: "50%", background: G,
                   display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   {localStorage.getItem("tci_avatar")
                     ? <img src={localStorage.getItem("tci_avatar")} alt=""
                         style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    : <User size={14} color="white" />
-                  }
+                    : <User size={14} color="white" />}
                 </div>
                 <span style={{ fontSize: 13, color: "#333", maxWidth: 100,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -210,30 +234,25 @@ export default function Home() {
                 {showUserMenu && (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
-                    style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "white",
-                      border: "0.5px solid #eee", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,.1)",
-                      overflow: "hidden", minWidth: 180, zIndex: 100 }}>
+                    style={{ position: "absolute", top: "calc(100% + 6px)",
+                      [isRTL ? "left" : "right"]: 0,
+                      background: "white", border: "0.5px solid #eee", borderRadius: 10,
+                      boxShadow: "0 4px 20px rgba(0,0,0,.1)", overflow: "hidden",
+                      minWidth: 180, zIndex: 100 }}>
                     <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #f5f5f5" }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{user.full_name}</div>
                       <div style={{ fontSize: 11, color: "#aaa" }}>{user.email}</div>
                     </div>
                     <button onClick={() => navigate("/profil")}
-                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
-                        padding: "10px 14px", border: "none", background: "white",
-                        cursor: "pointer", fontSize: 13, color: "#333" }}>
+                      style={menuBtnStyle}>
                       <User size={14} color={G} /> {t("nav_profile")}
                     </button>
                     <button onClick={() => navigate("/profil?tab=reservations")}
-                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
-                        padding: "10px 14px", border: "none", background: "white",
-                        cursor: "pointer", fontSize: 13, color: "#333" }}>
-                      ✦ Mes réservations
+                      style={menuBtnStyle}>
+                      ✦ {t("nav_reservations")}
                     </button>
-                    <button onClick={async () => { await logout(); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%",
-                        padding: "10px 14px", border: "none", background: "white",
-                        cursor: "pointer", fontSize: 13, color: "#DC2626",
-                        borderTop: "0.5px solid #f5f5f5" }}>
+                    <button onClick={() => logout()}
+                      style={{ ...menuBtnStyle, color: "#DC2626", borderTop: "0.5px solid #f5f5f5" }}>
                       <LogOut size={14} /> {t("nav_logout")}
                     </button>
                   </motion.div>
@@ -301,7 +320,7 @@ export default function Home() {
               color: activeTab === i ? G : "#777",
               borderBottom: `2px solid ${activeTab === i ? G : "transparent"}`,
               fontWeight: activeTab === i ? 500 : 400 }}>
-            {tab.label}
+            {t(tab.key)}
           </button>
         ))}
       </div>
@@ -310,7 +329,7 @@ export default function Home() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.8px",
           textTransform: "uppercase", color: "#aaa", padding: "18px 0 8px" }}>
-          Résultats — Abidjan
+          {t("results_label")}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "clamp(160px,22%,230px) 1fr", gap: 16 }}>
@@ -321,28 +340,28 @@ export default function Home() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#aaa",
                   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                  Type de cuisine
+                  {t("filter_cuisine")}
                 </div>
-                {CUISINES.map(item => (
-                  <label key={item} style={{ display: "flex", alignItems: "center",
+                {CUISINES.map(({ key, val }) => (
+                  <label key={val} style={{ display: "flex", alignItems: "center",
                     gap: 8, padding: "4px 0", fontSize: 13, color: "#444", cursor: "pointer" }}>
-                    <input type="checkbox" checked={!!checkedC[item]}
-                      onChange={() => toggle(setCheckedC, item)}
+                    <input type="checkbox" checked={!!checkedC[val]}
+                      onChange={() => toggle(setCheckedC, val)}
                       style={{ accentColor: G }} />
-                    {item}
+                    {t(key)}
                   </label>
                 ))}
               </div>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#aaa",
                   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                  Spécificités
+                  {t("filter_specs")}
                 </div>
-                {SPECS.map(item => (
-                  <label key={item} style={{ display: "flex", alignItems: "center",
+                {SPECS.map(({ key, val }) => (
+                  <label key={val} style={{ display: "flex", alignItems: "center",
                     gap: 8, padding: "4px 0", fontSize: 13, color: "#444", cursor: "pointer" }}>
                     <input type="checkbox" style={{ accentColor: G }} />
-                    {item}
+                    {t(key)}
                   </label>
                 ))}
               </div>
@@ -353,28 +372,26 @@ export default function Home() {
           <div style={{ paddingBottom: 32 }}>
             <div style={{ display: "flex", justifyContent: "space-between",
               alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontSize: 14, color: "#666" }}>
-                {loading ? "Chargement…" : `${total} restaurant${total !== 1 ? "s" : ""} disponible${total !== 1 ? "s" : ""}`}
-              </span>
+              <span style={{ fontSize: 14, color: "#666" }}>{resultsText}</span>
               <select value={sort} onChange={e => setSort(e.target.value)}
                 style={{ fontSize: 13, border: "0.5px solid #ddd", borderRadius: 8,
                   padding: "5px 10px", background: "white", color: "#444", cursor: "pointer" }}>
-                <option value="rating">Meilleure note</option>
-                <option value="reviews">Plus d'avis</option>
-                <option value="recent">Récents</option>
+                <option value="rating">{t("sort_rating")}</option>
+                <option value="reviews">{t("sort_reviews")}</option>
+                <option value="recent">{t("sort_recent")}</option>
               </select>
             </div>
 
             {loading ? (
               <div style={{ textAlign: "center", padding: "60px 0", color: "#bbb" }}>
-                <div style={{ fontSize: 13 }}>Chargement des restaurants…</div>
+                <div style={{ fontSize: 13 }}>{t("loading")}</div>
               </div>
             ) : restaurants.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 0", color: "#bbb" }}>
                 <UtensilsCrossed size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-                <div style={{ fontSize: 15, fontWeight: 500 }}>Aucun restaurant trouvé</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>{t("no_resto_title")}</div>
                 <div style={{ fontSize: 13, marginTop: 6 }}>
-                  {search ? "Essayez un autre terme de recherche" : "Aucun restaurant disponible pour le moment. Inscrivez votre restaurant !"}
+                  {search ? t("no_resto_search") : t("no_resto_empty")}
                 </div>
               </div>
             ) : (
@@ -392,7 +409,6 @@ export default function Home() {
                       <UtensilsCrossed size={36} color={G} style={{ opacity: 0.5 }} />
                     </div>
 
-                    {/* Bouton favori */}
                     <button onClick={(e) => toggleFavorite(e, r)}
                       style={{ position: "absolute", top: 8, right: 8, background: "white",
                         border: "0.5px solid #eee", borderRadius: "50%", width: 28, height: 28,
@@ -408,7 +424,7 @@ export default function Home() {
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
                         <Stars rating={r.rating} />
                         <span style={{ fontSize: 12, color: "#999" }}>
-                          {r.rating ? `${r.rating} (${r.review_count || 0} avis)` : "Nouveau"}
+                          {r.rating ? `${r.rating} (${r.review_count || 0} ${t("reviews")})` : t("new_resto")}
                         </span>
                         <span style={{ fontSize: 11, background: "#f5f5f5", color: "#666",
                           padding: "2px 8px", borderRadius: 10 }}>{r.cuisine_type}</span>
@@ -429,7 +445,7 @@ export default function Home() {
                         style={{ fontSize: 12, fontWeight: 500, padding: "6px 14px",
                           borderRadius: 7, border: `0.5px solid ${G}55`,
                           background: "#E1F5EE", color: DARK, cursor: "pointer" }}>
-                        Voir les créneaux →
+                        {t("see_slots")}
                       </motion.button>
                     </div>
                   </motion.div>
@@ -439,9 +455,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Expériences */}
+        {/* ── Expériences ──────────────────────────────────────────────── */}
         <div ref={experiencesRef} style={{ borderTop: "0.5px solid #eee", paddingTop: 24, marginBottom: 32 }}>
-          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 14 }}>Expériences à ne pas manquer</div>
+          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 14 }}>{t("exp_title")}</div>
           <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
             {EXPERIENCES.map((e, i) => (
               <motion.div key={i} whileHover={{ y: -3, boxShadow: "0 4px 16px rgba(0,0,0,.08)" }}
@@ -452,8 +468,36 @@ export default function Home() {
                   <e.icon size={34} color={DARK} style={{ opacity: 0.7 }} />
                 </div>
                 <div style={{ padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{e.name}</div>
-                  <div style={{ fontSize: 11, color: "#999" }}>{e.sub}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{t(e.nameKey)}</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>{t(e.subKey)}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Comment ça marche ────────────────────────────────────────── */}
+        <div ref={howRef} style={{ borderTop: "0.5px solid #eee", paddingTop: 32, marginBottom: 48 }}>
+          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 28, textAlign: "center" }}>
+            {t("how_title")}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+            {HOW_STEPS.map((step, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }} transition={{ delay: i * 0.1 }}
+                style={{ background: "white", border: "0.5px solid #eee", borderRadius: 14,
+                  padding: "24px 20px", position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 12, right: 16, fontSize: 32,
+                  fontWeight: 800, color: "#f0f0f0", lineHeight: 1 }}>{step.num}</div>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "#E1F5EE",
+                  display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                  <step.icon size={20} color={G} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1a1a1a" }}>
+                  {t(step.titleKey)}
+                </div>
+                <div style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>
+                  {t(step.descKey)}
                 </div>
               </motion.div>
             ))}
@@ -463,3 +507,9 @@ export default function Home() {
     </div>
   );
 }
+
+const menuBtnStyle = {
+  display: "flex", alignItems: "center", gap: 8, width: "100%",
+  padding: "10px 14px", border: "none", background: "white",
+  cursor: "pointer", fontSize: 13, color: "#333",
+};

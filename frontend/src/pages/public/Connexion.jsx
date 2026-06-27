@@ -5,6 +5,7 @@ import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User } from "luc
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P      = "#E8A045";
+const PL     = "#FEF6EC";
 const S      = "#3D6B55";
 const DARK   = "#1E2E28";
 const BG     = "#F8F5EF";

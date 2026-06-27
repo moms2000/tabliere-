@@ -1,6 +1,24 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+class ErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, fontFamily: "monospace", color: "#DC2626" }}>
+          <h2>Erreur de rendu</h2>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>
+            {this.state.error?.message}{"\n\n"}{this.state.error?.stack}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import NotFound from "./pages/public/NotFound.jsx";
 import "./index.css";
 
@@ -35,6 +53,7 @@ import RestaurantDetail from "./pages/public/RestaurantDetail";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
+    <ErrorBoundary>
     <BrowserRouter>
       <LanguageProvider>
         <ToastProvider>
@@ -87,5 +106,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         </ToastProvider>
       </LanguageProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

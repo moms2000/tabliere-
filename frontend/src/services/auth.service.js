@@ -1,27 +1,24 @@
-import api from "./api.js";
+import api, { setTokens, clearTokens } from "./api.js";
 
 export const authService = {
   async register(data) {
     const res = await api.post("/auth/register", data);
-    // Stocker les tokens si présents (inscription + connexion auto)
     const { access_token, refresh_token } = res.data.data || {};
-    if (access_token) localStorage.setItem("access_token", access_token);
-    if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
+    // Inscription : toujours mémoriser (l'utilisateur vient de créer son compte)
+    if (access_token && refresh_token) setTokens(access_token, refresh_token, true);
     return res.data;
   },
 
-  async login(email, password) {
+  async login(email, password, remember = true) {
     const res = await api.post("/auth/login", { email, password });
     const { access_token, refresh_token, user } = res.data.data;
-    localStorage.setItem("access_token",  access_token);
-    localStorage.setItem("refresh_token", refresh_token);
+    setTokens(access_token, refresh_token, remember);
     return user;
   },
 
   async logout() {
-    try { await api.post("/auth/logout"); } catch (_) { /* ignore */ }
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
+    try { await api.post("/auth/logout"); } catch (_) {}
+    clearTokens();
   },
 
   async me() {

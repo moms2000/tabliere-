@@ -198,11 +198,16 @@ export default function Inscription() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f7f5", display: "flex",
-      flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-      padding: "24px 24px 60px", direction: isRTL ? "rtl" : "ltr" }}>
+    <div style={{
+      minHeight: "100vh", background: "#f7f7f5",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "flex-start",
+      padding: "70px 16px 60px",
+      direction: isRTL ? "rtl" : "ltr",
+      boxSizing: "border-box",
+    }}>
 
-      <div style={{ position: "fixed", top: 20, [isRTL ? "right" : "left"]: 24 }}>
+      <div style={{ position: "fixed", top: 16, [isRTL ? "right" : "left"]: 16, zIndex: 10 }}>
         <button onClick={() => step === 1 ? navigate("/") : setStep(1)}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent",
             border: "none", cursor: "pointer", fontSize: 13, color: "#888" }}>
@@ -212,9 +217,13 @@ export default function Inscription() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        style={{ background: "white", borderRadius: 16, padding: "36px 40px",
-          border: "0.5px solid #eee", width: "100%", maxWidth: 480, marginTop: 50,
-          boxShadow: "0 4px 24px rgba(0,0,0,.07)" }}>
+        style={{
+          background: "white", borderRadius: 16,
+          padding: "clamp(20px, 4vw, 36px) clamp(16px, 5vw, 40px)",
+          border: "0.5px solid #eee", width: "100%", maxWidth: 480,
+          boxShadow: "0 4px 24px rgba(0,0,0,.07)",
+          boxSizing: "border-box",
+        }}>
 
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>

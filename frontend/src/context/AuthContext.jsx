@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
 
   // Recharger l'utilisateur depuis le token stocké au démarrage
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!token) { setLoading(false); return; }
 
     authService.me()
@@ -21,8 +21,8 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const u = await authService.login(email, password);
+  const login = useCallback(async (email, password, remember = true) => {
+    const u = await authService.login(email, password, remember);
     setUser(u);
     return u;
   }, []);

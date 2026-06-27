@@ -4,6 +4,7 @@ import helmet  from "helmet";
 import morgan  from "morgan";
 
 import { env }          from "./config/env.js";
+import { poolStats }    from "./config/db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter }   from "./middleware/rateLimiter.js";
 import { logger }       from "./utils/logger.js";
@@ -66,7 +67,22 @@ app.use(`${v1}/chat`,          chatRoutes);
 app.use(`${v1}/notifications`, notificationsRoutes);
 
 // ── Health check ────────────────────────────────────────────────────────────
-app.get("/health", (_req, res) => res.json({ status: "ok", ts: new Date().toISOString() }));
+app.get("/health", (_req, res) => {
+  const db = poolStats();
+  const healthy = db.waiting === 0 && db.total > 0;
+  res.status(healthy ? 200 : 503).json({
+    status:    healthy ? "ok" : "degraded",
+    ts:        new Date().toISOString(),
+    uptime_s:  Math.floor(process.uptime()),
+    memory_mb: Math.round(process.memoryUsage().heapUsed / 1_048_576),
+    db: {
+      pool_total:   db.total,    // connexions ouvertes
+      pool_idle:    db.idle,     // disponibles
+      pool_waiting: db.waiting,  // requêtes en attente (0 = bonne santé)
+      pool_max:     db.max,
+    },
+  });
+});
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ success: false, message: "Route introuvable" }));

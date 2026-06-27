@@ -1,55 +1,66 @@
 import { motion } from "framer-motion";
 
-const G = "#1D9E75";
+/* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
+const P    = "#E8A045";   // or pêche — primaire
+const PL   = "#FEF6EC";   // or pêche clair
+const S    = "#3D6B55";   // sauge
+const DARK = "#1E2E28";   // forêt
+const BG   = "#F8F5EF";   // sable
+const BORDER = "#E4DFD8";
+const MUTED  = "#9BA89F";
+const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 export function Card({ children, style = {}, hover = false }) {
-  const base = { background: "white", border: "0.5px solid #eee",
-    borderRadius: 10, padding: "14px 16px", ...style };
+  const base = {
+    background: "white", border: `0.5px solid ${BORDER}`,
+    borderRadius: 12, padding: "14px 16px", fontFamily: FONT, ...style,
+  };
   if (hover) return (
-    <motion.div whileHover={{ y: -2, boxShadow: "0 4px 16px rgba(0,0,0,.06)" }}
+    <motion.div whileHover={{ y: -2, boxShadow: "0 4px 16px rgba(30,46,40,.07)" }}
       transition={{ duration: 0.15 }} style={base}>{children}</motion.div>
   );
   return <div style={base}>{children}</div>;
 }
 
 // ── StatCard ──────────────────────────────────────────────────────────────────
-export function StatCard({ label, value, delta, up, icon: Icon, color = G }) {
+export function StatCard({ label, value, delta, up, icon: Icon, color = P }) {
   return (
-    <motion.div whileHover={{ y: -2, boxShadow: "0 4px 16px rgba(0,0,0,.06)" }}
+    <motion.div whileHover={{ y: -2, boxShadow: "0 4px 16px rgba(30,46,40,.07)" }}
       transition={{ duration: 0.14 }}
-      style={{ background: "white", border: "0.5px solid #eee", borderRadius: 10,
-        padding: "12px 14px", cursor: "default" }}>
+      style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12,
+        padding: "12px 14px", cursor: "default", fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "18",
           display: "flex", alignItems: "center", justifyContent: "center" }}>
           {Icon && <Icon size={17} color={color} />}
         </div>
         {delta && (
-          <span style={{ fontSize: 11, fontWeight: 500, color: up ? G : "#D85A30" }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: up ? S : "#DC2626" }}>
             {up ? "↑" : "↓"} {delta}
           </span>
         )}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>{value}</div>
-      <div style={{ fontSize: 11, color: "#888" }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 600, color: DARK, marginBottom: 2 }}>{value}</div>
+      <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
     </motion.div>
   );
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
 const BADGE_STYLES = {
-  green:  { bg: "#E1F5EE", color: "#0F6E56" },
-  amber:  { bg: "#FAEEDA", color: "#854F0B" },
-  red:    { bg: "#FAECE7", color: "#993C1D" },
-  blue:   { bg: "#E6F1FB", color: "#185FA5" },
-  gray:   { bg: "#F1EFE8", color: "#5F5E5A" },
+  green:  { bg: "#F0F6F2", color: S },
+  amber:  { bg: PL,        color: "#C47D1A" },
+  red:    { bg: "#FEF2F2", color: "#DC2626" },
+  blue:   { bg: "#EFF6FF", color: "#2563EB" },
+  gray:   { bg: BG,        color: MUTED },
+  gold:   { bg: PL,        color: P },
 };
 export function Badge({ label, variant = "gray" }) {
   const s = BADGE_STYLES[variant] || BADGE_STYLES.gray;
   return (
     <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 9px",
-      borderRadius: 10, background: s.bg, color: s.color }}>{label}</span>
+      borderRadius: 10, background: s.bg, color: s.color, fontFamily: FONT }}>{label}</span>
   );
 }
 
@@ -57,41 +68,44 @@ export function Badge({ label, variant = "gray" }) {
 export function Toggle({ value, onChange }) {
   return (
     <motion.div onClick={() => onChange(!value)}
-      animate={{ background: value ? G : "#ddd" }}
+      animate={{ background: value ? P : BORDER }}
       style={{ width: 36, height: 20, borderRadius: 10, cursor: "pointer",
         position: "relative", flexShrink: 0 }}>
       <motion.div animate={{ x: value ? 18 : 2 }}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
         style={{ width: 16, height: 16, borderRadius: "50%", background: "white",
-          position: "absolute", top: 2 }} />
+          position: "absolute", top: 2, boxShadow: "0 1px 3px rgba(0,0,0,.15)" }} />
     </motion.div>
   );
 }
 
 // ── Button ────────────────────────────────────────────────────────────────────
-export function Btn({ children, onClick, variant = "default", style = {}, icon: Icon }) {
+export function Btn({ children, onClick, variant = "default", style = {}, icon: Icon, disabled = false }) {
   const variants = {
-    default: { border: "0.5px solid #e0e0e0", background: "white", color: "#555" },
-    primary: { border: "none", background: G, color: "white" },
-    danger:  { border: "0.5px solid #FAECE7", background: "#FAECE7", color: "#993C1D" },
+    default:  { border: `0.5px solid ${BORDER}`, background: "white",    color: DARK },
+    primary:  { border: "none", background: P,    color: "#1A1000" },
+    secondary:{ border: `0.5px solid ${S}33`,     background: "#F0F6F2", color: S },
+    danger:   { border: `0.5px solid #FECACA`,    background: "#FEF2F2", color: "#DC2626" },
   };
   return (
-    <motion.button whileTap={{ scale: 0.96 }} onClick={onClick}
+    <motion.button whileTap={{ scale: disabled ? 1 : 0.96 }} onClick={disabled ? undefined : onClick}
       style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 8,
-        padding: "6px 13px", cursor: "pointer", fontSize: 13, fontWeight: variant === "primary" ? 500 : 400,
+        padding: "7px 14px", cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 13, fontWeight: variant === "primary" ? 600 : 400,
+        opacity: disabled ? 0.5 : 1, fontFamily: FONT,
         ...variants[variant], ...style }}>
       {Icon && <Icon size={14} />}{children}
     </motion.button>
   );
 }
 
-// ── SectionHeader ──────────────────────────────────────────────────────────────
+// ── SectionHeader ─────────────────────────────────────────────────────────────
 export function SectionHeader({ title, icon: Icon, action }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, color: "#222",
+      <h2 style={{ fontSize: 15, fontWeight: 600, color: DARK, fontFamily: FONT,
         display: "flex", alignItems: "center", gap: 7 }}>
-        {Icon && <Icon size={17} color={G} />}{title}
+        {Icon && <Icon size={17} color={P} />}{title}
       </h2>
       {action}
     </div>
@@ -101,31 +115,35 @@ export function SectionHeader({ title, icon: Icon, action }) {
 // ── PageTitle ─────────────────────────────────────────────────────────────────
 export function PageTitle({ title, subtitle }) {
   return (
-    <div style={{ marginBottom: 18 }}>
-      <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>{title}</h1>
-      {subtitle && <p style={{ fontSize: 13, color: "#888" }}>{subtitle}</p>}
+    <div style={{ marginBottom: 18, fontFamily: FONT }}>
+      <h1 style={{ fontSize: 18, fontWeight: 600, color: DARK, marginBottom: 2 }}>{title}</h1>
+      {subtitle && <p style={{ fontSize: 13, color: MUTED }}>{subtitle}</p>}
     </div>
   );
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
-export function Table({ columns, rows }) {
+export function Table({ columns, rows, onRowClick }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: FONT }}>
       <thead>
-        <tr style={{ borderBottom: "0.5px solid #f0f0f0" }}>
+        <tr style={{ borderBottom: `0.5px solid ${BORDER}` }}>
           {columns.map(c => (
             <th key={c.key} style={{ textAlign: c.align || "left", padding: "6px 8px",
-              color: "#aaa", fontWeight: 500, fontSize: 11 }}>{c.label}</th>
+              color: MUTED, fontWeight: 600, fontSize: 10,
+              textTransform: "uppercase", letterSpacing: "0.8px" }}>{c.label}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <motion.tr key={i} whileHover={{ background: "#fafff9" }}
-            style={{ borderBottom: "0.5px solid #f8f8f8" }}>
+          <motion.tr key={row.id || i}
+            whileHover={{ background: PL }}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            style={{ borderBottom: `0.5px solid ${BG}`,
+              cursor: onRowClick ? "pointer" : "default" }}>
             {columns.map(c => (
-              <td key={c.key} style={{ padding: "8px 8px", textAlign: c.align || "left",
+              <td key={c.key} style={{ padding: "9px 8px", textAlign: c.align || "left",
                 verticalAlign: "middle" }}>
                 {c.render ? c.render(row) : row[c.key]}
               </td>
@@ -134,5 +152,89 @@ export function Table({ columns, rows }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ── DateFilter (filtre jour/mois/année) ───────────────────────────────────────
+export function DateFilter({ value, onChange }) {
+  const modes = ["Jour", "Mois", "Année"];
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      {modes.map(m => (
+        <button key={m} onClick={() => onChange(m)}
+          style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, cursor: "pointer",
+            border: `0.5px solid ${value === m ? P : BORDER}`,
+            background: value === m ? PL : "white",
+            color: value === m ? "#C47D1A" : MUTED,
+            fontWeight: value === m ? 600 : 400, fontFamily: FONT }}>
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+export function Modal({ open, onClose, title, children, width = 480 }) {
+  if (!open) return null;
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.35)", zIndex: 100 }} />
+      <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        style={{ position: "fixed", top: "50%", left: "50%",
+          transform: "translate(-50%,-50%)", zIndex: 101,
+          background: "white", borderRadius: 16, padding: 24, width,
+          maxWidth: "calc(100vw - 32px)", fontFamily: FONT,
+          boxShadow: "0 24px 64px rgba(30,46,40,.18)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between",
+          alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: DARK }}>{title}</h2>
+          <button onClick={onClose} style={{ border: "none", background: "transparent",
+            cursor: "pointer", color: MUTED, fontSize: 22, lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+        {children}
+      </motion.div>
+    </>
+  );
+}
+
+// ── FormField ─────────────────────────────────────────────────────────────────
+export function FormField({ label, children, error }) {
+  return (
+    <div style={{ marginBottom: 14, fontFamily: FONT }}>
+      {label && <label style={{ display: "block", fontSize: 10, fontWeight: 700,
+        color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.8px" }}>
+        {label}
+      </label>}
+      {children}
+      {error && <div style={{ fontSize: 11, color: "#DC2626", marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+export function Input({ value, onChange, placeholder, type = "text", style = {} }) {
+  return (
+    <input value={value} onChange={onChange} placeholder={placeholder} type={type}
+      style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+        padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
+        outline: "none", fontFamily: FONT, boxSizing: "border-box", ...style }} />
+  );
+}
+
+// ── Select ────────────────────────────────────────────────────────────────────
+export function Select({ value, onChange, options, style = {} }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+        padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
+        outline: "none", fontFamily: FONT, cursor: "pointer", ...style }}>
+      {options.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
   );
 }

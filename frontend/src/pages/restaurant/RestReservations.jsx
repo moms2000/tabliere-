@@ -4,14 +4,22 @@ import {
   CalendarCheck, CheckCircle, XCircle, AlertTriangle,
   Clock, Users, MessageCircle, X, Plus, LayoutTemplate,
 } from "lucide-react";
-import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
+import { Card, SectionHeader, PageTitle, Badge, Btn, Table, DateFilter, Modal, FormField, Input, Select } from "../../components/ui";
 import { reservationsService } from "../../services/reservations.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { chatService } from "../../services/chat.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Chat from "../../components/Chat.jsx";
 
-const G = "#1D9E75";
+const P      = "#E8A045";
+const PL     = "#FEF6EC";
+const S      = "#3D6B55";
+const DARK   = "#1E2E28";
+const BG     = "#F8F5EF";
+const BORDER = "#E4DFD8";
+const MUTED  = "#9BA89F";
+const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
+const G      = P; // alias backward-compat
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
@@ -82,7 +90,14 @@ export default function RestReservations() {
   const [data,      setData]      = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [filter,    setFilter]    = useState("tous");
-  const [mainTab,   setMainTab]   = useState("reservations"); // reservations | analytics | noshow | waitlist | chat
+  const [dateMode,  setDateMode]  = useState("Mois"); // "Jour" | "Mois" | "Année"
+  const [mainTab,   setMainTab]   = useState("reservations");
+  const [modalCreate, setModalCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    client_name: "", client_phone: "", client_email: "",
+    reserved_at: new Date().toISOString().slice(0,16),
+    party_size: 2, notes: "",
+  });
   const [waitlist,  setWaitlist]  = useState([]);
   const [chatRes,   setChatRes]   = useState(null);
   const [conversations, setConversations] = useState([]);
@@ -179,6 +194,47 @@ export default function RestReservations() {
     setData(prev => prev.map(r => r.id === id ? { ...r, is_noshow: true, status: "annule" } : r));
   };
 
+  // Créer une réservation depuis l'interface restaurateur
+  const createReservation = async () => {
+    try {
+      const payload = {
+        ...createForm,
+        party_size: Number(createForm.party_size),
+        source: "restaurateur",
+      };
+      const res = await reservationsService.create(payload).catch(() => null);
+      const newR = res?.reservation || {
+        id: Date.now(), ...payload,
+        status: "confirme", ref: "R-" + Math.random().toString(36).slice(2,7).toUpperCase(),
+      };
+      setData(prev => [newR, ...prev]);
+    } catch (e) { console.error(e); }
+    setModalCreate(false);
+    setCreateForm({ client_name:"", client_phone:"", client_email:"",
+      reserved_at: new Date().toISOString().slice(0,16), party_size: 2, notes: "" });
+  };
+
+  // Modifier une réservation en ligne
+  const updateReservation = async (id, fields) => {
+    try {
+      await reservationsService.update(id, fields).catch(() => null);
+      setData(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r));
+    } catch (e) { console.error(e); }
+  };
+
+  // Filtrage par mode date
+  const filterByDate = (items) => {
+    const now = new Date();
+    return items.filter(r => {
+      if (!r.reserved_at) return true;
+      const d = new Date(r.reserved_at);
+      if (dateMode === "Jour")  return d.toDateString() === now.toDateString();
+      if (dateMode === "Mois")  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (dateMode === "Année") return d.getFullYear() === now.getFullYear();
+      return true;
+    });
+  };
+
   const addWaitlist = () => {
     if (!newWait.name) return;
     const entry = {
@@ -209,9 +265,10 @@ export default function RestReservations() {
     localStorage.setItem("tci_waitlist", JSON.stringify(updated));
   };
 
+  const filteredByDate = filterByDate(data);
   const filtered = filter === "tous"
-    ? data
-    : data.filter(r => r.status === filter || r.status === filter.replace(/_/g," "));
+    ? filteredByDate
+    : filteredByDate.filter(r => r.status === filter || r.status === filter.replace(/_/g," "));
 
   // No-show : clients avec 2+ annulations
   const clientCancels = {};
@@ -302,7 +359,15 @@ export default function RestReservations() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div variants={fadeUp}>
-        <PageTitle title="Réservations" subtitle="Gestion complète des réservations" />
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <PageTitle title="Réservations" subtitle="Gestion complète des réservations" />
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <DateFilter value={dateMode} onChange={setDateMode} />
+            <Btn variant="primary" icon={Plus} onClick={() => setModalCreate(true)}>
+              Nouvelle réservation
+            </Btn>
+          </div>
+        </div>
       </motion.div>
 
       {/* Stat cards */}
@@ -705,6 +770,54 @@ export default function RestReservations() {
             </Card>
           )}
         </motion.div>
+      )}
+
+      {/* ── Modal : Créer une réservation ─────────────────────────────────── */}
+      {modalCreate && (
+        <Modal open title="Nouvelle réservation" onClose={() => setModalCreate(false)} width={520}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Nom du client">
+              <Input value={createForm.client_name}
+                onChange={e => setCreateForm(p => ({ ...p, client_name: e.target.value }))}
+                placeholder="Jean Kouassi" />
+            </FormField>
+            <FormField label="Téléphone">
+              <Input value={createForm.client_phone}
+                onChange={e => setCreateForm(p => ({ ...p, client_phone: e.target.value }))}
+                placeholder="+225 07 00 00 00 00" />
+            </FormField>
+          </div>
+          <FormField label="Email (optionnel)">
+            <Input value={createForm.client_email} type="email"
+              onChange={e => setCreateForm(p => ({ ...p, client_email: e.target.value }))}
+              placeholder="client@exemple.com" />
+          </FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Date & heure">
+              <Input value={createForm.reserved_at} type="datetime-local"
+                onChange={e => setCreateForm(p => ({ ...p, reserved_at: e.target.value }))} />
+            </FormField>
+            <FormField label="Nombre de personnes">
+              <Input value={createForm.party_size} type="number"
+                onChange={e => setCreateForm(p => ({ ...p, party_size: e.target.value }))} />
+            </FormField>
+          </div>
+          <FormField label="Notes (optionnel)">
+            <textarea value={createForm.notes}
+              onChange={e => setCreateForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Anniversaire, allergie, demande spéciale…" rows={2}
+              style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+                padding: "9px 12px", fontSize: 13, color: DARK, background: BG,
+                outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
+          </FormField>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <Btn onClick={() => setModalCreate(false)}>Annuler</Btn>
+            <Btn variant="primary" onClick={createReservation}
+              disabled={!createForm.client_name || !createForm.reserved_at}>
+              Créer la réservation
+            </Btn>
+          </div>
+        </Modal>
       )}
     </motion.div>
   );

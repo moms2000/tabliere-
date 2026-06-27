@@ -1,8 +1,26 @@
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, BarChart3, Settings } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut } from "lucide-react";
+import { useAuth } from "../../context/AuthContext.jsx";
 
-const G = "#1D9E75";
+const P      = "#E8A045";
+const DARK   = "#1E2E28";
+const BG     = "#F8F5EF";
+const BORDER = "#E4DFD8";
+const MUTED  = "#9BA89F";
+const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
+
+function Logo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <rect width="40" height="40" rx="9" fill={P} />
+      <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+      <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+      <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
+        stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" fill="none" />
+    </svg>
+  );
+}
 
 const NAV = [
   { to: "/restaurant",              label: "Tableau de bord", icon: LayoutDashboard, end: true },
@@ -12,50 +30,79 @@ const NAV = [
 ];
 
 export default function RestaurantLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#f7f7f5", overflow: "hidden" }}>
-      <aside style={{ width: 200, background: "white", borderRight: "0.5px solid #eee",
+    <div style={{ display: "flex", height: "100vh", background: BG,
+      overflow: "hidden", fontFamily: FONT }}>
+
+      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      <aside style={{ width: 210, background: DARK, borderRight: "none",
         display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ padding: "14px 12px", borderBottom: "0.5px solid #f0f0f0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: G,
-              display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <LayoutTemplate size={15} color="white" />
-            </div>
+
+        {/* Logo */}
+        <div style={{ padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+            onClick={() => navigate("/restaurant")}>
+            <Logo size={28} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: G }}>TablièreCI</div>
-              <div style={{ fontSize: 10, color: "#aaa" }}>Le Maquis du Plateau</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "white", lineHeight: 1.2 }}>
+                Tablière<span style={{ color: P }}>CI</span>
+              </div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)",
+                textTransform: "uppercase", letterSpacing: "1px", marginTop: 2 }}>
+                {user?.resto_name || "Mon Restaurant"}
+              </div>
             </div>
           </div>
         </div>
-        <nav style={{ flex: 1, padding: "8px 6px" }}>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: "10px 8px" }}>
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}>
               {({ isActive }) => (
-                <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 9px",
-                  borderRadius: 8, marginBottom: 1, cursor: "pointer",
-                  background: isActive ? "#E1F5EE" : "transparent",
-                  color: isActive ? G : "#666", fontSize: 13, fontWeight: isActive ? 500 : 400 }}>
+                <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
+                    borderRadius: 9, marginBottom: 1, cursor: "pointer",
+                    background: isActive ? "rgba(232,160,69,.15)" : "transparent",
+                    borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
+                    color: isActive ? P : "rgba(255,255,255,.5)" }}>
                   <Icon size={16} style={{ flexShrink: 0 }} />
-                  {label}
-                </div>
+                  <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>{label}</span>
+                </motion.div>
               )}
             </NavLink>
           ))}
         </nav>
-        <div style={{ padding: "10px 8px", borderTop: "0.5px solid #f0f0f0",
+
+        {/* User */}
+        <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
           display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#E1F5EE",
+          <div style={{ width: 28, height: 28, borderRadius: "50%", background: P + "33",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 600, color: G }}>KJ</div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>Kouadio Jean</div>
-            <div style={{ fontSize: 10, color: "#aaa" }}>Gérant</div>
+            fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
+            {(user?.full_name || "RR").slice(0,2).toUpperCase()}
           </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: "white",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {user?.full_name || "Gérant"}
+            </div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>Restaurateur</div>
+          </div>
+          <button onClick={() => logout()}
+            style={{ border: "none", background: "transparent",
+              cursor: "pointer", color: "rgba(255,255,255,.3)", display: "flex", padding: 4 }}>
+            <LogOut size={14} />
+          </button>
         </div>
       </aside>
+
+      {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <main style={{ flex: 1, overflowY: "auto", padding: 18 }}>
+        <main style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           <AnimatePresence mode="wait">
             <motion.div key={window.location.pathname}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}

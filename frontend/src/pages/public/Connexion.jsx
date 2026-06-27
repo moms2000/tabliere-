@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
 const P      = "#E8A045";
 const S      = "#3D6B55";
 const DARK   = "#1E2E28";
@@ -25,62 +24,19 @@ function Logo({ size = 28 }) {
   );
 }
 
-export default function Connexion() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const { login } = useAuth();
-
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw,   setShowPw]   = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
-
-  const from = location.state?.from?.pathname || null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const user = await login(email, password, remember);
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (user.role === "admin") {
-        navigate("/admin",      { replace: true });
-      } else if (user.role === "restaurateur") {
-        navigate("/restaurant", { replace: true });
-      } else {
-        navigate("/",           { replace: true });
-      }
-    } catch (err) {
-      const status = err.response?.status;
-      if (status === 401 || status === 400) {
-        setError("Email ou mot de passe incorrect.");
-      } else if (status === 403) {
-        setError("Votre compte a été suspendu. Contactez le support.");
-      } else {
-        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+/* ── Étape 1 : Choix du type de compte ───────────────────────────────────────── */
+function StepChoix({ onChoose }) {
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "24px 16px",
-      fontFamily: FONT }}>
+      alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
         style={{ width: "100%", maxWidth: 860, display: "grid",
           gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
-          border: `0.5px solid ${BORDER}`,
-          boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
+          border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
 
-        {/* ── Panneau gauche sombre ─────────────────────────────────────────── */}
+        {/* Panneau gauche */}
         <div style={{ background: DARK, padding: "44px 36px",
           display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
@@ -103,40 +59,196 @@ export default function Connexion() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 28 }}>
-            <div>
-              <div style={{ fontSize: 26, fontWeight: 300, color: P, lineHeight: 1 }}>142</div>
-              <div style={{ fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase",
-                color: "rgba(180,165,130,0.3)", marginTop: 4 }}>Tables libres</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 26, fontWeight: 300, color: S, lineHeight: 1 }}>4.8</div>
-              <div style={{ fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase",
-                color: "rgba(180,165,130,0.3)", marginTop: 4 }}>Note moyenne</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 26, fontWeight: 300, color: "#EAE0CC", lineHeight: 1 }}>34</div>
-              <div style={{ fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase",
-                color: "rgba(180,165,130,0.3)", marginTop: 4 }}>Restaurants</div>
-            </div>
+            {[
+              { n: "142", label: "Tables libres", color: P },
+              { n: "4.8", label: "Note moyenne",  color: S },
+              { n: "34",  label: "Restaurants",   color: "#EAE0CC" },
+            ].map(s => (
+              <div key={s.label}>
+                <div style={{ fontSize: 26, fontWeight: 300, color: s.color, lineHeight: 1 }}>{s.n}</div>
+                <div style={{ fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase",
+                  color: "rgba(180,165,130,0.3)", marginTop: 4 }}>{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Panneau droit — formulaire ────────────────────────────────────── */}
+        {/* Panneau droit — choix */}
         <div style={{ background: "#FAFAF6", padding: "44px 36px",
           display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <button onClick={() => window.history.back()}
+            style={{ alignSelf: "flex-start", background: "transparent", border: "none",
+              cursor: "pointer", fontSize: 12, color: MUTED, marginBottom: 28,
+              display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: FONT }}>
+            ← Retour
+          </button>
 
+          <div style={{ fontSize: 20, fontWeight: 500, color: DARK, marginBottom: 6 }}>Connexion</div>
+          <div style={{ fontSize: 13, color: MUTED, marginBottom: 32 }}>
+            Choisissez votre espace de connexion
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              {
+                type: "client",
+                icon: User,
+                title: "Client",
+                sub: "Réservez et gérez vos tables",
+                bg: PL,
+                border: `0.5px solid ${P}44`,
+              },
+              {
+                type: "restaurateur",
+                icon: UtensilsCrossed,
+                title: "Restaurateur",
+                sub: "Gérez votre restaurant et réservations",
+                bg: "#F0F6F2",
+                border: `0.5px solid ${S}44`,
+              },
+            ].map(opt => (
+              <motion.button key={opt.type} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                onClick={() => onChoose(opt.type)}
+                style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
+                  borderRadius: 12, border: opt.border, background: opt.bg,
+                  cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
+                <div style={{ width: 44, height: 44, borderRadius: 11,
+                  background: opt.type === "client" ? P + "22" : S + "22",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <opt.icon size={20} color={opt.type === "client" ? P : S} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: DARK, marginBottom: 3 }}>
+                    {opt.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: MUTED }}>{opt.sub}</div>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+
+          <p style={{ textAlign: "center", fontSize: 12, color: MUTED, marginTop: 28 }}>
+            Pas encore de compte ?{" "}
+            <Link to="/inscription" style={{ color: P, fontWeight: 500, textDecoration: "none" }}>
+              S'inscrire
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ── Étape 2 : Formulaire de connexion ───────────────────────────────────────── */
+function StepForm({ type, onBack }) {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const { login } = useAuth();
+
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw,   setShowPw]   = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
+
+  const from = location.state?.from?.pathname || null;
+
+  const isResto = type === "restaurateur";
+  const accentColor = isResto ? S : P;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const user = await login(email, password, remember);
+      if (from) {
+        navigate(from, { replace: true });
+      } else if (user.role === "admin") {
+        navigate("/admin", { replace: true });
+      } else if (user.role === "restaurateur") {
+        navigate("/restaurant", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 401 || status === 400) {
+        setError("Email ou mot de passe incorrect.");
+      } else if (status === 403) {
+        setError("Votre compte a été suspendu. Contactez le support.");
+      } else {
+        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: BG, display: "flex",
+      alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: FONT }}>
+
+      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        style={{ width: "100%", maxWidth: 860, display: "grid",
+          gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
+          border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
+
+        {/* Panneau gauche */}
+        <div style={{ background: DARK, padding: "44px 36px",
+          display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 52 }}>
+              <Logo size={30} />
+              <span style={{ fontSize: 16, fontWeight: 400, color: "#EAE0CC" }}>
+                Tablière<span style={{ color: P, fontWeight: 500 }}>CI</span>
+              </span>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8,
+              background: accentColor + "22", borderRadius: 8, padding: "6px 12px", marginBottom: 20 }}>
+              {isResto
+                ? <UtensilsCrossed size={14} color={accentColor} />
+                : <User size={14} color={accentColor} />}
+              <span style={{ fontSize: 11, color: accentColor, fontWeight: 600 }}>
+                Espace {isResto ? "Restaurateur" : "Client"}
+              </span>
+            </div>
+            <h1 style={{ fontSize: 28, fontWeight: 300, color: "#EAE0CC",
+              lineHeight: 1.2, letterSpacing: "-0.5px", marginBottom: 14 }}>
+              {isResto ? "Gérez vos tables\net réservations." : "Bon retour\nparmi nous."}
+            </h1>
+            <p style={{ fontSize: 13, color: "rgba(180,165,130,0.5)", lineHeight: 1.7 }}>
+              {isResto
+                ? "Dashboard, menu, plan de salle — tout en un."
+                : "Les meilleures tables d'Abidjan vous attendent."}
+            </p>
+          </div>
+          <button onClick={onBack}
+            style={{ background: "transparent", border: `0.5px solid rgba(255,255,255,.15)`,
+              borderRadius: 8, padding: "8px 16px", color: "rgba(255,255,255,.4)",
+              cursor: "pointer", fontSize: 12, textAlign: "left", fontFamily: FONT }}>
+            ← Changer de type de compte
+          </button>
+        </div>
+
+        {/* Panneau droit */}
+        <div style={{ background: "#FAFAF6", padding: "44px 36px",
+          display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <button onClick={() => navigate("/")}
             style={{ alignSelf: "flex-start", background: "transparent", border: "none",
               cursor: "pointer", fontSize: 12, color: MUTED, marginBottom: 28,
-              display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
+              display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: FONT }}>
             ← Retour à l'accueil
           </button>
 
           <div style={{ fontSize: 20, fontWeight: 500, color: DARK, marginBottom: 4 }}>Connexion</div>
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 28 }}>Accédez à votre compte</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 28 }}>
+            Accédez à votre espace {isResto ? "restaurateur" : "client"}
+          </div>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
             {error && (
               <div style={{ display: "flex", alignItems: "center", gap: 8,
                 background: "#FEF2F2", border: "0.5px solid #FECACA",
@@ -168,16 +280,17 @@ export default function Connexion() {
                 </button>
               </div>
               <div style={{ textAlign: "right", marginTop: 6 }}>
-                <span style={{ fontSize: 11, color: P, cursor: "pointer" }}>Mot de passe oublié ?</span>
+                <span style={{ fontSize: 11, color: accentColor, cursor: "pointer" }}>
+                  Mot de passe oublié ?
+                </span>
               </div>
             </div>
 
-            {/* Toggle rester connecté */}
             <label style={{ display: "flex", alignItems: "center", gap: 10,
               cursor: "pointer", userSelect: "none" }}>
               <div onClick={() => setRemember(p => !p)}
                 style={{ width: 36, height: 20, borderRadius: 10, flexShrink: 0,
-                  background: remember ? P : BORDER, position: "relative",
+                  background: remember ? accentColor : BORDER, position: "relative",
                   transition: "background 0.2s", cursor: "pointer" }}>
                 <div style={{ position: "absolute", top: 2,
                   left: remember ? 18 : 2, width: 16, height: 16, borderRadius: "50%",
@@ -191,17 +304,18 @@ export default function Connexion() {
             </label>
 
             <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={loading}
-              style={{ background: loading ? "#F0C98A" : P, color: "#1A1000",
+              style={{ background: loading ? accentColor + "99" : accentColor,
+                color: isResto ? "white" : "#1A1000",
                 border: "none", borderRadius: 9, padding: "13px 0",
                 fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-                marginTop: 4, transition: "background 0.2s", fontFamily: "inherit" }}>
+                marginTop: 4, transition: "background 0.2s", fontFamily: FONT }}>
               {loading ? "Connexion en cours…" : "Se connecter"}
             </motion.button>
           </form>
 
           <p style={{ textAlign: "center", fontSize: 12, color: MUTED, marginTop: 20 }}>
             Pas encore de compte ?{" "}
-            <Link to="/inscription" style={{ color: P, fontWeight: 500, textDecoration: "none" }}>
+            <Link to="/inscription" style={{ color: accentColor, fontWeight: 500, textDecoration: "none" }}>
               S'inscrire
             </Link>
           </p>
@@ -211,14 +325,33 @@ export default function Connexion() {
   );
 }
 
+/* ── Composant principal ─────────────────────────────────────────────────────── */
+export default function Connexion() {
+  const [step, setStep] = useState("choix"); // "choix" | "client" | "restaurateur"
+
+  return (
+    <AnimatePresence mode="wait">
+      {step === "choix" ? (
+        <motion.div key="choix" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <StepChoix onChoose={(type) => setStep(type)} />
+        </motion.div>
+      ) : (
+        <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <StepForm type={step} onBack={() => setStep("choix")} />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 const labelSt = {
-  fontSize: 11, fontWeight: 500, color: "#6A7A72", display: "block", marginBottom: 6,
+  fontSize: 11, fontWeight: 500, color: MUTED, display: "block", marginBottom: 6, fontFamily: FONT,
 };
 const wrapSt = {
   display: "flex", alignItems: "center", gap: 10,
-  border: `0.5px solid #E4DFD8`, borderRadius: 9, padding: "11px 14px", background: "#F8F5EF",
+  border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "11px 14px", background: BG,
 };
 const inpSt = {
   border: "none", background: "transparent", fontSize: 13,
-  outline: "none", flex: 1, color: "#1E2E28", fontFamily: "inherit",
+  outline: "none", flex: 1, color: DARK, fontFamily: FONT,
 };

@@ -100,11 +100,20 @@ function buildDays14() {
 }
 
 function slotToDatetime(dateObj, slot) {
-  // "19h30" → "2026-06-27T19:30"
+  // "19h30" → datetime ISO local (ex: "2026-06-28T19:30")
   const [h, m] = slot.replace("h",":").split(":").map(Number);
   const d = new Date(dateObj);
   d.setHours(h, m || 0, 0, 0);
-  return d.toISOString().slice(0, 16);
+  // Retourner au format local (pas UTC) pour éviter le décalage horaire
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function isSlotPast(dateObj, slot) {
+  const [h, m] = slot.replace("h",":").split(":").map(Number);
+  const d = new Date(dateObj);
+  d.setHours(h, m || 0, 0, 0);
+  return d < new Date();
 }
 
 function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
@@ -115,16 +124,22 @@ function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
   const setField = (k) => (e) => setForm(p => ({ ...p, [k]: e.target?.value ?? e }));
 
   const handleSlot = (slot) => {
+    if (isSlotPast(selectedDay, slot)) return; // bloquer créneaux passés
     setSelectedSlot(slot);
     setForm(p => ({ ...p, reserved_at: slotToDatetime(selectedDay, slot) }));
   };
 
   const handleDay = (d) => {
     setSelectedDay(d);
-    if (selectedSlot) setForm(p => ({ ...p, reserved_at: slotToDatetime(d, selectedSlot) }));
+    // Si le créneau sélectionné est maintenant passé avec ce nouveau jour, le réinitialiser
+    if (selectedSlot && isSlotPast(d, selectedSlot)) setSelectedSlot("");
+    else if (selectedSlot) setForm(p => ({ ...p, reserved_at: slotToDatetime(d, selectedSlot) }));
   };
 
-  const canCreate = form.client_name?.trim() && form.reserved_at;
+  const isToday = (d) => d.toDateString() === new Date().toDateString();
+
+  // Un créneau doit être sélectionné pour créer
+  const canCreate = form.client_name?.trim() && selectedSlot;
 
   return (
     <Modal open title="Nouvelle réservation" onClose={onClose} width={540}>
@@ -189,45 +204,42 @@ function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
           letterSpacing: "0.8px", marginBottom: 8 }}>Heure</div>
-        <div style={{ marginBottom: 6 }}>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontWeight: 500 }}>Déjeuner</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {LUNCH_SLOTS.map(s => (
-              <button key={s} onClick={() => handleSlot(s)}
-                style={{ padding: "7px 12px", borderRadius: 8, border: "none",
-                  fontSize: 12, cursor: "pointer", fontFamily: FONT,
-                  background: selectedSlot === s ? P : BG,
-                  color: selectedSlot === s ? "white" : DARK,
-                  fontWeight: selectedSlot === s ? 600 : 400,
-                  outline: selectedSlot === s ? "none" : `0.5px solid ${BORDER}`,
-                }}>
-                {s}
-              </button>
-            ))}
+        {[
+          { label: "Déjeuner", slots: LUNCH_SLOTS },
+          { label: "Dîner",    slots: DINNER_SLOTS },
+        ].map(({ label, slots }) => (
+          <div key={label} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontWeight: 500 }}>{label}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {slots.map(s => {
+                const past = isSlotPast(selectedDay, s);
+                const sel  = selectedSlot === s;
+                return (
+                  <button key={s} onClick={() => handleSlot(s)} disabled={past}
+                    title={past ? "Créneau passé" : ""}
+                    style={{ padding: "7px 12px", borderRadius: 8, border: "none",
+                      fontSize: 12, fontFamily: FONT,
+                      cursor: past ? "not-allowed" : "pointer",
+                      background: sel ? P : past ? "#f0f0f0" : BG,
+                      color:      sel ? "white" : past ? "#ccc" : DARK,
+                      fontWeight: sel ? 600 : 400,
+                      outline: sel ? "none" : `0.5px solid ${past ? "#e8e8e8" : BORDER}`,
+                      textDecoration: past ? "line-through" : "none",
+                      opacity: past ? 0.5 : 1,
+                    }}>
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ))}
         <div>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontWeight: 500 }}>Dîner</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {DINNER_SLOTS.map(s => (
-              <button key={s} onClick={() => handleSlot(s)}
-                style={{ padding: "7px 12px", borderRadius: 8, border: "none",
-                  fontSize: 12, cursor: "pointer", fontFamily: FONT,
-                  background: selectedSlot === s ? P : BG,
-                  color: selectedSlot === s ? "white" : DARK,
-                  fontWeight: selectedSlot === s ? 600 : 400,
-                  outline: selectedSlot === s ? "none" : `0.5px solid ${BORDER}`,
-                }}>
-                {s}
-              </button>
-            ))}
-          </div>
         </div>
         {!selectedSlot && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>Heure personnalisée</div>
-            <Input type="datetime-local" value={form.reserved_at}
-              onChange={e => { setSelectedSlot(""); setForm(p => ({ ...p, reserved_at: e.target.value })); }} />
+          <div style={{ marginTop: 8, padding: "8px 12px", background: "#FEF6EC",
+            borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
+            ⚡ Sélectionnez un créneau ci-dessus pour continuer
           </div>
         )}
       </div>
@@ -389,12 +401,12 @@ export default function RestReservations() {
     setCreateError("");
     try {
       const payload = {
-        reserved_at:  createForm.reserved_at,
-        party_size:   Number(createForm.party_size),
+        restaurant_id:   user.resto_id || undefined, // requis par le Joi schema
+        reserved_at:     createForm.reserved_at,
+        party_size:      Number(createForm.party_size),
         special_request: createForm.notes || undefined,
-        walk_in_name:  createForm.client_name  || undefined,
-        walk_in_phone: createForm.client_phone || undefined,
-        // restaurant_id injecté côté backend via req.user.restaurant_id
+        walk_in_name:    createForm.client_name  || undefined,
+        walk_in_phone:   createForm.client_phone || undefined,
       };
       const result = await reservationsService.create(payload);
       const newR = result?.reservation || result;

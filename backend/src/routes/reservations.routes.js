@@ -8,16 +8,19 @@ import * as ctrl                   from "../controllers/reservations.controller.
 const router = Router();
 
 const createSchema = Joi.object({
-  restaurant_id: Joi.string().uuid().required(),
-  table_id:      Joi.string().uuid().optional(),
-  reserved_at:   Joi.date().iso().min("now").required(),
-  party_size:    Joi.number().integer().min(1).max(50).required(),
-  special_request: Joi.string().max(500).optional(),
+  restaurant_id:   Joi.string().uuid().optional(), // optionnel pour les restaurateurs (utilisent req.user.restaurant_id)
+  table_id:        Joi.string().uuid().optional(),
+  reserved_at:     Joi.date().iso().required(),    // .min("now") retiré → le contrôleur gère la logique métier
+  party_size:      Joi.number().integer().min(1).max(50).required(),
+  special_request: Joi.string().max(500).allow("", null).optional(),
+  walk_in_name:    Joi.string().max(255).allow("", null).optional(),
+  walk_in_phone:   Joi.string().max(30).allow("", null).optional(),
 });
 
 router.post(
   "/",
-  authenticate, reservationLimiter,
+  authenticate,
+  authorize("client", "restaurateur", "admin"),
   validate(createSchema),
   ctrl.create
 );

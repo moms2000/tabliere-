@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown } from "lucide-react";
+import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown, LayoutGrid, Clock, ShoppingBag } from "lucide-react";
 import { menuService }   from "../../services/menu.service.js";
 import { ordersService } from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
@@ -124,9 +124,13 @@ export default function RestPOS() {
   const [loading,     setLoading]     = useState(true);
   const [submitting,  setSubmitting]  = useState(false);
   const [lastOrder,   setLastOrder]   = useState(null);
-  const [showCart,    setShowCart]    = useState(false); // mobile: show cart panel
+  const [showCart,    setShowCart]    = useState(false);
   const [error,       setError]       = useState("");
   const [showNote,    setShowNote]    = useState(false);
+  // Vue par table
+  const [posTab,      setPosTab]      = useState("commande"); // "commande" | "tables"
+  const [orders,      setOrders]      = useState([]);
+  const [loadOrders,  setLoadOrders]  = useState(false);
 
   const restoSlug = user?.resto_slug;
   const restoId   = user?.resto_id;
@@ -162,6 +166,36 @@ export default function RestPOS() {
       return { ...p, [id]: { ...p[id], qty } };
     }), []);
   const clearCart = () => { setCart({}); setClientName(""); setOrderNote(""); setTableLabel(""); setLastOrder(null); setError(""); };
+
+  // ── Charger les commandes pour la vue par table ──
+  const fetchOrders = useCallback(async () => {
+    if (!restoId) return;
+    setLoadOrders(true);
+    try {
+      const res = await ordersService.list({ limit: 100 });
+      setOrders(res.data || []);
+    } catch (_) {}
+    setLoadOrders(false);
+  }, [restoId]);
+
+  useEffect(() => {
+    if (posTab === "tables") fetchOrders();
+  }, [posTab, fetchOrders]);
+
+  // Grouper les commandes par table
+  const ordersByTable = orders.reduce((acc, o) => {
+    const key = o.table_label || "Sans table";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(o);
+    return acc;
+  }, {});
+
+  const updateOrderStatus = async (id, status) => {
+    try {
+      await ordersService.updateStatus(id, status);
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    } catch (_) {}
+  };
 
   // ── Envoyer en cuisine ──
   const sendOrder = async () => {
@@ -242,12 +276,29 @@ export default function RestPOS() {
   return (
     <div style={{ fontFamily: FONT, height: "calc(100vh - 50px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      {/* ── Header avec sélecteur table + panier ── */}
+      {/* ── Header ── */}
       <div style={{ background: DARK, padding: "10px 16px", display: "flex", alignItems: "center",
         gap: 12, flexShrink: 0, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Zap size={18} color={P} />
           <span style={{ fontSize: 14, fontWeight: 700, color: "white" }}>Service rapide</span>
+        </div>
+
+        {/* Onglets Commande / Vue tables */}
+        <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,.08)", borderRadius: 8, padding: 3 }}>
+          {[
+            { id: "commande", label: "Commande",    icon: ShoppingBag },
+            { id: "tables",   label: "Par table",   icon: LayoutGrid },
+          ].map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setPosTab(id)}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px",
+                borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: FONT,
+                background: posTab === id ? P : "transparent",
+                color:      posTab === id ? "#1a1000" : "rgba(255,255,255,.6)",
+                fontWeight: posTab === id ? 700 : 400 }}>
+              <Icon size={12} />{label}
+            </button>
+          ))}
         </div>
 
         {/* Sélecteur table */}
@@ -281,7 +332,150 @@ export default function RestPOS() {
         </motion.button>
       </div>
 
-      {/* ── Tabs catégories ── */}
+      {/* ── Vue par table ── */}
+      {posTab === "tables" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: 16, background: BG }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: DARK }}>
+              Commandes par table
+            </span>
+            <button onClick={fetchOrders} disabled={loadOrders}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+                borderRadius: 8, border: `0.5px solid ${BORDER}`, background: "white",
+                fontSize: 12, cursor: "pointer", color: MUTED }}>
+              <RefreshCw size={12} style={{ animation: loadOrders ? "spin 1s linear infinite" : "none" }} />
+              Actualiser
+            </button>
+          </div>
+
+          {loadOrders ? (
+            <div style={{ textAlign: "center", padding: 40, color: MUTED }}>Chargement…</div>
+          ) : Object.keys(ordersByTable).length === 0 ? (
+            <div style={{ textAlign: "center", padding: 60, color: MUTED, fontSize: 14 }}>
+              <ShoppingBag size={36} style={{ marginBottom: 12, opacity: 0.3 }} />
+              <div>Aucune commande en cours</div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
+              {Object.entries(ordersByTable).map(([tableKey, tableOrders]) => {
+                const active = tableOrders.filter(o => !["servi","annule"].includes(o.status));
+                return (
+                  <div key={tableKey} style={{ background: "white", borderRadius: 14,
+                    border: `1.5px solid ${active.length > 0 ? P : BORDER}`,
+                    overflow: "hidden", boxShadow: active.length > 0 ? `0 2px 12px ${P}22` : "none" }}>
+
+                    {/* En-tête table */}
+                    <div style={{ padding: "10px 14px", background: active.length > 0 ? P + "15" : "#f8f8f8",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      borderBottom: `0.5px solid ${BORDER}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8,
+                          background: active.length > 0 ? P : MUTED + "44",
+                          display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <LayoutGrid size={16} color={active.length > 0 ? "#1a1000" : MUTED} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{tableKey}</div>
+                          <div style={{ fontSize: 10, color: MUTED }}>{tableOrders.length} commande{tableOrders.length > 1 ? "s" : ""}</div>
+                        </div>
+                      </div>
+                      {active.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px",
+                          borderRadius: 20, background: P + "22", color: "#C47D1A" }}>
+                          {active.length} active{active.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Liste des commandes de la table */}
+                    <div style={{ maxHeight: 350, overflowY: "auto" }}>
+                      {tableOrders.map(order => {
+                        const STATUS = {
+                          en_attente: { bg: "#FEF3C7", color: "#92400E", label: "En attente",  next: "en_cours" },
+                          en_cours:   { bg: "#DBEAFE", color: "#1E40AF", label: "En cours",    next: "servi" },
+                          servi:      { bg: "#D1FAE5", color: "#065F46", label: "Servi",       next: null },
+                          annule:     { bg: "#FEE2E2", color: "#991B1B", label: "Annulé",      next: null },
+                        };
+                        const st = STATUS[order.status] || STATUS.en_attente;
+                        return (
+                          <div key={order.id} style={{ padding: "10px 14px",
+                            borderBottom: `0.5px solid ${BG}` }}>
+                            <div style={{ display: "flex", alignItems: "flex-start",
+                              justifyContent: "space-between", marginBottom: 6 }}>
+                              <div>
+                                {order.client_name && (
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: DARK }}>{order.client_name}</div>
+                                )}
+                                <div style={{ fontSize: 11, color: MUTED }}>
+                                  {new Date(order.created_at).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" })}
+                                  {" · "}{fmt(order.total)}
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px",
+                                borderRadius: 8, background: st.bg, color: st.color, whiteSpace: "nowrap" }}>
+                                {st.label}
+                              </span>
+                            </div>
+
+                            {/* Articles */}
+                            <div style={{ fontSize: 11, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+                              {(order.items || []).map((it, j) => (
+                                <span key={j}>{j > 0 && " · "}<strong style={{ color: DARK }}>{it.qty}×</strong> {it.name}</span>
+                              ))}
+                            </div>
+
+                            {/* Actions statut */}
+                            {!["servi","annule"].includes(order.status) && (
+                              <div style={{ display: "flex", gap: 6 }}>
+                                {order.status === "en_attente" && (
+                                  <button onClick={() => updateOrderStatus(order.id, "en_cours")}
+                                    style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: "none",
+                                      background: "#DBEAFE", color: "#1E40AF", fontSize: 11,
+                                      fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                                    ▶ Prendre en charge
+                                  </button>
+                                )}
+                                {order.status === "en_cours" && (
+                                  <button onClick={() => updateOrderStatus(order.id, "servi")}
+                                    style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: "none",
+                                      background: "#D1FAE5", color: "#065F46", fontSize: 11,
+                                      fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                                    ✓ Marquer servi
+                                  </button>
+                                )}
+                                <button onClick={() => updateOrderStatus(order.id, "annule")}
+                                  style={{ padding: "5px 10px", borderRadius: 7,
+                                    border: `0.5px solid #FCA5A5`, background: "#FEF2F2",
+                                    color: "#991B1B", fontSize: 11, cursor: "pointer", fontFamily: FONT }}>
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer — prendre commande pour cette table */}
+                    <div style={{ padding: "8px 14px", borderTop: `0.5px solid ${BORDER}` }}>
+                      <button
+                        onClick={() => { setTableLabel(tableKey === "Sans table" ? "" : tableKey); setPosTab("commande"); }}
+                        style={{ width: "100%", padding: "7px 0", borderRadius: 8, border: `0.5px solid ${P}`,
+                          background: "white", color: P, fontSize: 12, fontWeight: 600,
+                          cursor: "pointer", fontFamily: FONT }}>
+                        + Ajouter une commande pour {tableKey}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Vue commande (catégories + grille + panier) ── */}
+      {posTab === "commande" && <>
       <div style={{ background: "white", borderBottom: `0.5px solid ${BORDER}`,
         display: "flex", gap: 0, overflowX: "auto", flexShrink: 0 }}>
         {categories.map((cat, i) => {
@@ -379,6 +573,7 @@ export default function RestPOS() {
           </>
         )}
       </AnimatePresence>
+      </>}
     </div>
   );
 }

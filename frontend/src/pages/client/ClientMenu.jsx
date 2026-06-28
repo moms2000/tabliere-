@@ -82,7 +82,7 @@ export default function ClientMenu() {
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [cart,        setCart]        = useState({});
-  const [step,        setStep]        = useState("menu");
+  const [step,        setStep]        = useState("splash"); // splash → menu → cart → info → confirm
   const [openCats,    setOpenCats]    = useState({});
   const [submitting,  setSubmitting]  = useState(false);
   const [errorMsg,    setErrorMsg]    = useState("");
@@ -188,6 +188,121 @@ export default function ClientMenu() {
     <div style={{ minHeight: "100vh", background: DARK, display: "flex", alignItems: "center",
       justifyContent: "center", fontFamily: FONT, color: "rgba(255,255,255,.5)", padding: 24, textAlign: "center" }}>
       Menu introuvable
+    </div>
+  );
+
+  /* ── Splash screen style BBR ── */
+  if (step === "splash") return (
+    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", fontFamily: FONT,
+      position: "relative", overflow: "hidden", background: DARK }}>
+
+      {/* Photo héro — logo du restaurant si disponible, sinon gradient thème */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+        {resto.logo_url ? (
+          <img src={resto.logo_url} alt={resto.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }}
+            onError={e => { e.target.style.display = "none"; }} />
+        ) : (
+          <div style={{ width: "100%", height: "100%",
+            background: `linear-gradient(160deg, ${G}22 0%, ${DARK} 60%, ${DARK} 100%)` }} />
+        )}
+        {/* Overlay dégradé vers le bas */}
+        <div style={{ position: "absolute", inset: 0,
+          background: "linear-gradient(to bottom, rgba(0,0,0,.25) 0%, rgba(0,0,0,.15) 30%, rgba(13,27,24,.95) 65%, " + DARK + " 100%)" }} />
+      </div>
+
+      {/* Décor watermark TablièreCI */}
+      <TCIWatermark color={G} />
+
+      {/* Badge table — en haut à droite */}
+      {table && (
+        <div style={{ position: "absolute", top: 20, right: 20, zIndex: 10,
+          background: "rgba(255,255,255,.92)", backdropFilter: "blur(10px)",
+          borderRadius: 20, padding: "4px 14px" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: DARK,
+            letterSpacing: "2px", textTransform: "uppercase" }}>
+            TABLE {table}
+          </span>
+        </div>
+      )}
+
+      {/* Logo TablièreCI — en haut à gauche */}
+      <div style={{ position: "absolute", top: 20, left: 20, zIndex: 10,
+        display: "flex", alignItems: "center", gap: 7 }}>
+        <TCI size={26} color="white" />
+        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.7)",
+          letterSpacing: "1.5px", textTransform: "uppercase" }}>TablièreCI</span>
+      </div>
+
+      {/* Contenu central */}
+      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        padding: "0 28px 52px" }}>
+
+        {/* Sous-titre style italic gold */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: G,
+            letterSpacing: "3px", textTransform: "uppercase",
+            fontStyle: "italic", marginBottom: 14 }}>
+            {resto.cuisine_type || "Restaurant"}
+          </div>
+        </motion.div>
+
+        {/* Titre principal */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: 900, color: "white",
+            lineHeight: 1.15, margin: "0 0 10px",
+            textShadow: "0 2px 20px rgba(0,0,0,.5)" }}>
+            {table ? `Bienvenue —\nTable ${table}` : `Bienvenue\nchez ${resto.name}`}
+          </h1>
+        </motion.div>
+
+        {/* Description */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,.6)",
+            lineHeight: 1.7, marginBottom: 36, maxWidth: 320 }}>
+            {resto.description ||
+              "Découvrez notre carte et commandez directement depuis votre table."}
+          </p>
+        </motion.div>
+
+        {/* CTA principal */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setStep("menu")}
+            style={{ width: "100%", padding: "18px 0", borderRadius: 14, border: "none",
+              background: G, color: "white", fontSize: 15, fontWeight: 800,
+              cursor: "pointer", fontFamily: FONT, letterSpacing: "1px", textTransform: "uppercase",
+              boxShadow: `0 8px 32px ${G}60` }}>
+            Découvrir la carte
+          </motion.button>
+        </motion.div>
+
+        {/* Historique si déjà commandé */}
+        {localOrders.length > 0 && (
+          <motion.button
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+            onClick={() => setStep("history")}
+            style={{ marginTop: 14, width: "100%", padding: "14px 0", borderRadius: 14,
+              border: "0.5px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)",
+              color: "rgba(255,255,255,.7)", fontSize: 14, fontWeight: 600,
+              cursor: "pointer", fontFamily: FONT, display: "flex",
+              alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <History size={16} /> Voir mes commandes ({localOrders.length})
+          </motion.button>
+        )}
+
+        {/* Footer restaurateur */}
+        {resto.name && (
+          <div style={{ marginTop: 32, textAlign: "center",
+            fontSize: 11, color: "rgba(255,255,255,.25)", letterSpacing: "0.5px" }}>
+            {resto.name}
+            {resto.quartier && ` · ${resto.quartier}`}
+          </div>
+        )}
+      </div>
     </div>
   );
 

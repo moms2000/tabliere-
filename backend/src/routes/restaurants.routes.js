@@ -22,7 +22,8 @@ router.get  ("/:id/manage",        authenticate, authorize("restaurateur","admin
 router.patch("/:id",               authenticate, authorize("restaurateur","admin"), ctrl.update);
 router.post ("/:id/qr",            authenticate, authorize("restaurateur","admin"), ctrl.generateQR);
 router.post ("/:id/tables",        authenticate, authorize("restaurateur","admin"), validate(tableSchema), ctrl.createTable);
-router.patch("/:id/tables/:tableId", authenticate, authorize("restaurateur","admin"), ctrl.updateTable);
-router.delete("/:id/tables/:tableId", authenticate, authorize("restaurateur","admin"), ctrl.deleteTable);
+router.patch ("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), ctrl.updateTable);
+router.delete("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), ctrl.deleteTable);
+router.post  ("/:id/tables/:tableId/qr",   authenticate, authorize("restaurateur","admin"), ctrl.generateTableQR);
 
 export default router;

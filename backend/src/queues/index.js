@@ -1,6 +1,7 @@
 import { Queue, Worker } from "bullmq";
 // redisClient non utilisé ici — BullMQ a sa propre connexion via `connection`
 import { whatsappService } from "../services/whatsapp.service.js";
+import { emailService }    from "../services/email.service.js";
 import { logger }          from "../utils/logger.js";
 import { query }           from "../config/db.js";
 
@@ -53,13 +54,23 @@ function createNotificationWorker() {
 
       switch (name) {
         case "confirmation": {
-          // WhatsApp au client
+          // WhatsApp + Email au client
           const { rows: [user] } = await query(
-            "SELECT full_name, phone FROM users WHERE id = $1", [data.userId]
+            "SELECT full_name, phone, email FROM users WHERE id = $1", [data.userId]
           );
           if (user?.phone) {
             await whatsappService.sendReservationConfirmation({
               phone:      user.phone,
+              name:       user.full_name,
+              restoName:  data.restoName,
+              reservedAt: data.reservedAt,
+              partySize:  data.partySize,
+              ref:        data.reservationRef,
+            });
+          }
+          if (user?.email) {
+            await emailService.sendReservationConfirmation({
+              email:      user.email,
               name:       user.full_name,
               restoName:  data.restoName,
               reservedAt: data.reservedAt,
@@ -73,7 +84,7 @@ function createNotificationWorker() {
         case "confirmation_client": {
           const { rows: [resa] } = await query(
             `SELECT r.reserved_at, r.party_size, r.ref,
-                    u.full_name, u.phone,
+                    u.full_name, u.phone, u.email,
                     re.name AS resto_name
              FROM reservations r
              JOIN users u ON u.id = r.client_id
@@ -89,6 +100,38 @@ function createNotificationWorker() {
               reservedAt: resa.reserved_at,
               partySize:  resa.party_size,
               ref:        resa.ref,
+            });
+          }
+          if (resa?.email) {
+            await emailService.sendConfirmedByResto({
+              email:      resa.email,
+              name:       resa.full_name,
+              restoName:  resa.resto_name,
+              reservedAt: resa.reserved_at,
+              ref:        resa.ref,
+            });
+          }
+          break;
+        }
+
+        case "cancellation": {
+          const { rows: [resa] } = await query(
+            `SELECT r.ref, r.cancel_reason,
+                    u.full_name, u.email,
+                    re.name AS resto_name
+             FROM reservations r
+             JOIN users u ON u.id = r.client_id
+             JOIN restaurants re ON re.id = r.restaurant_id
+             WHERE r.id = $1`,
+            [data.reservationId]
+          );
+          if (resa?.email) {
+            await emailService.sendCancellation({
+              email:     resa.email,
+              name:      resa.full_name,
+              restoName: resa.resto_name,
+              ref:       resa.ref,
+              reason:    resa.cancel_reason,
             });
           }
           break;

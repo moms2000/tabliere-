@@ -46,4 +46,9 @@ export const restaurantsService = {
   async deleteTable(restoId, tableId) {
     await api.delete(`/restaurants/${restoId}/tables/${tableId}`);
   },
+
+  async generateTableQR(restoId, tableId) {
+    const res = await api.post(`/restaurants/${restoId}/tables/${tableId}/qr`);
+    return res.data.data;
+  },
 };

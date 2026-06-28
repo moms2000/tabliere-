@@ -27,6 +27,10 @@ export const env = {
   APP_URL:      optional("APP_URL", "https://tabliereci.ci"),
   FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
 
+  // SendGrid (email)
+  SENDGRID_API_KEY: optional("SENDGRID_API_KEY", ""),
+  EMAIL_FROM:       optional("EMAIL_FROM", "noreply@tabliereci.ci"),
+
   // WhatsApp Business API
   WHATSAPP_TOKEN:    optional("WHATSAPP_TOKEN", ""),
   WHATSAPP_PHONE_ID: optional("WHATSAPP_PHONE_ID", ""),

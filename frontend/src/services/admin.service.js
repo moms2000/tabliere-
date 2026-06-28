@@ -50,4 +50,24 @@ export const adminService = {
     const res = await api.get("/admin/payments", { params: { limit: 200, ...params } });
     return res.data;
   },
+
+  async batchRestaurantStatus(ids, status) {
+    const res = await api.patch("/admin/restaurants/batch", { ids, status });
+    return res.data.data;
+  },
+
+  async batchUserStatus(ids, status) {
+    const res = await api.patch("/admin/users/batch", { ids, status });
+    return res.data.data;
+  },
+
+  async exportCSV(type) {
+    const res = await api.get("/admin/export", { params: { type }, responseType: "blob" });
+    const url  = URL.createObjectURL(res.data);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `${type}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

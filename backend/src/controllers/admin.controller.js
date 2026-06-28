@@ -246,6 +246,114 @@ export const listReservations = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /admin/restaurants/batch — statut en masse
+// ---------------------------------------------------------------------------
+export const batchRestaurantStatus = asyncHandler(async (req, res) => {
+  const { ids, status } = req.body;
+  const allowed = ["actif", "suspendu", "en_attente"];
+  if (!Array.isArray(ids) || ids.length === 0) throw new AppError("ids[] requis", 400);
+  if (!allowed.includes(status)) throw new AppError(`Statut invalide : ${allowed.join(", ")}`, 400);
+
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");
+  const { rowCount } = await query(
+    `UPDATE restaurants SET status = $1, updated_at = NOW() WHERE id IN (${placeholders})`,
+    [status, ...ids]
+  );
+
+  await cache.delPattern("restaurant:*");
+  await cache.del("admin:stats");
+  logger.info("Batch statut restaurants", { count: rowCount, status });
+  return ok(res, { updated: rowCount }, `${rowCount} restaurant(s) mis à jour`);
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /admin/users/batch — statut en masse
+// ---------------------------------------------------------------------------
+export const batchUserStatus = asyncHandler(async (req, res) => {
+  const { ids, status } = req.body;
+  const allowed = ["actif", "bloque", "suspendu"];
+  if (!Array.isArray(ids) || ids.length === 0) throw new AppError("ids[] requis", 400);
+  if (!allowed.includes(status)) throw new AppError(`Statut invalide : ${allowed.join(", ")}`, 400);
+
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");
+  const { rowCount } = await query(
+    `UPDATE users SET status = $1, updated_at = NOW() WHERE id IN (${placeholders})`,
+    [status, ...ids]
+  );
+
+  // Invalider le cache de session pour chaque utilisateur modifié
+  await Promise.all(ids.map(id => cache.del(`user:${id}`)));
+  logger.info("Batch statut utilisateurs", { count: rowCount, status });
+  return ok(res, { updated: rowCount }, `${rowCount} utilisateur(s) mis à jour`);
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/export?type=restaurants|users|reservations — CSV download
+// ---------------------------------------------------------------------------
+export const exportCSV = asyncHandler(async (req, res) => {
+  const { type = "restaurants" } = req.query;
+
+  let rows, headers, filename;
+
+  if (type === "restaurants") {
+    ({ rows } = await query(
+      `SELECT r.name, r.ville, r.quartier, r.cuisine_type, r.plan, r.status,
+              r.rating, r.review_count, r.commission_pct,
+              u.full_name AS owner_name, u.email AS owner_email,
+              (SELECT COUNT(*) FROM reservations WHERE restaurant_id = r.id) AS resa_count,
+              r.created_at
+       FROM restaurants r JOIN users u ON u.id = r.owner_id
+       ORDER BY r.created_at DESC`
+    ));
+    headers = ["Nom", "Ville", "Quartier", "Cuisine", "Plan", "Statut", "Note", "Avis",
+               "Commission %", "Gérant", "Email gérant", "Réservations", "Inscrit le"];
+    filename = "restaurants.csv";
+
+  } else if (type === "users") {
+    ({ rows } = await query(
+      `SELECT full_name, email, phone, role, status, created_at,
+              (SELECT COUNT(*) FROM reservations WHERE client_id = users.id) AS resa_count
+       FROM users ORDER BY created_at DESC`
+    ));
+    headers = ["Nom", "Email", "Téléphone", "Rôle", "Statut", "Inscrit le", "Réservations"];
+    filename = "utilisateurs.csv";
+
+  } else if (type === "reservations") {
+    ({ rows } = await query(
+      `SELECT r.ref, r.status, r.reserved_at, r.party_size, r.special_request,
+              re.name AS restaurant, u.full_name AS client, u.email AS email_client,
+              r.created_at
+       FROM reservations r
+       JOIN restaurants re ON re.id = r.restaurant_id
+       JOIN users u ON u.id = r.client_id
+       ORDER BY r.reserved_at DESC`
+    ));
+    headers = ["Référence", "Statut", "Date réservation", "Couverts", "Demande spéciale",
+               "Restaurant", "Client", "Email client", "Créé le"];
+    filename = "reservations.csv";
+
+  } else {
+    throw new AppError("type invalide : restaurants | users | reservations", 400);
+  }
+
+  const escape = (v) => {
+    if (v == null) return "";
+    const s = String(v instanceof Date ? v.toISOString() : v);
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const csv = [
+    headers.join(","),
+    ...rows.map(row => Object.values(row).map(escape).join(",")),
+  ].join("\r\n");
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send("﻿" + csv); // BOM UTF-8 pour Excel
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /admin/reservations/:id
 // ---------------------------------------------------------------------------
 export const updateReservation = asyncHandler(async (req, res) => {

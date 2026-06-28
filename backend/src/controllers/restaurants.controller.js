@@ -83,6 +83,7 @@ export const getOne = asyncHandler(async (req, res) => {
 
 // ── GET /restaurants/:id/manage — restaurateur ────────────────────────────────
 export const getManage = asyncHandler(async (req, res) => {
+  await ensureRestaurantColumns();
   await ensureTableColumns();
   const { rows: [resto] } = await query(
     "SELECT * FROM restaurants WHERE id = $1",
@@ -100,6 +101,7 @@ export const getManage = asyncHandler(async (req, res) => {
 
 // ── PATCH /restaurants/:id ─────────────────────────────────────────────────────
 export const update = asyncHandler(async (req, res) => {
+  await ensureRestaurantColumns();
   const { rows: [resto] } = await query(
     "SELECT * FROM restaurants WHERE id = $1", [req.params.id]
   );
@@ -177,7 +179,19 @@ export const generateQR = asyncHandler(async (req, res) => {
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 
-// Migration silencieuse : ajouter pos_x / pos_y si absent
+// Migration silencieuse : colonnes manquantes restaurants
+let restaurantMigrated = false;
+async function ensureRestaurantColumns() {
+  if (restaurantMigrated) return;
+  try {
+    await query(`
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS logo_url TEXT;
+    `);
+  } catch (_) {}
+  restaurantMigrated = true;
+}
+
+// Migration silencieuse : ajouter pos_x / pos_y / qr_url sur les tables
 let tablesMigrated = false;
 async function ensureTableColumns() {
   if (tablesMigrated) return;
@@ -185,6 +199,7 @@ async function ensureTableColumns() {
     await query(`
       ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_x INTEGER DEFAULT 20;
       ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_y INTEGER DEFAULT 20;
+      ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS qr_url TEXT;
     `);
   } catch (_) {}
   tablesMigrated = true;
@@ -242,6 +257,34 @@ export const deleteTable = asyncHandler(async (req, res) => {
   );
   if (!table) return notFound(res, "Table introuvable");
   return ok(res, null, "Table désactivée");
+});
+
+// ── POST /restaurants/:id/tables/:tableId/qr — QR par table ──────────────────
+export const generateTableQR = asyncHandler(async (req, res) => {
+  await ensureTableColumns();
+  const { rows: [resto] } = await query(
+    "SELECT id, slug, theme_color FROM restaurants WHERE id = $1", [req.params.id]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+  _assertOwnerOrAdmin(req, resto);
+
+  const { rows: [table] } = await query(
+    "SELECT id, label FROM restaurant_tables WHERE id = $1 AND restaurant_id = $2",
+    [req.params.tableId, req.params.id]
+  );
+  if (!table) return notFound(res, "Table introuvable");
+
+  const frontendUrl = process.env.FRONTEND_URL || "https://tabliere.vercel.app";
+  const qrUrl = `${frontendUrl}/menu/${resto.slug}?table=${encodeURIComponent(table.label)}`;
+
+  await query(
+    "UPDATE restaurant_tables SET qr_url = $1 WHERE id = $2",
+    [qrUrl, table.id]
+  );
+
+  await cache.delPattern("restaurant:*").catch(() => {});
+  logger.info("QR table généré", { tableId: table.id, label: table.label });
+  return ok(res, { qr_url: qrUrl, table_label: table.label });
 });
 
 // ── Disponibilités ─────────────────────────────────────────────────────────────

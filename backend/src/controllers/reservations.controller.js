@@ -11,16 +11,40 @@ import { notificationQueue }      from "../queues/index.js";
 import { logger }                 from "../utils/logger.js";
 import { emitToUser }             from "../utils/sse.js";
 
+// Migration silencieuse : colonnes walk-in
+let resaMigrated = false;
+async function ensureResaColumns() {
+  if (resaMigrated) return;
+  try {
+    await query(`
+      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_name  VARCHAR(255);
+      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(30);
+      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_noshow     BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+  } catch (_) {}
+  resaMigrated = true;
+}
+
 // ── POST /reservations ────────────────────────────────────────────────────────
 export const create = asyncHandler(async (req, res) => {
-  const { restaurant_id, table_id, reserved_at, party_size, special_request } = req.body;
+  await ensureResaColumns();
+  const { restaurant_id, table_id, reserved_at, party_size, special_request,
+          walk_in_name, walk_in_phone } = req.body;
 
   // Vérifier que le restaurant est actif
+  // Pour restaurateur créant une réservation walk-in :
+  // utiliser son propre restaurant si restaurant_id absent
+  const effectiveRestoId = restaurant_id || req.user.restaurant_id;
+  if (!effectiveRestoId) throw new AppError("restaurant_id requis", 400);
+
+  // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity FROM restaurants WHERE id = $1 AND status = 'actif'",
-    [restaurant_id]
+    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1",
+    [effectiveRestoId]
   );
-  if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
+  if (!resto) throw new AppError("Restaurant introuvable", 404);
+  if (req.user.role === "client" && resto.status !== "actif")
+    throw new AppError("Restaurant inactif", 404);
   if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 
   // Vérifier que la table n'est pas déjà réservée sur ce créneau
@@ -41,13 +65,18 @@ export const create = asyncHandler(async (req, res) => {
     "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
   );
 
+  // Statut initial : confirmé pour réservation créée par restaurateur
+  const initialStatus = req.user.role === "restaurateur" ? "confirme" : "en_attente";
+
   const resa = await withTransaction(async (client) => {
     const { rows: [newResa] } = await client.query(
       `INSERT INTO reservations
-         (ref, restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'en_attente')
+         (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
+          special_request, status, walk_in_name, walk_in_phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [nextref, restaurant_id, req.user.id, table_id || null, reserved_at, party_size, special_request || null]
+      [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
+       special_request || null, initialStatus, walk_in_name || null, walk_in_phone || null]
     );
 
     // Marquer la table comme réservée
@@ -115,8 +144,10 @@ export const list = asyncHandler(async (req, res) => {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const { rows } = await query(
-    `SELECT r.*, re.name AS resto_name, re.slug AS resto_slug,
-            u.full_name AS client_name, u.phone AS client_phone,
+    `SELECT r.*,
+            re.name AS resto_name, re.slug AS resto_slug,
+            COALESCE(r.walk_in_name, u.full_name) AS client_name,
+            COALESCE(r.walk_in_phone, u.phone)    AS client_phone,
             t.label AS table_label, t.zone AS table_zone
      FROM reservations r
      JOIN restaurants re ON re.id = r.restaurant_id
@@ -313,6 +344,8 @@ export const cancel = asyncHandler(async (req, res) => {
     );
   }
 
+  await notificationQueue.add("cancellation", { reservationId: resa.id }).catch(() => {});
+
   logger.info("Réservation annulée", { resaId: resa.id, ref: resa.ref });
   return ok(res, { reservation: updated }, "Réservation annulée");
 });
@@ -328,8 +361,9 @@ export const noShow = asyncHandler(async (req, res) => {
     throw new AppError("Accès refusé", 403);
   }
 
+  await ensureResaColumns();
   const { rows: [updated] } = await query(
-    `UPDATE reservations SET status = 'no_show', no_show_at = NOW(), updated_at = NOW()
+    `UPDATE reservations SET status = 'no_show', is_noshow = TRUE, no_show_at = NOW(), updated_at = NOW()
      WHERE id = $1 RETURNING *`,
     [req.params.id]
   );

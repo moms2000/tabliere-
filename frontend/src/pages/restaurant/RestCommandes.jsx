@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag, TrendingUp, BarChart3, CheckCircle,
-  Clock, X, RefreshCw, Award, AlertTriangle,
+  Clock, X, RefreshCw, Award, AlertTriangle, Plus, Minus, Pencil,
 } from "lucide-react";
-import { Card, SectionHeader, PageTitle, Badge, Btn } from "../../components/ui";
+import { Card, SectionHeader, PageTitle, Btn } from "../../components/ui";
 import { ordersService }     from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
+import { menuService }        from "../../services/menu.service.js";
 import { useAuth }           from "../../context/AuthContext.jsx";
 
 const P      = "#E8A045";
@@ -102,12 +103,25 @@ export default function RestCommandes() {
   const [orders,       setOrders]       = useState([]);
   const [stats,        setStats]        = useState(null);
   const [restoName,    setRestoName]    = useState("");
+  const [restoSlug,    setRestoSlug]    = useState("");
+  const [tables,       setTables]       = useState([]);
+  const [menuCats,     setMenuCats]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [qrActive,     setQrActive]     = useState(true);
   const [period,       setPeriod]       = useState("day");
-  const [activeTab,    setActiveTab]    = useState("commandes"); // commandes | stats
+  const [activeTab,    setActiveTab]    = useState("commandes");
   const [statusFilter, setStatusFilter] = useState("");
   const [refreshing,   setRefreshing]   = useState(false);
+  // Modale prise de commande manuelle
+  const [showManual,   setShowManual]   = useState(false);
+  const [manualForm,   setManualForm]   = useState({ client_name: "", client_phone: "", table_label: "", note: "" });
+  const [manualCart,   setManualCart]   = useState({}); // {itemId: {item, qty}}
+  const [manualErr,    setManualErr]    = useState("");
+  const [submittingM,  setSubmittingM]  = useState(false);
+  // Modale modification d'une commande
+  const [editOrder,    setEditOrder]    = useState(null);
+  const [editCart,     setEditCart]     = useState({});
+  const [editNote,     setEditNote]     = useState("");
 
   const load = useCallback(async () => {
     if (!user?.resto_id) return;
@@ -117,13 +131,22 @@ export default function RestCommandes() {
         ordersService.list({ limit: 100, ...(statusFilter ? { status: statusFilter } : {}) }),
         ordersService.getStats({ period }).catch(() => null),
       ]);
-      setRestoName(restoData.restaurant?.name || "");
-      setQrActive(restoData.restaurant?.qr_active || false);
+      const r = restoData.restaurant || {};
+      setRestoName(r.name || "");
+      setRestoSlug(r.slug || user.resto_slug || "");
+      setQrActive(r.qr_active || false);
+      setTables(r.tables || []);
       setOrders(ordersData.data || []);
       if (statsData) setStats(statsData);
+      // Charger le menu pour la prise de commande
+      if (r.slug || user.resto_slug) {
+        menuService.getFullMenu(r.slug || user.resto_slug)
+          .then(d => setMenuCats(d.categories || []))
+          .catch(() => {});
+      }
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [user?.resto_id, period, statusFilter]);
+  }, [user?.resto_id, user?.resto_slug, period, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -133,6 +156,81 @@ export default function RestCommandes() {
     try {
       await ordersService.updateStatus(id, status);
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    } catch (e) { console.error(e); }
+  };
+
+  // ── Commande manuelle ──
+  const manualItems = Object.values(manualCart);
+  const manualTotal = manualItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
+
+  const addToManual = (item) =>
+    setManualCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty || 0) + 1 } }));
+  const remFromManual = (id) =>
+    setManualCart(p => {
+      const qty = (p[id]?.qty || 0) - 1;
+      if (qty <= 0) { const n = { ...p }; delete n[id]; return n; }
+      return { ...p, [id]: { ...p[id], qty } };
+    });
+
+  const submitManual = async () => {
+    if (manualItems.length === 0) return;
+    setManualErr(""); setSubmittingM(true);
+    try {
+      const items = manualItems.map(({ item, qty }) => ({
+        id: item.id, name: item.name, price: item.price, qty,
+      }));
+      const result = await ordersService.createManual({
+        table_label:  manualForm.table_label  || undefined,
+        client_name:  manualForm.client_name  || undefined,
+        client_phone: manualForm.client_phone || undefined,
+        note:         manualForm.note         || undefined,
+        items,
+      });
+      setOrders(prev => [result.order || result, ...prev]);
+      setShowManual(false);
+      setManualCart({});
+      setManualForm({ client_name: "", client_phone: "", table_label: "", note: "" });
+    } catch (e) {
+      setManualErr(e.response?.data?.message || "Erreur lors de la création");
+    }
+    setSubmittingM(false);
+  };
+
+  // ── Modification d'une commande ──
+  const openEditOrder = (order) => {
+    const cart = {};
+    (order.items || []).forEach(it => {
+      cart[it.id || it.name] = { item: it, qty: it.qty };
+    });
+    setEditOrder(order);
+    setEditCart(cart);
+    setEditNote(order.notes || "");
+  };
+
+  const editItems  = Object.values(editCart);
+  const editTotal  = editItems.reduce((s, { item, qty }) => s + (item.price || 0) * qty, 0);
+
+  const addToEdit  = (item) =>
+    setEditCart(p => ({ ...p, [item.id || item.name]: { item, qty: (p[item.id || item.name]?.qty || 0) + 1 } }));
+  const remFromEdit = (key) =>
+    setEditCart(p => {
+      const qty = (p[key]?.qty || 0) - 1;
+      if (qty <= 0) { const n = { ...p }; delete n[key]; return n; }
+      return { ...p, [key]: { ...p[key], qty } };
+    });
+
+  const saveEditOrder = async () => {
+    if (!editOrder) return;
+    try {
+      const items = editItems.map(({ item, qty }) => ({
+        id: item.id, name: item.name, price: item.price || 0, qty,
+      }));
+      await ordersService.updateItems(editOrder.id, items, editNote);
+      setOrders(prev => prev.map(o => o.id === editOrder.id
+        ? { ...o, items, total: editTotal, notes: editNote }
+        : o
+      ));
+      setEditOrder(null);
     } catch (e) { console.error(e); }
   };
 
@@ -166,7 +264,14 @@ export default function RestCommandes() {
       <motion.div variants={fadeUp}>
         <div style={{ display: "flex", alignItems: "center",
           justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <PageTitle title="Commandes QR" subtitle="Commandes reçues via scan QR" />
+          <PageTitle title="Commandes" subtitle="QR + prise de commande manuelle" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowManual(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+                borderRadius: 9, border: "none", background: P, color: "#1A1000",
+                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+              <Plus size={13} />Nouvelle commande
+            </button>
           <button onClick={refresh} disabled={refreshing}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
               borderRadius: 9, border: `0.5px solid ${BORDER}`, background: "white",
@@ -174,6 +279,7 @@ export default function RestCommandes() {
             <RefreshCw size={13} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
             Actualiser
           </button>
+          </div>
         </div>
       </motion.div>
 
@@ -285,8 +391,8 @@ export default function RestCommandes() {
                     </div>
 
                     {/* Actions statut */}
-                    {order.status !== "servi" && order.status !== "annule" && (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {order.status !== "servi" && order.status !== "annule" && <>
                         {order.status === "en_attente" && (
                           <button onClick={() => updateStatus(order.id, "en_cours")}
                             style={{ fontSize: 11, padding: "4px 12px", borderRadius: 7,
@@ -303,14 +409,20 @@ export default function RestCommandes() {
                             Marquer servi
                           </button>
                         )}
+                        <button onClick={() => openEditOrder(order)}
+                          style={{ fontSize: 11, padding: "4px 12px", borderRadius: 7,
+                            border: `0.5px solid ${BORDER}`, background: "white", color: DARK,
+                            cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 4 }}>
+                          <Pencil size={10} />Modifier
+                        </button>
                         <button onClick={() => updateStatus(order.id, "annule")}
                           style={{ fontSize: 11, padding: "4px 12px", borderRadius: 7,
                             border: `0.5px solid #FCA5A5`, background: "#FEF2F2", color: "#991B1B",
                             cursor: "pointer", fontFamily: FONT }}>
                           Annuler
                         </button>
-                      </div>
-                    )}
+                      </>}
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -429,6 +541,231 @@ export default function RestCommandes() {
           </div>
         </Card>
       )}
+
+      {/* ── MODALE : Nouvelle commande manuelle ──────────────────────────── */}
+      <AnimatePresence>
+        {showManual && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowManual(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              style={{ position: "fixed", top: "50%", left: "50%",
+                transform: "translate(-50%,-50%)", zIndex: 60,
+                background: "white", borderRadius: 16, padding: 24,
+                width: "min(620px, 95vw)", maxHeight: "90vh", overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT }}>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Nouvelle commande</div>
+                <button onClick={() => setShowManual(false)} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+                  <X size={18} color={MUTED} />
+                </button>
+              </div>
+
+              {/* Infos client + table */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: "Nom client", key: "client_name", ph: "Jean Kouassi" },
+                  { label: "Téléphone", key: "client_phone", ph: "+225 07 00 00 00 00" },
+                  { label: "Numéro de table", key: "table_label", ph: "T1" },
+                  { label: "Note", key: "note", ph: "Sans piment…" },
+                ].map(({ label, key, ph }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4, fontWeight: 600 }}>{label}</label>
+                    <input value={manualForm[key]} onChange={e => setManualForm(p => ({ ...p, [key]: e.target.value }))}
+                      placeholder={ph}
+                      style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                        padding: "8px 10px", fontSize: 12, outline: "none", fontFamily: FONT,
+                        background: BG, color: DARK, boxSizing: "border-box" }} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Sélection des plats depuis le menu */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                letterSpacing: "0.8px", marginBottom: 10 }}>Articles</div>
+              <div style={{ maxHeight: 280, overflowY: "auto", borderRadius: 8,
+                border: `0.5px solid ${BORDER}`, marginBottom: 16 }}>
+                {menuCats.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: MUTED }}>
+                    Activez le menu QR pour choisir des articles
+                  </div>
+                ) : menuCats.map(cat => (
+                  <div key={cat.id}>
+                    <div style={{ padding: "6px 12px", background: BG, fontSize: 10, fontWeight: 700,
+                      color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
+                      {cat.name}
+                    </div>
+                    {(cat.items || []).filter(i => i.is_active !== false).map(item => {
+                      const qty = manualCart[item.id]?.qty || 0;
+                      return (
+                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10,
+                          padding: "8px 12px", borderBottom: `0.5px solid ${BG}` }}>
+                          {item.image_url && (
+                            <img src={item.image_url} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }}
+                              onError={e => { e.target.style.display = "none"; }} />
+                          )}
+                          <div style={{ flex: 1, fontSize: 12, color: DARK }}>{item.name}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: P, minWidth: 70 }}>{fmt(item.price)}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {qty > 0 && (
+                              <button onClick={() => remFromManual(item.id)}
+                                style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${BORDER}`,
+                                  background: "white", cursor: "pointer", display: "flex",
+                                  alignItems: "center", justifyContent: "center" }}>
+                                <Minus size={10} color={MUTED} />
+                              </button>
+                            )}
+                            {qty > 0 && <span style={{ fontSize: 13, fontWeight: 700, color: P, minWidth: 14, textAlign: "center" }}>{qty}</span>}
+                            <button onClick={() => addToManual(item)}
+                              style={{ width: 26, height: 26, borderRadius: "50%", border: "none",
+                                background: P, cursor: "pointer", display: "flex",
+                                alignItems: "center", justifyContent: "center" }}>
+                              <Plus size={10} color="white" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Récap */}
+              {manualItems.length > 0 && (
+                <div style={{ background: BG, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, color: DARK }}>
+                    <span>{manualItems.length} article{manualItems.length > 1 ? "s" : ""}</span>
+                    <span style={{ color: P }}>{fmt(manualTotal)}</span>
+                  </div>
+                </div>
+              )}
+
+              {manualErr && (
+                <div style={{ padding: "8px 12px", background: "#FAECE7", borderRadius: 8,
+                  fontSize: 12, color: "#993C1D", marginBottom: 12 }}>{manualErr}</div>
+              )}
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowManual(false)}
+                  style={{ flex: 1, border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "11px 0",
+                    background: "white", cursor: "pointer", fontSize: 13, color: MUTED }}>
+                  Annuler
+                </button>
+                <button onClick={submitManual} disabled={submittingM || manualItems.length === 0}
+                  style={{ flex: 2, border: "none", borderRadius: 9, padding: "11px 0",
+                    background: manualItems.length === 0 ? MUTED : P,
+                    color: "#1A1000", fontSize: 13, fontWeight: 700,
+                    cursor: manualItems.length === 0 ? "not-allowed" : "pointer" }}>
+                  {submittingM ? "Envoi…" : `Créer la commande · ${fmt(manualTotal)}`}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODALE : Modifier une commande ─────────────────────────────── */}
+      <AnimatePresence>
+        {editOrder && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setEditOrder(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              style={{ position: "fixed", top: "50%", left: "50%",
+                transform: "translate(-50%,-50%)", zIndex: 60,
+                background: "white", borderRadius: 16, padding: 24,
+                width: "min(540px, 95vw)", maxHeight: "85vh", overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT }}>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Modifier la commande</div>
+                  {editOrder.table_label && (
+                    <div style={{ fontSize: 12, color: MUTED }}>Table {editOrder.table_label}</div>
+                  )}
+                </div>
+                <button onClick={() => setEditOrder(null)} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+                  <X size={18} color={MUTED} />
+                </button>
+              </div>
+
+              {/* Articles existants */}
+              <div style={{ maxHeight: 260, overflowY: "auto", borderRadius: 8,
+                border: `0.5px solid ${BORDER}`, marginBottom: 14 }}>
+                {menuCats.map(cat => (
+                  <div key={cat.id}>
+                    <div style={{ padding: "5px 12px", background: BG, fontSize: 10, fontWeight: 700,
+                      color: MUTED, textTransform: "uppercase" }}>{cat.name}</div>
+                    {(cat.items || []).filter(i => i.is_active !== false).map(item => {
+                      const key = item.id || item.name;
+                      const qty = editCart[key]?.qty || 0;
+                      return (
+                        <div key={key} style={{ display: "flex", alignItems: "center", gap: 10,
+                          padding: "7px 12px", borderBottom: `0.5px solid ${BG}` }}>
+                          <div style={{ flex: 1, fontSize: 12, color: DARK }}>{item.name}</div>
+                          <div style={{ fontSize: 12, color: P, minWidth: 64 }}>{fmt(item.price)}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {qty > 0 && (
+                              <button onClick={() => remFromEdit(key)}
+                                style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${BORDER}`,
+                                  background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Minus size={9} color={MUTED} />
+                              </button>
+                            )}
+                            {qty > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: P, minWidth: 12, textAlign: "center" }}>{qty}</span>}
+                            <button onClick={() => addToEdit(item)}
+                              style={{ width: 24, height: 24, borderRadius: "50%", border: "none",
+                                background: P, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Plus size={9} color="white" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Note */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4, fontWeight: 600 }}>Note</label>
+                <input value={editNote} onChange={e => setEditNote(e.target.value)}
+                  placeholder="Instructions spéciales…"
+                  style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                    padding: "8px 10px", fontSize: 12, outline: "none", fontFamily: FONT,
+                    background: BG, boxSizing: "border-box" }} />
+              </div>
+
+              {editItems.length > 0 && (
+                <div style={{ background: BG, borderRadius: 8, padding: "10px 14px",
+                  marginBottom: 14, fontSize: 13, fontWeight: 700, color: DARK,
+                  display: "flex", justifyContent: "space-between" }}>
+                  <span>Total</span>
+                  <span style={{ color: P }}>{fmt(editTotal)}</span>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setEditOrder(null)}
+                  style={{ flex: 1, border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "11px 0",
+                    background: "white", cursor: "pointer", fontSize: 13, color: MUTED }}>
+                  Annuler
+                </button>
+                <button onClick={saveEditOrder}
+                  style={{ flex: 2, border: "none", borderRadius: 9, padding: "11px 0",
+                    background: P, color: "#1A1000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Enregistrer les modifications
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

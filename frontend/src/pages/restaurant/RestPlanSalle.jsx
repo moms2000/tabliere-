@@ -624,16 +624,22 @@ export default function RestPlanSalle() {
                   QR Code de la table
                 </div>
                 {!showQR ? (
-                  <Btn icon={QrCode} onClick={() => setShowQR(true)}
+                  <Btn icon={QrCode} onClick={async () => {
+                    setShowQR(true);
+                    // Sauvegarder l'URL QR côté serveur
+                    try {
+                      await restaurantsService.generateTableQR(user.resto_id, selected.id);
+                    } catch (_) {}
+                  }}
                     style={{ width: "100%", justifyContent: "center" }}>
-                    Afficher le QR Code
+                    Générer le QR Code
                   </Btn>
                 ) : (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                     <TableQR url={tableQrUrl(selected)} label={selected.label} />
                     <div style={{ fontSize: 11, color: MUTED, marginTop: 10, lineHeight: 1.6,
                       textAlign: "center" }}>
-                      Scannez pour accéder directement au menu de cette table
+                      Ce QR amène le client directement sur le menu Table {selected.label}
                     </div>
                   </motion.div>
                 )}

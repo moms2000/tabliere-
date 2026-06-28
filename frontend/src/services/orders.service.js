@@ -22,4 +22,14 @@ export const ordersService = {
     const res = await api.patch(`/orders/${id}`, { status });
     return res.data.data;
   },
+
+  async createManual(data) {
+    const res = await api.post("/orders/manual", data);
+    return res.data.data;
+  },
+
+  async updateItems(id, items, note) {
+    const res = await api.patch(`/orders/${id}/items`, { items, note });
+    return res.data.data;
+  },
 };

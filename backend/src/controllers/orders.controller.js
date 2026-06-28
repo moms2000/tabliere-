@@ -168,6 +168,52 @@ export const getStats = asyncHandler(async (req, res) => {
   });
 });
 
+// ── POST /orders/manual — commande manuelle par restaurateur ────────────────
+export const createManualOrder = asyncHandler(async (req, res) => {
+  await ensureTable();
+  const { table_label, items, note, client_name, client_phone } = req.body;
+  const restoId = req.user.restaurant_id;
+  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  if (!items || !Array.isArray(items) || items.length === 0)
+    throw new AppError("La commande doit contenir au moins un article", 400);
+
+  const total = items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
+
+  const { rows: [order] } = await query(
+    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note, status)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'en_cours') RETURNING *`,
+    [restoId, table_label || null, client_name || null, client_phone || null,
+     JSON.stringify(items), total, note || null]
+  );
+
+  logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
+  return created(res, { order }, "Commande créée");
+});
+
+// ── PATCH /orders/:id/items — modifier les articles d'une commande ─────────
+export const updateOrderItems = asyncHandler(async (req, res) => {
+  await ensureTable();
+  const { items, note } = req.body;
+  const restoId = req.user.restaurant_id;
+
+  const { rows: [existing] } = await query(
+    "SELECT * FROM qr_orders WHERE id = $1 AND restaurant_id = $2",
+    [req.params.id, restoId]
+  );
+  if (!existing) return notFound(res, "Commande introuvable");
+  if (existing.status === "servi") throw new AppError("Impossible de modifier une commande servie", 400);
+
+  const total = (items || existing.items).reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
+
+  const { rows: [order] } = await query(
+    `UPDATE qr_orders SET items = $1::jsonb, total = $2, note = COALESCE($3, note), updated_at = NOW()
+     WHERE id = $4 RETURNING *`,
+    [JSON.stringify(items || existing.items), total, note || null, req.params.id]
+  );
+
+  return ok(res, { order }, "Commande modifiée");
+});
+
 // ── PATCH /orders/:id — changer statut ─────────────────────────────────────
 export const updateOrder = asyncHandler(async (req, res) => {
   await ensureTable();

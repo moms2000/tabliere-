@@ -107,7 +107,7 @@ function slotToDatetime(dateObj, slot) {
   return d.toISOString().slice(0, 16);
 }
 
-function CreateResaModal({ onClose, onCreate, form, setForm }) {
+function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
   const days14 = buildDays14();
   const [selectedDay, setSelectedDay] = useState(days14[0]);
   const [selectedSlot, setSelectedSlot] = useState("");
@@ -241,6 +241,13 @@ function CreateResaModal({ onClose, onCreate, form, setForm }) {
             outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box" }} />
       </FormField>
 
+      {error && (
+        <div style={{ padding: "8px 12px", background: "#FAECE7", borderRadius: 8,
+          fontSize: 12, color: "#993C1D", marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
         <Btn onClick={onClose}>Annuler</Btn>
         <Btn variant="primary" onClick={onCreate} disabled={!canCreate}>
@@ -274,21 +281,26 @@ export default function RestReservations() {
   const [tables,       setTables]       = useState([]);   // tables libres du resto
   const [selectedTable, setSelectedTable] = useState("");
   const [loadingTables, setLoadingTables] = useState(false);
+  const [modalError,   setModalError]   = useState("");
   // Modale changement de table (résa déjà confirmée)
   const [assignModal, setAssignModal] = useState(null); // { resa }
 
   // Charger toutes les tables du resto (pour assignation)
   const loadTables = async () => {
     const restoId = user?.resto_id;
-    if (!restoId) return;
+    if (!restoId) {
+      console.warn("loadTables: resto_id manquant dans user", user);
+      return;
+    }
     setLoadingTables(true);
+    setModalError("");
     try {
       const d = await restaurantsService.getManage(restoId);
-      // On affiche toutes les tables — l'assignation est possible quelle que soit la dispo
       const ts = d?.restaurant?.tables || d?.tables || [];
       setTables(ts);
     } catch (err) {
       console.error("loadTables error", err);
+      setModalError("Impossible de charger les tables : " + (err.response?.data?.message || err.message));
     }
     setLoadingTables(false);
   };
@@ -318,6 +330,7 @@ export default function RestReservations() {
 
   const confirmWithTable = async () => {
     if (!confirmModal) return;
+    setModalError("");
     try {
       await reservationsService.confirm(confirmModal.id, selectedTable || null);
       setData(prev => prev.map(r => r.id === confirmModal.id
@@ -327,7 +340,9 @@ export default function RestReservations() {
       ));
       setConfirmModal(null);
       setSelectedTable("");
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setModalError(e.response?.data?.message || "Erreur lors de la confirmation");
+    }
   };
 
   // Ouvre la modale pour changer/assigner une table à une résa déjà confirmée
@@ -339,6 +354,7 @@ export default function RestReservations() {
 
   const assignTable = async () => {
     if (!assignModal || !selectedTable) return;
+    setModalError("");
     try {
       await reservationsService.assignTable(assignModal.id, selectedTable);
       const tbl = tables.find(t => t.id === selectedTable);
@@ -348,38 +364,52 @@ export default function RestReservations() {
       ));
       setAssignModal(null);
       setSelectedTable("");
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setModalError(e.response?.data?.message || "Erreur lors de l'assignation");
+    }
   };
 
   const cancel = async (id) => {
     try {
       await reservationsService.cancel(id, "Annulé par le restaurateur");
       setData(prev => prev.map(r => r.id === id ? { ...r, status: "annule" } : r));
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("cancel error", e); }
   };
 
-  const markNoShow = (id) => {
-    setData(prev => prev.map(r => r.id === id ? { ...r, is_noshow: true, status: "annule" } : r));
+  const markNoShow = async (id) => {
+    try {
+      await reservationsService.noShow(id);
+      setData(prev => prev.map(r => r.id === id ? { ...r, is_noshow: true, status: "no_show" } : r));
+    } catch (e) { console.error("noShow error", e); }
   };
 
-  // Créer une réservation depuis l'interface restaurateur
+  // Créer une réservation walk-in depuis l'interface restaurateur
+  const [createError, setCreateError] = useState("");
   const createReservation = async () => {
+    setCreateError("");
     try {
       const payload = {
-        ...createForm,
-        party_size: Number(createForm.party_size),
-        source: "restaurateur",
+        reserved_at:  createForm.reserved_at,
+        party_size:   Number(createForm.party_size),
+        special_request: createForm.notes || undefined,
+        walk_in_name:  createForm.client_name  || undefined,
+        walk_in_phone: createForm.client_phone || undefined,
+        // restaurant_id injecté côté backend via req.user.restaurant_id
       };
-      const res = await reservationsService.create(payload).catch(() => null);
-      const newR = res?.reservation || {
-        id: Date.now(), ...payload,
-        status: "confirme", ref: "R-" + Math.random().toString(36).slice(2,7).toUpperCase(),
-      };
-      setData(prev => [newR, ...prev]);
-    } catch (e) { console.error(e); }
-    setModalCreate(false);
-    setCreateForm({ client_name:"", client_phone:"", client_email:"",
-      reserved_at: new Date().toISOString().slice(0,16), party_size: 2, notes: "" });
+      const result = await reservationsService.create(payload);
+      const newR = result?.reservation || result;
+      if (newR?.id) {
+        // Enrichir avec les infos d'affichage
+        newR.client_name  = createForm.client_name  || "Client";
+        newR.client_phone = createForm.client_phone || "";
+        setData(prev => [newR, ...prev]);
+        setModalCreate(false);
+        setCreateForm({ client_name:"", client_phone:"", client_email:"",
+          reserved_at: new Date().toISOString().slice(0,16), party_size: 2, notes: "" });
+      }
+    } catch (e) {
+      setCreateError(e.response?.data?.message || "Erreur lors de la création");
+    }
   };
 
   // Modifier une réservation en ligne
@@ -784,10 +814,11 @@ export default function RestReservations() {
         {(confirmModal || assignModal) && (() => {
           const modal = confirmModal || assignModal;
           const isConfirm = !!confirmModal;
+          const closeModal = () => { setConfirmModal(null); setAssignModal(null); setModalError(""); setSelectedTable(""); };
           return (
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                onClick={closeModal}
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 50 }} />
               <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
@@ -805,7 +836,7 @@ export default function RestReservations() {
                       {modal.client_name} · {modal.party_size} pers. · {fmtDate(modal.reserved_at)}
                     </div>
                   </div>
-                  <button onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                  <button onClick={closeModal}
                     style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb" }}>
                     <X size={18} />
                   </button>
@@ -858,8 +889,15 @@ export default function RestReservations() {
                   )}
                 </div>
 
+                {modalError && (
+                  <div style={{ padding: "8px 12px", background: "#FAECE7", borderRadius: 8,
+                    fontSize: 12, color: "#993C1D", marginBottom: 12 }}>
+                    {modalError}
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => { setConfirmModal(null); setAssignModal(null); }}
+                  <button onClick={closeModal}
                     style={{ flex: 1, border: "0.5px solid #eee", borderRadius: 9, padding: "11px 0",
                       background: "white", cursor: "pointer", fontSize: 13, color: "#666" }}>
                     Annuler
@@ -941,10 +979,11 @@ export default function RestReservations() {
 
       {/* ── Modal : Créer une réservation — style OpenTable ──────────────── */}
       {modalCreate && <CreateResaModal
-        onClose={() => setModalCreate(false)}
+        onClose={() => { setModalCreate(false); setCreateError(""); }}
         onCreate={createReservation}
         form={createForm}
         setForm={setCreateForm}
+        error={createError}
       />}
     </motion.div>
   );

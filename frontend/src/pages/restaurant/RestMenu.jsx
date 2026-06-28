@@ -121,7 +121,7 @@ export default function RestMenu() {
       }
     } catch (e) { console.error(e); }
     setModalItem(false); setEditItem(null);
-    setFormItem({ name: "", description: "", price: "", is_active: true });
+    setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
   };
 
   const deleteItem = async (catId, itemId) => {

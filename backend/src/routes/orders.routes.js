@@ -8,8 +8,10 @@ const router = Router();
 router.post("/", ctrl.createOrder);
 
 // Restaurateur / Admin
-router.get("/",        authenticate, authorize("restaurateur","admin"), ctrl.listOrders);
-router.get("/stats",   authenticate, authorize("restaurateur","admin"), ctrl.getStats);
-router.patch("/:id",   authenticate, authorize("restaurateur","admin"), ctrl.updateOrder);
+router.get   ("/",             authenticate, authorize("restaurateur","admin"), ctrl.listOrders);
+router.get   ("/stats",        authenticate, authorize("restaurateur","admin"), ctrl.getStats);
+router.post  ("/manual",       authenticate, authorize("restaurateur","admin"), ctrl.createManualOrder);
+router.patch ("/:id",          authenticate, authorize("restaurateur","admin"), ctrl.updateOrder);
+router.patch ("/:id/items",    authenticate, authorize("restaurateur","admin"), ctrl.updateOrderItems);
 
 export default router;

@@ -35,6 +35,7 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
 
+  await ensureMenuColumns();
   const { rows: categories } = await query(
     `SELECT mc.id, mc.name, mc.position,
             COALESCE(json_agg(
@@ -45,7 +46,8 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
                 'price',        mi.price,
                 'image_url',    mi.image_url,
                 'is_available', mi.is_available,
-                'position',     mi.position
+                'position',     mi.position,
+                'options',      mi.options
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
      FROM menu_categories mc
@@ -69,6 +71,7 @@ export const getFullMenu = asyncHandler(async (req, res) => {
   if (!resto) return notFound(res, "Restaurant introuvable");
   _assertOwnerOrAdmin(req, resto);
 
+  await ensureMenuColumns();
   const { rows: categories } = await query(
     `SELECT mc.id, mc.name, mc.position, mc.is_active,
             COALESCE(json_agg(
@@ -80,7 +83,8 @@ export const getFullMenu = asyncHandler(async (req, res) => {
                 'image_url',    mi.image_url,
                 'is_active',    mi.is_active,
                 'is_available', mi.is_available,
-                'position',     mi.position
+                'position',     mi.position,
+                'options',      mi.options
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
      FROM menu_categories mc

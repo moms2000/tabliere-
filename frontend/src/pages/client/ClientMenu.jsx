@@ -10,7 +10,7 @@ import { menuService }        from "../../services/menu.service.js";
 import { ordersService }      from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 
-/* ── Tokens BBR ──────────────────────────────────────────────────────────── */
+/* ── Tokens BBR + TablièreCI ──────────────────────────────────────────────── */
 const CREAM  = "#FAF6EF";
 const SAND   = "#F2ECE3";
 const DARK   = "#1C1209";
@@ -20,6 +20,72 @@ const BORDER = "#E5DDD0";
 const WHITE  = "#FFFFFF";
 const FS     = "Georgia,'Times New Roman',serif";
 const FN     = "'Avenir Next','Avenir','Century Gothic',sans-serif";
+
+// Couleurs officielle TablièreCI (du logo)
+const TCI_DARK  = "#1E2E28"; // vert forêt foncé
+const TCI_AMBER = "#E8A045"; // orange amber
+const TCI_GREEN = "#3D6B55"; // vert sauge
+
+/* ── Écran intro animé (style Airbnb / OpenTable) ────────────────────────── */
+function IntroScreen({ onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}
+      style={{ position: "fixed", inset: 0, background: TCI_DARK, zIndex: 9999,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 0, fontFamily: FN }}>
+
+      {/* Logo animé */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.6 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 280, damping: 22, delay: 0.1 }}>
+
+        {/* Icône SVG TablièreCI plein — plus grande */}
+        <svg width="80" height="80" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="10" fill={TCI_AMBER} />
+          <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+          <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+          <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
+            stroke="rgba(255,255,255,0.45)" strokeWidth="1.3" fill="none" />
+        </svg>
+      </motion.div>
+
+      {/* Nom TablièreCI */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45, duration: 0.45 }}
+        style={{ marginTop: 20, textAlign: "center" }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: WHITE, letterSpacing: "-0.5px" }}>
+          Tablière<span style={{ color: TCI_AMBER }}>CI</span>
+        </div>
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
+          style={{ fontSize: 11, color: "rgba(255,255,255,.45)", marginTop: 6,
+            letterSpacing: "3px", textTransform: "uppercase" }}>
+          Réserver · Commander
+        </motion.div>
+      </motion.div>
+
+      {/* Point de chargement animé */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}
+        style={{ position: "absolute", bottom: 48, display: "flex", gap: 6 }}>
+        {[0, 1, 2].map(i => (
+          <motion.div key={i}
+            animate={{ opacity: [0.3, 1, 0.3] }}
+            transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
+            style={{ width: 6, height: 6, borderRadius: "50%", background: TCI_AMBER }} />
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
 
 const fmt = (n) => n ? Number(n).toLocaleString("fr-CI") + " F" : "—";
 
@@ -152,7 +218,7 @@ export default function ClientMenu() {
   const [resto,       setResto]       = useState(null);
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [step,        setStep]        = useState("splash");
+  const [step,        setStep]        = useState("intro"); // intro → splash → menu → ...
   const [activeItem,  setActiveItem]  = useState(null);   // item détail
   const [selectedCat, setSelectedCat] = useState("tous"); // "tous" ou cat.id
   const [search,      setSearch]      = useState("");
@@ -266,6 +332,13 @@ export default function ClientMenu() {
   };
 
   const reset = () => { setCart({}); setClientName(""); setClientPhone(""); setOrderNote(""); setAgreed(false); setLastOrder(null); setErrorMsg(""); setStep("menu"); };
+
+  /* ── Intro animation ── */
+  if (step === "intro") return (
+    <AnimatePresence>
+      <IntroScreen onDone={() => setStep("splash")} />
+    </AnimatePresence>
+  );
 
   /* ── Loading ── */
   if (loading) return (
@@ -516,21 +589,21 @@ export default function ClientMenu() {
         })}
       </div>
 
-      {/* Bouton panier CENTRÉ */}
+      {/* Bouton panier — centré sur tous appareils */}
       <AnimatePresence>
         {cartCount > 0 && (
           <motion.div
             initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
-            style={{ position: "fixed", bottom: 20,
-              left: "50%", transform: "translateX(-50%)",
-              width: "calc(100% - 40px)", maxWidth: 420, zIndex: 40 }}>
+            style={{ position: "fixed", bottom: 20, left: 0, right: 0, zIndex: 40,
+              display: "flex", justifyContent: "center", pointerEvents: "none" }}>
             <button onClick={() => setStep("cart")}
-              style={{ width: "100%", padding: "15px 24px", borderRadius: 40,
+              style={{ width: "calc(100% - 40px)", maxWidth: 420,
+                padding: "15px 24px", borderRadius: 40,
                 border: "none", background: BROWN, color: WHITE, fontSize: 14,
                 fontWeight: 700, cursor: "pointer", fontFamily: FN,
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                boxShadow: `0 6px 24px ${BROWN}55` }}>
+                boxShadow: `0 6px 24px ${BROWN}55`, pointerEvents: "auto" }}>
               <span style={{ background: "rgba(255,255,255,.2)", borderRadius: "50%",
                 width: 26, height: 26, display: "flex", alignItems: "center",
                 justifyContent: "center", fontSize: 12, fontWeight: 900 }}>{cartCount}</span>
@@ -666,10 +739,11 @@ export default function ClientMenu() {
           </div>
         </div>
 
-        {/* Barre fixe bas — Prix + Qty + Ajouter */}
-        <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-          width: "100%", maxWidth: 480, background: WHITE,
-          borderTop: `0.5px solid ${BORDER}`, padding: "12px 16px 20px", zIndex: 30 }}>
+        {/* Barre fixe bas — centrée sur tous appareils */}
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
+          display: "flex", justifyContent: "center" }}>
+        <div style={{ width: "100%", maxWidth: 480, background: WHITE,
+          borderTop: `0.5px solid ${BORDER}`, padding: "12px 16px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: DARK, fontFamily: FS, fontStyle: "italic" }}>
               {fmt(activeItem.price * itemQty)}
@@ -710,6 +784,7 @@ export default function ClientMenu() {
             <ArrowLeft size={12} /> Précédent
           </button>
         </div>
+        </div> {/* ferme le wrapper flex centré */}
       </div>
     );
   }

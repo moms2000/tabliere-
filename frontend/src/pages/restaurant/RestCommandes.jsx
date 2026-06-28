@@ -549,13 +549,15 @@ export default function RestCommandes() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowManual(false)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              style={{ position: "fixed", top: "50%", left: "50%",
-                transform: "translate(-50%,-50%)", zIndex: 60,
-                background: "white", borderRadius: 16, padding: 24,
-                width: "min(620px, 95vw)", maxHeight: "90vh", overflowY: "auto",
-                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT }}>
+            <div style={{ position: "fixed", inset: 0, zIndex: 60,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 16, pointerEvents: "none" }}>
+            <motion.div initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20 }} transition={{ type: "spring", stiffness: 360, damping: 32 }}
+              style={{ background: "white", borderRadius: 16, padding: 24,
+                width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT,
+                pointerEvents: "auto" }}>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Nouvelle commande</div>
@@ -663,6 +665,7 @@ export default function RestCommandes() {
                 </button>
               </div>
             </motion.div>
+            </div> {/* ferme le wrapper flex centré */}
           </>
         )}
       </AnimatePresence>
@@ -674,13 +677,15 @@ export default function RestCommandes() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setEditOrder(null)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              style={{ position: "fixed", top: "50%", left: "50%",
-                transform: "translate(-50%,-50%)", zIndex: 60,
-                background: "white", borderRadius: 16, padding: 24,
-                width: "min(540px, 95vw)", maxHeight: "85vh", overflowY: "auto",
-                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT }}>
+            <div style={{ position: "fixed", inset: 0, zIndex: 60,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 16, pointerEvents: "none" }}>
+            <motion.div initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20 }} transition={{ type: "spring", stiffness: 360, damping: 32 }}
+              style={{ background: "white", borderRadius: 16, padding: 24,
+                width: "100%", maxWidth: 540, maxHeight: "85vh", overflowY: "auto",
+                boxShadow: "0 20px 60px rgba(0,0,0,.2)", fontFamily: FONT,
+                pointerEvents: "auto" }}>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div>
@@ -763,6 +768,7 @@ export default function RestCommandes() {
                 </button>
               </div>
             </motion.div>
+            </div> {/* ferme le wrapper flex centré */}
           </>
         )}
       </AnimatePresence>

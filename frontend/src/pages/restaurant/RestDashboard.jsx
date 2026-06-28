@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CalendarCheck, Users, Star, TrendingUp, QrCode, CheckCircle, ExternalLink } from "lucide-react";
+import {
+  CalendarCheck, Users, Star, TrendingUp, QrCode, CheckCircle,
+  ExternalLink, Calendar, XCircle, Clock, Percent, ShoppingBag, AlertTriangle,
+} from "lucide-react";
 import { StatCard, Card, SectionHeader, Badge, PageTitle } from "../../components/ui";
-import { Calendar } from "lucide-react";
+import { ordersService } from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -39,9 +42,10 @@ export default function RestDashboard() {
   const { user } = useAuth();
   const [resto,    setResto]    = useState(null);
   const [resas,    setResas]    = useState([]);
+  const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [dateMode,      setDateMode]      = useState("Mois");
-  const [customDate,    setCustomDate]    = useState("");   // YYYY-MM-DD pour mode "Date"
+  const [customDate,    setCustomDate]    = useState("");
   const [showDatePick,  setShowDatePick]  = useState(false);
 
   useEffect(() => {
@@ -49,11 +53,13 @@ export default function RestDashboard() {
     if (!user.resto_id) { setLoading(false); return; }
     Promise.all([
       restaurantsService.getManage(user.resto_id),
-      reservationsService.list({ limit: 50 }),
+      reservationsService.list({ limit: 100 }),
+      ordersService.list({ limit: 100 }).catch(() => ({ data: [] })),
     ])
-      .then(([restoData, resaData]) => {
+      .then(([restoData, resaData, ordersData]) => {
         setResto(restoData.restaurant);
         setResas(resaData.data || []);
+        setOrders(ordersData.data || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -91,7 +97,14 @@ export default function RestDashboard() {
   const todayResas  = resas.filter(r => r.reserved_at && new Date(r.reserved_at).toDateString() === now.toDateString());
   const confirmed   = filteredResas.filter(r => ["confirme","confirmé"].includes(r.status)).length;
   const pending     = filteredResas.filter(r => ["en_attente","en attente"].includes(r.status)).length;
+  const annuled     = filteredResas.filter(r => ["annule","annulé"].includes(r.status)).length;
+  const noShows     = filteredResas.filter(r => r.is_noshow || r.status === "no_show").length;
   const libres      = tables.filter(t => ["libre","free"].includes(t.status)).length;
+  const avgParty    = filteredResas.length ? (filteredResas.reduce((s, r) => s + (r.party_size || 0), 0) / filteredResas.length).toFixed(1) : 0;
+  const tauxConfirm = filteredResas.length ? Math.round(confirmed / filteredResas.length * 100) : 0;
+  // Commandes QR du jour
+  const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === now.toDateString());
+  const ordersRevenue = todayOrders.filter(o => o.status !== "annule").reduce((s, o) => s + (o.total || 0), 0);
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
@@ -137,14 +150,34 @@ export default function RestDashboard() {
         </div>
       </motion.div>
 
-      {/* KPIs */}
+      {/* KPIs — ligne 1 */}
       <motion.div variants={fadeUp}
-        style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
-        <StatCard label="Réservations aujourd'hui" value={todayResas.length}    icon={CalendarCheck} color={S} />
-        <StatCard label="Tables libres"            value={libres}               icon={Users}         color="#185FA5" />
-        <StatCard label="Confirmées (période)"     value={confirmed}            icon={CheckCircle}   color={S} />
-        <StatCard label="En attente"               value={pending}              icon={TrendingUp}    color="#C47D1A" />
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10 }}>
+        <StatCard label="Résa. aujourd'hui" value={todayResas.length}  icon={CalendarCheck} color={S} />
+        <StatCard label="Tables libres"     value={`${libres}/${tables.length}`} icon={Users} color="#185FA5" />
+        <StatCard label="Confirmées"        value={confirmed}           icon={CheckCircle}   color={S} />
+        <StatCard label="En attente"        value={pending}             icon={Clock}         color="#C47D1A" />
       </motion.div>
+
+      {/* KPIs — ligne 2 */}
+      <motion.div variants={fadeUp}
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 14 }}>
+        <StatCard label="Annulées"          value={annuled}             icon={XCircle}       color="#DC2626" />
+        <StatCard label="No-shows"          value={noShows}             icon={AlertTriangle} color="#7C3AED" />
+        <StatCard label="Taux confirmation" value={`${tauxConfirm}%`}  icon={Percent}       color={S} />
+        <StatCard label="Moy. personnes"    value={avgParty}            icon={Users}         color="#0891B2" />
+      </motion.div>
+
+      {/* KPIs commandes QR */}
+      {orders.length > 0 && (
+        <motion.div variants={fadeUp}
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 14 }}>
+          <StatCard label="Commandes QR auj." value={todayOrders.length}                                          icon={ShoppingBag} color={P} />
+          <StatCard label="CA commandes QR"   value={ordersRevenue.toLocaleString("fr-CI") + " F"}               icon={TrendingUp}  color={S} />
+          <StatCard label="Commandes en cours" value={orders.filter(o => o.status === "en_cours").length}         icon={Clock}       color="#C47D1A" />
+          <StatCard label="Commandes servies"  value={orders.filter(o => o.status === "servi").length}            icon={CheckCircle} color={S} />
+        </motion.div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 14, marginBottom: 14 }}>
 

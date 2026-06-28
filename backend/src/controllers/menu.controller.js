@@ -15,9 +15,14 @@ async function ensureMenuColumns() {
   if (menuMigrated) return;
   try {
     await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`);
+    // Élargir image_url : VARCHAR(500) → TEXT (base64 images = 50k+ chars)
+    await query(`ALTER TABLE menu_items ALTER COLUMN image_url TYPE TEXT`);
+    // Pareil pour logo_url
+    await query(`ALTER TABLE restaurants ALTER COLUMN logo_url TYPE TEXT`).catch(() => {});
     menuMigrated = true;
   } catch (e) {
     logger.warn("ensureMenuColumns", { error: e?.message });
+    menuMigrated = true; // eviter boucle
   }
 }
 

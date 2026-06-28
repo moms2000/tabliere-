@@ -90,7 +90,7 @@ const DAYS_FR  = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
 const LUNCH_SLOTS  = ["11h30","12h00","12h30","13h00","13h30","14h00","14h30"];
 const DINNER_SLOTS = ["18h30","19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
-const PARTY_OPTIONS = [1,2,3,4,5,6,7,8,9,10,12,15,20];
+const PARTY_OPTIONS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25];
 
 function buildDays14() {
   return Array.from({ length: 14 }, (_, i) => {

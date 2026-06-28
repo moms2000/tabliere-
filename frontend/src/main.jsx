@@ -95,9 +95,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
 
-                  {/* ── Client ──────────────────────────────────────────── */}
+                  {/* ── Client — profil personnel (clients uniquement) ── */}
                   <Route path="/profil" element={
-                    <ProtectedRoute roles={["client","restaurateur","admin"]}>
+                    <ProtectedRoute roles={["client"]}>
                       <Profil />
                     </ProtectedRoute>
                   } />

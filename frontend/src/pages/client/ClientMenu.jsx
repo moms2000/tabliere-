@@ -1,93 +1,149 @@
 /**
- * ClientMenu — Interface QR style BBR (Boulay Beach Resort)
- * Design premium : fond crème, chocolat foncé, typographie serif
- * Identique à https://bbr-boulay-beach-resort.vercel.app/order
+ * ClientMenu — Interface QR identique BBR (Boulay Beach Resort)
+ * Screens: splash → menu → item → cart → info → confirm
  */
 import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, X, Check, AlertTriangle, History, ArrowLeft, ShoppingBag } from "lucide-react";
+import { Plus, Minus, ShoppingCart, Search, ArrowLeft, Check, AlertTriangle, History, RefreshCw, ChevronRight } from "lucide-react";
 import { menuService }        from "../../services/menu.service.js";
 import { ordersService }      from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 
-/* ── Design tokens BBR ────────────────────────────────────────────────────── */
-const CREAM   = "#FAF6EF";   // fond principal
-const SAND    = "#F2ECE3";   // fond secondaire / cards hover
-const DARK    = "#1C1209";   // texte principal
-const BROWN   = "#3B2010";   // bouton principal (chocolat)
-const TEAL    = "#5B8989";   // accent (tagline "LIFE IS HERE")
-const MUTED   = "#9B8E7E";   // texte secondaire
-const BORDER  = "#E5DDD0";   // séparateurs
-const WHITE   = "#FFFFFF";
-const FONT_S  = "Georgia, 'Times New Roman', serif";
-const FONT    = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
+/* ── Tokens BBR ──────────────────────────────────────────────────────────── */
+const CREAM  = "#FAF6EF";
+const SAND   = "#F2ECE3";
+const DARK   = "#1C1209";
+const BROWN  = "#3B2010";
+const MUTED  = "#9B8E7E";
+const BORDER = "#E5DDD0";
+const WHITE  = "#FFFFFF";
+const FS     = "Georgia,'Times New Roman',serif";
+const FN     = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const fmt = (n) => n ? Number(n).toLocaleString("fr-CI") + " F" : "—";
 
-/* ── Storage commandes ─────────────────────────────────────────────────────── */
+/* ── Helpers localStorage ─────────────────────────────────────────────────── */
 const KEY = "tci_qr_orders";
 const saveOrder = (o) => {
-  try {
-    const arr = JSON.parse(localStorage.getItem(KEY) || "[]");
-    arr.unshift(o);
-    localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 20)));
-  } catch (_) {}
+  try { const a = JSON.parse(localStorage.getItem(KEY)||"[]"); a.unshift(o); localStorage.setItem(KEY,JSON.stringify(a.slice(0,20))); } catch(_){}
 };
-const loadOrders = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
+const loadOrders = () => { try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch { return []; }};
 
-const STATUS = {
-  en_attente: { label: "En attente",     color: "#8B6914" },
-  en_cours:   { label: "En préparation", color: "#185FA5" },
-  servi:      { label: "Servi",          color: "#1D6B45" },
-  annule:     { label: "Annulé",         color: "#8B1414" },
-};
+/* ── Composants partagés ─────────────────────────────────────────────────── */
 
-/* ── Composants ────────────────────────────────────────────────────────────── */
-
-function BtnBrown({ children, onClick, disabled, style = {} }) {
+/* Logo TablièreCI SVG */
+function TCILogo({ size = 24, color = BROWN }) {
   return (
-    <motion.button whileTap={{ scale: disabled ? 1 : 0.97 }}
-      onClick={disabled ? undefined : onClick}
-      style={{ background: disabled ? "#C4B8A8" : BROWN, color: WHITE,
-        border: "none", borderRadius: 40, padding: "15px 0",
-        fontSize: 13, fontWeight: 700, letterSpacing: "1.5px",
-        textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer",
-        fontFamily: FONT, width: "100%", ...style }}>
-      {children}
-    </motion.button>
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <rect width="40" height="40" rx="8" fill={color} fillOpacity="0.12" />
+      <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill={color} />
+      <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill={color} />
+      <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5" stroke={color} strokeWidth="1.3" strokeOpacity=".5" fill="none" />
+    </svg>
   );
 }
 
-function HeaderNav({ title, onBack, table }) {
+/* Header BBR — présent sur toutes les pages après splash */
+function BBRHeader({ restoName, table, cartCount, onCartClick, onBack }) {
   return (
     <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
-      padding: "14px 20px", position: "sticky", top: 0, zIndex: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {onBack && (
-          <button onClick={onBack}
-            style={{ background: "none", border: "none", cursor: "pointer",
-              color: MUTED, display: "flex", alignItems: "center", padding: 0 }}>
-            <ArrowLeft size={18} />
+      padding: "10px 16px", display: "flex", alignItems: "center",
+      justifyContent: "space-between", position: "sticky", top: 0, zIndex: 30 }}>
+      {/* Gauche: retour ou logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 60 }}>
+        {onBack ? (
+          <button onClick={onBack} style={{ background: "none", border: "none",
+            cursor: "pointer", padding: 0, display: "flex", alignItems: "center", color: DARK }}>
+            <ArrowLeft size={20} />
+          </button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <TCILogo size={22} />
+            <span style={{ fontSize: 11, fontWeight: 800, color: BROWN,
+              letterSpacing: "0.5px", textTransform: "uppercase" }}>TablièreCI</span>
+          </div>
+        )}
+      </div>
+
+      {/* Centre: nom du restaurant */}
+      <div style={{ textAlign: "center", flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: DARK, fontFamily: FS, lineHeight: 1.2 }}>
+          {restoName}
+        </div>
+        {table && (
+          <div style={{ fontSize: 10, color: MUTED, letterSpacing: "1px", textTransform: "uppercase" }}>
+            Table {table}
+          </div>
+        )}
+      </div>
+
+      {/* Droite: panier */}
+      <div style={{ minWidth: 60, display: "flex", justifyContent: "flex-end" }}>
+        {onCartClick && (
+          <button onClick={onCartClick}
+            style={{ position: "relative", background: cartCount > 0 ? BROWN : SAND,
+              border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background .2s" }}>
+            <ShoppingCart size={16} color={cartCount > 0 ? WHITE : MUTED} />
+            {cartCount > 0 && (
+              <span style={{ position: "absolute", top: -3, right: -3, background: BROWN,
+                color: WHITE, borderRadius: "50%", width: 16, height: 16, fontSize: 9,
+                fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center",
+                border: `2px solid ${WHITE}` }}>
+                {cartCount}
+              </span>
+            )}
           </button>
         )}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: DARK, fontFamily: FONT_S }}>{title}</div>
-          {table && <div style={{ fontSize: 11, color: MUTED }}>Table {table}</div>}
-        </div>
-        {/* Petit logo TablièreCI */}
-        <div style={{ fontSize: 10, fontWeight: 800, color: BROWN,
-          letterSpacing: "1.5px", textTransform: "uppercase" }}>
-          TablièreCI
-        </div>
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════════════════════════════════════ */
+/* Petite bande photo héro (comme BBR sur la page menu) */
+function HeroBand({ logoUrl, restoName, table, height = 160 }) {
+  return (
+    <div style={{ position: "relative", height, overflow: "hidden", background: SAND }}>
+      {logoUrl ? (
+        <img src={logoUrl} alt={restoName}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={e => { e.target.style.display = "none"; }} />
+      ) : (
+        <div style={{ width: "100%", height: "100%",
+          background: `linear-gradient(135deg, ${BROWN}22 0%, ${SAND} 100%)` }} />
+      )}
+      <div style={{ position: "absolute", inset: 0,
+        background: "linear-gradient(to bottom, rgba(0,0,0,.06) 0%, rgba(250,246,239,.7) 100%)" }} />
+      {table && (
+        <div style={{ position: "absolute", bottom: 12, left: 16,
+          fontSize: 15, fontWeight: 400, color: DARK, fontFamily: FS, fontStyle: "italic" }}>
+          Table {table}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Bouton brun full-width */
+function BrownBtn({ children, onClick, disabled, style = {} }) {
+  return (
+    <motion.button whileTap={{ scale: disabled ? 1 : 0.97 }}
+      onClick={disabled ? undefined : onClick}
+      style={{ background: disabled ? "#C4B8A8" : BROWN, color: WHITE,
+        border: "none", borderRadius: 8, padding: "16px 0", width: "100%",
+        fontSize: 13, fontWeight: 700, letterSpacing: "1.5px",
+        textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: FN, ...style }}>
+      {children}
+    </motion.button>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN
+══════════════════════════════════════════════════════════════════════════ */
 export default function ClientMenu() {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
@@ -96,73 +152,115 @@ export default function ClientMenu() {
   const [resto,       setResto]       = useState(null);
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [cart,        setCart]        = useState({});
   const [step,        setStep]        = useState("splash");
+  const [activeItem,  setActiveItem]  = useState(null);   // item détail
+  const [selectedCat, setSelectedCat] = useState("tous"); // "tous" ou cat.id
+  const [search,      setSearch]      = useState("");
+  const [cart,        setCart]        = useState({});
   const [submitting,  setSubmitting]  = useState(false);
   const [errorMsg,    setErrorMsg]    = useState("");
   const [lastOrder,   setLastOrder]   = useState(null);
   const [localOrders, setLocalOrders] = useState([]);
-  const [activeCat,   setActiveCat]   = useState(null);
-  const catRefs = useRef({});
 
+  // Infos client
   const [clientName,  setClientName]  = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [orderNote,   setOrderNote]   = useState("");
   const [agreed,      setAgreed]      = useState(false);
 
-  const G = resto?.theme_color || BROWN;
+  // Item detail state
+  const [itemQty,     setItemQty]     = useState(1);
+  const [itemCuisson, setItemCuisson] = useState("");
+  const [itemAccomp,  setItemAccomp]  = useState("");
+  const [itemNote,    setItemNote]    = useState("");
 
   useEffect(() => {
     if (!slug) return;
     Promise.all([
       restaurantsService.getBySlug(slug),
       menuService.getPublicMenu(slug),
-    ]).then(([restoData, menuData]) => {
-      const r = restoData.restaurant || restoData;
+    ]).then(([rd, md]) => {
+      const r = rd.restaurant || rd;
       setResto(r);
-      const cats = (menuData.categories || []).filter(c => (c.items||[]).some(i => i.is_active !== false));
+      const cats = (md.categories || []).filter(c => (c.items||[]).some(i => i.is_active !== false));
       setCategories(cats);
-      if (cats.length > 0) setActiveCat(cats[0].id);
     }).catch(console.error).finally(() => setLoading(false));
     setLocalOrders(loadOrders());
   }, [slug]);
 
-  /* ── Cart helpers ── */
+  /* ── Panier ── */
   const cartItems = Object.values(cart);
   const cartCount = cartItems.reduce((a, c) => a + c.qty, 0);
   const cartTotal = cartItems.reduce((a, c) => a + c.item.price * c.qty, 0);
 
-  const addItem = (item) =>
-    setCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty || 0) + 1, note: p[item.id]?.note || "", options: p[item.id]?.options || {} } }));
-  const remItem = (id) =>
-    setCart(p => { const qty = (p[id]?.qty || 0) - 1; if (qty <= 0) { const n = {...p}; delete n[id]; return n; } return { ...p, [id]: {...p[id], qty} }; });
-  const setItemOpt = (id, key, val) =>
-    setCart(p => ({ ...p, [id]: { ...p[id], options: { ...(p[id]?.options || {}), [key]: val } } }));
-
-  const scrollToCat = (catId) => {
-    setActiveCat(catId);
-    catRefs.current[catId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const openItem = (item) => {
+    setActiveItem(item);
+    setItemQty(cart[item.id]?.qty || 1);
+    const opts = parseOpts(item);
+    setItemCuisson(cart[item.id]?.options?.cuisson || (opts?.cuissons?.[0] || ""));
+    setItemAccomp(cart[item.id]?.options?.accompagnement || "");
+    setItemNote(cart[item.id]?.note || "");
+    setStep("item");
   };
 
-  /* ── Place order ── */
+  const parseOpts = (item) => {
+    if (!item?.options) return null;
+    try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; }
+  };
+
+  const addItemToCart = () => {
+    const item = activeItem;
+    setCart(p => ({
+      ...p,
+      [item.id]: {
+        item,
+        qty: itemQty,
+        note: itemNote,
+        options: {
+          ...(itemCuisson ? { cuisson: itemCuisson } : {}),
+          ...(itemAccomp  ? { accompagnement: itemAccomp } : {}),
+        },
+      },
+    }));
+    setStep("menu");
+  };
+
+  const remItem = (id) =>
+    setCart(p => { const qty = (p[id]?.qty||0) - 1; if(qty<=0){const n={...p};delete n[id];return n;} return {...p,[id]:{...p[id],qty}}; });
+
+  const addOne = (item) =>
+    setCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty||0)+1, note: p[item.id]?.note||"", options: p[item.id]?.options||{} } }));
+
+  /* ── Filtre ── */
+  const allItems = categories.flatMap(c => (c.items||[]).filter(i => i.is_active !== false && i.is_available !== false).map(i => ({ ...i, catId: c.id, catName: c.name })));
+  const filteredItems = allItems.filter(i => {
+    const matchCat = selectedCat === "tous" || i.catId === selectedCat;
+    const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase()) || (i.description||"").toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  /* ── Commande ── */
   const placeOrder = async () => {
     setSubmitting(true); setErrorMsg("");
     try {
       const items = cartItems.map(({ item, qty, note, options }) => ({
         id: item.id, name: item.name, price: item.price, qty,
-        note: note || undefined,
-        options: options && Object.keys(options).length ? options : undefined,
+        note: note||undefined, options: options&&Object.keys(options).length?options:undefined,
       }));
       const result = await ordersService.create({
-        restaurant_id: resto.id, table_label: table || undefined,
-        client_name: clientName || undefined, client_phone: clientPhone || undefined,
-        note: orderNote || undefined, items, total: cartTotal,
+        restaurant_id: resto.id, table_label: table||undefined,
+        client_name: clientName||undefined, client_phone: clientPhone||undefined,
+        note: orderNote||undefined, items, total: cartTotal,
       });
-      const newOrder = { id: result?.order?.id || String(Date.now()), status: "en_attente",
-        total: cartTotal, items, created_at: new Date().toISOString(), table_label: table, client_name: clientName };
+      const newOrder = {
+        id: result?.order?.id || String(Date.now()),
+        ref: result?.order?.ref || "CMD-" + Math.random().toString(36).slice(2,7).toUpperCase(),
+        status: "en_attente", total: cartTotal, items,
+        created_at: new Date().toISOString(), table_label: table, client_name: clientName,
+      };
       setLastOrder(newOrder); saveOrder(newOrder); setLocalOrders(loadOrders()); setStep("confirm");
     } catch (e) {
-      setErrorMsg(e.response?.data?.message || "Impossible d'envoyer la commande. Réessayez.");
+      setErrorMsg(e.response?.data?.message || "Impossible d'envoyer la commande.");
     }
     setSubmitting(false);
   };
@@ -172,327 +270,270 @@ export default function ClientMenu() {
   /* ── Loading ── */
   if (loading) return (
     <div style={{ minHeight: "100vh", background: CREAM, display: "flex", alignItems: "center",
-      justifyContent: "center", fontFamily: FONT }}>
-      <div style={{ textAlign: "center" }}>
-        <motion.div animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1.5 }}
-          style={{ fontSize: 22, fontFamily: FONT_S, color: BROWN, fontStyle: "italic" }}>
-          Chargement…
-        </motion.div>
-      </div>
+      justifyContent: "center", fontFamily: FN }}>
+      <motion.div animate={{ opacity: [.4,1,.4] }} transition={{ repeat: Infinity, duration: 1.6 }}
+        style={{ fontSize: 20, fontFamily: FS, color: BROWN, fontStyle: "italic" }}>
+        Chargement…
+      </motion.div>
     </div>
   );
 
   if (!resto) return (
     <div style={{ minHeight: "100vh", background: CREAM, display: "flex", alignItems: "center",
-      justifyContent: "center", fontFamily: FONT, color: MUTED, fontSize: 14 }}>
-      Menu introuvable
-    </div>
+      justifyContent: "center", color: MUTED, fontFamily: FN }}>Menu introuvable</div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
-     SPLASH — BBR Style
-  ══════════════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════════
+     SPLASH — Style BBR
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "splash") return (
-    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto",
-      background: CREAM, fontFamily: FONT, overflowX: "hidden" }}>
+    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", background: CREAM, fontFamily: FN }}>
 
-      {/* Zone photo — 58vh */}
-      <div style={{ position: "relative", height: "58vh", overflow: "hidden" }}>
+      {/* Photo héro */}
+      <div style={{ position: "relative", height: "58vh", overflow: "hidden", background: SAND }}>
         {resto.logo_url ? (
           <img src={resto.logo_url} alt={resto.name}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={e => { e.target.style.display = "none"; }} />
         ) : (
           <div style={{ width: "100%", height: "100%",
-            background: `linear-gradient(150deg, ${G}99 0%, ${DARK} 100%)` }} />
+            background: `linear-gradient(150deg, ${BROWN}33, ${SAND})` }} />
         )}
-
-        {/* Overlay dégradé photo → crème */}
         <div style={{ position: "absolute", inset: 0,
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 50%, " + CREAM + " 100%)" }} />
+          background: "linear-gradient(to bottom, rgba(0,0,0,.08), rgba(0,0,0,.18) 50%, " + CREAM + " 100%)" }} />
 
-        {/* Badge TABLE — haut droite */}
+        {/* Badge TABLE */}
         {table && (
-          <div style={{ position: "absolute", top: 20, right: 20,
-            background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
-            borderRadius: 20, padding: "4px 14px",
-            fontSize: 10, fontWeight: 800, color: DARK,
-            letterSpacing: "2.5px", textTransform: "uppercase" }}>
+          <div style={{ position: "absolute", top: 18, right: 18,
+            background: "rgba(255,255,255,.94)", borderRadius: 20, padding: "4px 14px",
+            fontSize: 10, fontWeight: 800, color: DARK, letterSpacing: "2.5px", textTransform: "uppercase" }}>
             TABLE {table}
           </div>
         )}
 
-        {/* Logo TablièreCI — haut gauche */}
-        <div style={{ position: "absolute", top: 20, left: 20,
-          display: "flex", alignItems: "center", gap: 6 }}>
+        {/* TablièreCI haut gauche */}
+        <div style={{ position: "absolute", top: 18, left: 18, display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="8" fill="rgba(255,255,255,0.18)" />
+            <rect width="40" height="40" rx="8" fill="rgba(255,255,255,.18)" />
             <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
             <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
-            <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
-              stroke="rgba(255,255,255,0.5)" strokeWidth="1.3" fill="none" />
+            <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5" stroke="rgba(255,255,255,.5)" strokeWidth="1.3" fill="none" />
           </svg>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.75)",
-            letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
+          <span style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,.8)",
+            letterSpacing: "1.5px", textTransform: "uppercase" }}>TablièreCI</span>
         </div>
 
-        {/* Nom restaurant — énorme, blanc, sur la photo (comme BBr) */}
-        <div style={{ position: "absolute", bottom: 40, left: 0, right: 0, textAlign: "center",
-          padding: "0 20px" }}>
-          <div style={{ fontSize: "clamp(46px, 13vw, 72px)", fontWeight: 900, color: "rgba(255,255,255,0.92)",
-            letterSpacing: "-1px", lineHeight: 1, fontFamily: FONT_S, textShadow: "0 2px 20px rgba(0,0,0,0.25)" }}>
+        {/* Nom restaurant ÉNORME */}
+        <div style={{ position: "absolute", bottom: 48, left: 0, right: 0, textAlign: "center", padding: "0 20px" }}>
+          <div style={{ fontSize: "clamp(44px, 12vw, 68px)", fontWeight: 900, color: "rgba(255,255,255,.93)",
+            lineHeight: 1, fontFamily: FS, textShadow: "0 2px 20px rgba(0,0,0,.2)" }}>
             {resto.name?.toUpperCase()}
           </div>
           {resto.cuisine_type && (
-            <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.65)",
+            <div style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,.6)",
               letterSpacing: "4px", textTransform: "uppercase", marginTop: 6 }}>
-              {resto.cuisine_type?.toUpperCase()}
+              {resto.cuisine_type}
             </div>
           )}
         </div>
       </div>
 
-      {/* Zone crème — contenu */}
-      <div style={{ background: CREAM, padding: "32px 28px 40px", textAlign: "center" }}>
-
-        {/* Tagline style "LIFE IS HERE" */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: TEAL, letterSpacing: "3px",
+      {/* Contenu crème */}
+      <div style={{ padding: "32px 28px 40px", textAlign: "center" }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .2 }}>
+          <div style={{ fontSize: 11, color: "#6B8989", letterSpacing: "3px",
             textTransform: "uppercase", fontStyle: "italic", marginBottom: 16 }}>
-            {resto.quartier ? `${resto.quartier}${resto.ville ? ", " + resto.ville : ""}` : "La table est prête"}
+            {resto.quartier || "La table est prête"}
           </div>
         </motion.div>
 
-        {/* Titre "Bienvenue — Table X" */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 400, color: DARK, margin: "0 0 14px",
-            fontFamily: FONT_S, lineHeight: 1.25 }}>
-            {table ? `Bienvenue — Table ${table}` : `Bienvenue`}
-          </h1>
+        <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .3 }}
+          style={{ fontSize: 27, fontWeight: 400, color: DARK, fontFamily: FS,
+            margin: "0 0 14px", lineHeight: 1.25 }}>
+          {table ? `Bienvenue — Table ${table}` : "Bienvenue"}
+        </motion.h1>
+
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .4 }}
+          style={{ fontSize: 14, color: MUTED, lineHeight: 1.75, margin: "0 0 36px" }}>
+          {resto.description || "Découvrez notre carte et commandez directement depuis votre table."}
+        </motion.p>
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .5 }}>
+          <BrownBtn onClick={() => setStep("menu")}>Découvrir la carte</BrownBtn>
         </motion.div>
 
-        {/* Description */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-          <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.75, margin: "0 0 36px",
-            fontFamily: FONT }}>
-            {resto.description ||
-              "Découvrez notre carte et commandez directement depuis votre table."}
-          </p>
-        </motion.div>
-
-        {/* CTA "DÉCOUVRIR LA CARTE" */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <BtnBrown onClick={() => setStep("menu")}>
-            Découvrir la carte
-          </BtnBrown>
-        </motion.div>
-
-        {/* Lien historique si déjà commandé */}
         {localOrders.length > 0 && (
-          <motion.button
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
+          <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .65 }}
             onClick={() => setStep("history")}
-            style={{ marginTop: 16, background: "none", border: "none", cursor: "pointer",
-              fontSize: 12, color: MUTED, fontFamily: FONT,
-              display: "flex", alignItems: "center", gap: 6, margin: "16px auto 0" }}>
-            <History size={14} /> Voir mes commandes ({localOrders.length})
+            style={{ marginTop: 14, background: "none", border: "none", cursor: "pointer",
+              fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 6, margin: "14px auto 0" }}>
+            <History size={13} /> Mes commandes ({localOrders.length})
           </motion.button>
         )}
 
-        {/* Footer discret */}
-        <div style={{ marginTop: 40, fontSize: 9, color: "#C4B8A8",
-          letterSpacing: "2px", textTransform: "uppercase" }}>
+        <div style={{ marginTop: 40, fontSize: 9, color: "#D4C8BC", letterSpacing: "2px", textTransform: "uppercase" }}>
           Tablière CI
         </div>
       </div>
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
-     MENU PRINCIPAL — Catégories + Plats
-  ══════════════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════════
+     MENU — Style BBR (liste + search + catégories pills)
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "menu") return (
-    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
-      margin: "0 auto", fontFamily: FONT, paddingBottom: cartCount > 0 ? 96 : 24 }}>
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480, margin: "0 auto",
+      fontFamily: FN, paddingBottom: cartCount > 0 ? 90 : 24 }}>
 
       {/* Header */}
-      <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
-        position: "sticky", top: 0, zIndex: 20 }}>
-        {/* Infos resto */}
-        <div style={{ padding: "14px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: DARK, fontFamily: FONT_S }}>{resto.name}</div>
-            {table && <div style={{ fontSize: 11, color: MUTED }}>Table {table}</div>}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {localOrders.length > 0 && (
-              <button onClick={() => setStep("history")}
-                style={{ background: SAND, border: "none", borderRadius: 20, padding: "5px 12px",
-                  fontSize: 11, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                <History size={12} /> Historique
-              </button>
-            )}
-          </div>
-        </div>
+      <BBRHeader restoName={resto.name} table={table} cartCount={cartCount}
+        onCartClick={cartCount > 0 ? () => setStep("cart") : null} />
 
-        {/* Tabs catégories — scrollable */}
-        <div style={{ display: "flex", gap: 0, overflowX: "auto", padding: "10px 16px 0",
-          scrollbarWidth: "none" }}>
-          {categories.map(cat => {
-            const items = (cat.items || []).filter(i => i.is_active !== false);
-            if (!items.length) return null;
-            const active = activeCat === cat.id;
-            return (
-              <button key={cat.id} onClick={() => scrollToCat(cat.id)}
-                style={{ padding: "8px 14px", border: "none", cursor: "pointer",
-                  background: "transparent", whiteSpace: "nowrap", fontFamily: FONT,
-                  fontSize: 13, fontWeight: active ? 700 : 400,
-                  color: active ? BROWN : MUTED,
-                  borderBottom: `2px solid ${active ? BROWN : "transparent"}`,
-                  transition: "all .15s" }}>
-                {cat.name}
-              </button>
-            );
-          })}
+      {/* Photo bande */}
+      <HeroBand logoUrl={resto.logo_url} restoName={resto.name} table={table} height={140} />
+
+      {/* Search */}
+      <div style={{ padding: "12px 16px 0", background: WHITE }}>
+        <div style={{ position: "relative" }}>
+          <Search size={15} color={MUTED} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un plat..."
+            style={{ width: "100%", background: SAND, border: "none",
+              borderRadius: 8, padding: "10px 12px 10px 36px", fontSize: 14,
+              color: DARK, outline: "none", fontFamily: FN, boxSizing: "border-box" }} />
         </div>
       </div>
 
-      {/* Liste produits par catégorie */}
-      <div>
-        {categories.map(cat => {
-          const items = (cat.items || []).filter(i => i.is_active !== false && i.is_available !== false);
-          if (!items.length) return null;
+      {/* Catégorie pills */}
+      <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
+        padding: "10px 16px", display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none" }}>
+        <button onClick={() => setSelectedCat("tous")}
+          style={{ padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer",
+            fontSize: 13, fontFamily: FN, whiteSpace: "nowrap", fontWeight: 600,
+            background: selectedCat === "tous" ? DARK : SAND,
+            color:      selectedCat === "tous" ? WHITE : MUTED }}>
+          Tous
+        </button>
+        {categories.map(cat => (
+          <button key={cat.id} onClick={() => setSelectedCat(cat.id)}
+            style={{ padding: "6px 14px", borderRadius: 20, border: `0.5px solid ${BORDER}`,
+              cursor: "pointer", fontSize: 13, fontFamily: FN, whiteSpace: "nowrap",
+              background: selectedCat === cat.id ? DARK : WHITE,
+              color:      selectedCat === cat.id ? WHITE : DARK,
+              fontWeight: selectedCat === cat.id ? 600 : 400 }}>
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Liste des plats — style BBR */}
+      <div style={{ background: WHITE }}>
+        {filteredItems.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "50px 20px", color: MUTED, fontSize: 14 }}>
+            Aucun plat trouvé
+          </div>
+        ) : filteredItems.map((item, idx) => {
+          const inCart = cart[item.id]?.qty || 0;
+          const isFirst = idx === 0 || filteredItems[idx-1]?.catName !== item.catName;
           return (
-            <div key={cat.id} ref={el => { catRefs.current[cat.id] = el; }}>
-              {/* Titre catégorie */}
-              <div style={{ padding: "20px 20px 8px",
-                fontSize: 11, fontWeight: 700, color: MUTED,
-                letterSpacing: "2px", textTransform: "uppercase" }}>
-                {cat.name}
-              </div>
+            <div key={item.id}>
+              {/* Séparateur catégorie si "Tous" */}
+              {selectedCat === "tous" && isFirst && (
+                <div style={{ padding: "10px 16px 4px", fontSize: 11, fontWeight: 700,
+                  color: MUTED, textTransform: "uppercase", letterSpacing: "1.5px",
+                  borderTop: idx > 0 ? `4px solid ${CREAM}` : "none" }}>
+                  {item.catName}
+                </div>
+              )}
 
-              {/* Items */}
-              {items.map(item => {
-                const inCart = cart[item.id]?.qty || 0;
-                const opts = (() => { try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; } })();
-                return (
-                  <div key={item.id}
-                    style={{ display: "flex", gap: 14, padding: "14px 20px",
-                      borderBottom: `0.5px solid ${BORDER}`, background: WHITE,
-                      transition: "background .15s" }}>
+              <div onClick={() => openItem(item)}
+                style={{ display: "flex", gap: 12, padding: "14px 16px",
+                  borderBottom: `0.5px solid ${BORDER}`, cursor: "pointer",
+                  background: WHITE, transition: "background .1s" }}
+                onMouseEnter={e => e.currentTarget.style.background = SAND}
+                onMouseLeave={e => e.currentTarget.style.background = WHITE}>
 
-                    {/* Photo ou placeholder */}
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name}
-                        style={{ width: 84, height: 84, borderRadius: 12, objectFit: "cover", flexShrink: 0, border: `0.5px solid ${BORDER}` }}
-                        onError={e => { e.target.style.display = "none"; }} />
-                    ) : (
-                      <div style={{ width: 84, height: 84, borderRadius: 12, flexShrink: 0,
-                        background: SAND, display: "flex", alignItems: "center",
-                        justifyContent: "center", fontSize: 26 }}>🍽️</div>
-                    )}
+                {/* Photo */}
+                <div style={{ flexShrink: 0 }}>
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name}
+                      style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover",
+                        border: `0.5px solid ${BORDER}` }}
+                      onError={e => { e.target.style.display = "none"; }} />
+                  ) : (
+                    <div style={{ width: 72, height: 72, borderRadius: 8, background: SAND,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🍽️</div>
+                  )}
+                </div>
 
-                    {/* Infos */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: DARK,
-                        fontFamily: FONT_S, marginBottom: 4, lineHeight: 1.3 }}>
-                        {item.name}
-                      </div>
-                      {item.description && (
-                        <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 6,
-                          overflow: "hidden", display: "-webkit-box",
-                          WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                          {item.description}
-                        </div>
-                      )}
-
-                      {/* Options tags */}
-                      {opts && (opts.cuissons?.length || opts.accompagnements?.length) ? (
-                        <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
-                          {opts.cuissons?.length > 0 && (
-                            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
-                              background: "#F0EBE3", color: BROWN, fontWeight: 700, letterSpacing: "0.5px" }}>
-                              Cuisson
-                            </span>
-                          )}
-                          {opts.accompagnements?.length > 0 && (
-                            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
-                              background: "#F0EBE3", color: BROWN, fontWeight: 700, letterSpacing: "0.5px" }}>
-                              Accompagnement
-                            </span>
-                          )}
-                        </div>
-                      ) : null}
-
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: BROWN }}>
-                          {fmt(item.price)}
-                        </div>
-
-                        {/* Contrôle quantité */}
-                        {inCart > 0 ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <button onClick={() => remItem(item.id)}
-                              style={{ width: 30, height: 30, borderRadius: "50%",
-                                border: `1.5px solid ${BORDER}`, background: WHITE,
-                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <Minus size={12} color={MUTED} />
-                            </button>
-                            <motion.span key={inCart} initial={{ scale: 1.3 }} animate={{ scale: 1 }}
-                              style={{ fontSize: 15, fontWeight: 800, color: BROWN, minWidth: 16, textAlign: "center" }}>
-                              {inCart}
-                            </motion.span>
-                            <button onClick={() => addItem(item)}
-                              style={{ width: 30, height: 30, borderRadius: "50%",
-                                border: "none", background: BROWN,
-                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <Plus size={12} color={WHITE} />
-                            </button>
-                          </div>
-                        ) : (
-                          <motion.button whileTap={{ scale: 0.92 }} onClick={() => addItem(item)}
-                            style={{ width: 34, height: 34, borderRadius: "50%",
-                              border: "none", background: BROWN,
-                              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                              boxShadow: `0 3px 12px ${BROWN}40` }}>
-                            <Plus size={15} color={WHITE} />
-                          </motion.button>
-                        )}
-                      </div>
-                    </div>
+                {/* Infos */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: DARK,
+                    fontFamily: FS, marginBottom: 3, lineHeight: 1.3 }}>
+                    {item.name}
                   </div>
-                );
-              })}
+                  {item.description && (
+                    <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.45, marginBottom: 5,
+                      overflow: "hidden", display: "-webkit-box",
+                      WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                      {item.description}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: BROWN, fontFamily: FS, fontStyle: "italic" }}>
+                    {fmt(item.price)}
+                  </div>
+                </div>
+
+                {/* Bouton + ou badge quantité */}
+                <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}
+                  onClick={e => e.stopPropagation()}>
+                  {inCart > 0 ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button onClick={() => remItem(item.id)}
+                        style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`,
+                          background: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Minus size={11} color={MUTED} />
+                      </button>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: BROWN, minWidth: 14, textAlign: "center" }}>{inCart}</span>
+                      <button onClick={() => openItem(item)}
+                        style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
+                          background: BROWN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Plus size={11} color={WHITE} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => openItem(item)}
+                      style={{ width: 32, height: 32, borderRadius: "50%", border: "none",
+                        background: BROWN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: `0 2px 8px ${BROWN}40` }}>
+                      <Plus size={15} color={WHITE} />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })}
-        {categories.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: MUTED }}>
-            Menu non disponible
-          </div>
-        )}
       </div>
 
-      {/* Bouton panier flottant */}
+      {/* Bouton panier CENTRÉ */}
       <AnimatePresence>
         {cartCount > 0 && (
           <motion.div
             initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
-            style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
-              width: "calc(100% - 40px)", maxWidth: 440, zIndex: 30 }}>
+            style={{ position: "fixed", bottom: 20,
+              left: "50%", transform: "translateX(-50%)",
+              width: "calc(100% - 40px)", maxWidth: 420, zIndex: 40 }}>
             <button onClick={() => setStep("cart")}
-              style={{ width: "100%", padding: "16px 20px", borderRadius: 40, border: "none",
-                background: BROWN, color: WHITE, fontSize: 14, fontWeight: 700,
-                cursor: "pointer", fontFamily: FONT, display: "flex",
-                alignItems: "center", justifyContent: "space-between",
-                letterSpacing: "0.5px",
+              style={{ width: "100%", padding: "15px 24px", borderRadius: 40,
+                border: "none", background: BROWN, color: WHITE, fontSize: 14,
+                fontWeight: 700, cursor: "pointer", fontFamily: FN,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
                 boxShadow: `0 6px 24px ${BROWN}55` }}>
-              <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%",
+              <span style={{ background: "rgba(255,255,255,.2)", borderRadius: "50%",
                 width: 26, height: 26, display: "flex", alignItems: "center",
-                justifyContent: "center", fontSize: 12, fontWeight: 900 }}>
-                {cartCount}
-              </span>
+                justifyContent: "center", fontSize: 12, fontWeight: 900 }}>{cartCount}</span>
               <span>Voir mon panier</span>
               <span style={{ fontWeight: 900 }}>{fmt(cartTotal)}</span>
             </button>
@@ -502,341 +543,533 @@ export default function ClientMenu() {
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════════════
+     ITEM DETAIL — Style BBR (photo grande + cuisson + note)
+  ══════════════════════════════════════════════════════════════════════ */
+  if (step === "item" && activeItem) {
+    const opts = parseOpts(activeItem);
+    const hasCuisson = opts?.cuissons?.length > 0;
+    const hasAccomp  = opts?.accompagnements?.length > 0;
+    const catName = categories.find(c => (c.items||[]).some(i => i.id === activeItem.id))?.name || "";
+    const catItems = categories.find(c => (c.items||[]).some(i => i.id === activeItem.id))?.items || [];
+    const itemIdx = catItems.findIndex(i => i.id === activeItem.id);
+
+    return (
+      <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+        margin: "0 auto", fontFamily: FN, paddingBottom: 130 }}>
+
+        {/* Photo plein-écran */}
+        <div style={{ position: "relative", height: "42vh", overflow: "hidden", background: SAND }}>
+          {/* Back button */}
+          <button onClick={() => setStep("menu")}
+            style={{ position: "absolute", top: 16, left: 16, zIndex: 10,
+              background: "rgba(255,255,255,.88)", border: "none", borderRadius: "50%",
+              width: 36, height: 36, cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center" }}>
+            <ArrowLeft size={18} color={DARK} />
+          </button>
+
+          {activeItem.image_url ? (
+            <img src={activeItem.image_url} alt={activeItem.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={e => { e.target.style.display = "none"; }} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: SAND,
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 60 }}>🍽️</div>
+          )}
+
+          {/* Dégradé bas */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60,
+            background: `linear-gradient(to top, ${CREAM}, transparent)` }} />
+
+          {/* Catégorie + index */}
+          {catName && (
+            <div style={{ position: "absolute", bottom: 14, left: 16,
+              fontSize: 10, color: MUTED, letterSpacing: "1.5px", textTransform: "uppercase" }}>
+              {catName}{catItems.length > 1 ? ` · ${itemIdx + 1}/${catItems.length}` : ""}
+            </div>
+          )}
+        </div>
+
+        {/* Contenu */}
+        <div style={{ padding: "20px 20px 0" }}>
+          {/* Nom */}
+          <h2 style={{ fontSize: 24, fontWeight: 400, color: DARK, fontFamily: FS,
+            margin: "0 0 8px", lineHeight: 1.25 }}>
+            {activeItem.name}
+          </h2>
+
+          {/* Description */}
+          {activeItem.description && (
+            <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, margin: "0 0 20px" }}>
+              {activeItem.description}
+            </p>
+          )}
+
+          {/* Cuisson */}
+          {hasCuisson && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED,
+                textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+                Cuisson{" "}
+                <span style={{ color: "#B0A090", fontWeight: 400 }}>(Requis — 1 choix)</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {opts.cuissons.map(c => (
+                  <button key={c} onClick={() => setItemCuisson(c)}
+                    style={{ padding: "7px 16px", borderRadius: 20, cursor: "pointer",
+                      border: `1px solid ${itemCuisson === c ? BROWN : BORDER}`,
+                      background: itemCuisson === c ? BROWN : WHITE,
+                      color:      itemCuisson === c ? WHITE : DARK,
+                      fontSize: 13, fontFamily: FN,
+                      fontWeight: itemCuisson === c ? 700 : 400 }}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Accompagnements */}
+          {hasAccomp && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED,
+                textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+                Accompagnement <span style={{ color: "#B0A090", fontWeight: 400 }}>(optionnel)</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {opts.accompagnements.map(a => (
+                  <button key={a} onClick={() => setItemAccomp(itemAccomp === a ? "" : a)}
+                    style={{ padding: "7px 16px", borderRadius: 20, cursor: "pointer",
+                      border: `1px solid ${itemAccomp === a ? BROWN : BORDER}`,
+                      background: itemAccomp === a ? BROWN : WHITE,
+                      color:      itemAccomp === a ? WHITE : DARK,
+                      fontSize: 13, fontFamily: FN,
+                      fontWeight: itemAccomp === a ? 700 : 400 }}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 8 }}>
+              Note pour cet article (optionnel)
+            </label>
+            <textarea value={itemNote} onChange={e => setItemNote(e.target.value)}
+              placeholder="Ex : bien cuit, sans sauce…" rows={3}
+              style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                padding: "10px 12px", fontSize: 13, color: DARK, background: WHITE,
+                outline: "none", fontFamily: FN, resize: "none", boxSizing: "border-box" }} />
+          </div>
+        </div>
+
+        {/* Barre fixe bas — Prix + Qty + Ajouter */}
+        <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 480, background: WHITE,
+          borderTop: `0.5px solid ${BORDER}`, padding: "12px 16px 20px", zIndex: 30 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: DARK, fontFamily: FS, fontStyle: "italic" }}>
+              {fmt(activeItem.price * itemQty)}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <button onClick={() => setItemQty(q => Math.max(1, q-1))}
+                style={{ width: 32, height: 32, borderRadius: "50%",
+                  border: `1.5px solid ${BORDER}`, background: WHITE,
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Minus size={13} color={MUTED} />
+              </button>
+              <span style={{ fontSize: 16, fontWeight: 800, color: DARK, minWidth: 20, textAlign: "center" }}>{itemQty}</span>
+              <button onClick={() => setItemQty(q => q+1)}
+                style={{ width: 32, height: 32, borderRadius: "50%",
+                  border: "none", background: BROWN,
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Plus size={13} color={WHITE} />
+              </button>
+            </div>
+          </div>
+
+          <BrownBtn onClick={addItemToCart}
+            disabled={hasCuisson && !itemCuisson}
+            style={{ borderRadius: 8 }}>
+            Ajouter au panier
+          </BrownBtn>
+
+          {hasCuisson && !itemCuisson && (
+            <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 6 }}>
+              Choisissez une cuisson pour continuer
+            </div>
+          )}
+
+          <button onClick={() => setStep("menu")}
+            style={{ background: "none", border: "none", cursor: "pointer",
+              fontSize: 12, color: MUTED, display: "flex", alignItems: "center",
+              gap: 4, padding: "8px 0 0", fontFamily: FN }}>
+            <ArrowLeft size={12} /> Précédent
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
      PANIER
-  ══════════════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "cart") return (
     <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
-      margin: "0 auto", fontFamily: FONT, paddingBottom: 100 }}>
-      <HeaderNav title="Mon panier" table={table} onBack={() => setStep("menu")} />
+      margin: "0 auto", fontFamily: FN, paddingBottom: 110 }}>
 
-      <div style={{ padding: "16px 20px" }}>
-        {cartItems.map(({ item, qty, note, options }) => {
-          const opts = (() => { try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; } })();
-          return (
-            <div key={item.id} style={{ background: WHITE, borderRadius: 14, padding: "14px 16px",
-              marginBottom: 10, border: `0.5px solid ${BORDER}` }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                {item.image_url && (
-                  <img src={item.image_url} alt={item.name}
-                    style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                    onError={e => { e.target.style.display = "none"; }} />
-                )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: DARK, fontFamily: FONT_S }}>{item.name}</div>
-                  <div style={{ fontSize: 13, color: BROWN, fontWeight: 700, marginTop: 2 }}>{fmt(item.price)}</div>
-                  {options?.cuisson && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>Cuisson : {options.cuisson}</div>}
-                  {options?.accompagnement && <div style={{ fontSize: 11, color: MUTED }}>Avec : {options.accompagnement}</div>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  <button onClick={() => remItem(item.id)}
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`,
-                      background: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Minus size={11} color={MUTED} />
-                  </button>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
-                  <button onClick={() => addItem(item)}
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
-                      background: BROWN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Plus size={11} color={WHITE} />
-                  </button>
+      <BBRHeader restoName={resto.name} table={table} cartCount={cartCount} onBack={() => setStep("menu")} />
+
+      <div style={{ padding: "16px" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 400, fontFamily: FS, color: DARK, margin: "0 0 16px" }}>
+          Mon panier
+        </h2>
+
+        {cartItems.map(({ item, qty, options }) => (
+          <div key={item.id} style={{ background: WHITE, borderRadius: 12, padding: "14px 16px",
+            marginBottom: 10, border: `0.5px solid ${BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              {item.image_url && (
+                <img src={item.image_url} alt={item.name}
+                  style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                  onError={e => { e.target.style.display = "none"; }} />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: DARK, fontFamily: FS }}>{item.name}</div>
+                {options?.cuisson && <div style={{ fontSize: 11, color: MUTED }}>Cuisson : {options.cuisson}</div>}
+                {options?.accompagnement && <div style={{ fontSize: 11, color: MUTED }}>Avec : {options.accompagnement}</div>}
+                <div style={{ fontSize: 13, color: BROWN, fontWeight: 700, fontFamily: FS, fontStyle: "italic", marginTop: 4 }}>
+                  {fmt(item.price * qty)}
                 </div>
               </div>
-
-              {/* Options cuisson/accompagnement */}
-              {opts && (opts.cuissons?.length || opts.accompagnements?.length) && (
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {opts.cuissons?.length > 0 && (
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: "1px" }}>Cuisson</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {opts.cuissons.map(c => (
-                          <button key={c} onClick={() => setItemOpt(item.id, "cuisson", c)}
-                            style={{ padding: "4px 11px", borderRadius: 20, border: "none", fontSize: 11, cursor: "pointer",
-                              background: options?.cuisson === c ? BROWN : SAND,
-                              color: options?.cuisson === c ? WHITE : MUTED,
-                              fontWeight: options?.cuisson === c ? 600 : 400 }}>
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {opts.accompagnements?.length > 0 && (
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: "1px" }}>Accompagnement</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {opts.accompagnements.map(a => (
-                          <button key={a} onClick={() => setItemOpt(item.id, "accompagnement", a)}
-                            style={{ padding: "4px 11px", borderRadius: 20, border: "none", fontSize: 11, cursor: "pointer",
-                              background: options?.accompagnement === a ? BROWN : SAND,
-                              color: options?.accompagnement === a ? WHITE : MUTED,
-                              fontWeight: options?.accompagnement === a ? 600 : 400 }}>
-                            {a}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <button onClick={() => remItem(item.id)}
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`,
+                    background: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Minus size={11} color={MUTED} />
+                </button>
+                <span style={{ fontSize: 14, fontWeight: 800, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
+                <button onClick={() => addOne(item)}
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
+                    background: BROWN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Plus size={11} color={WHITE} />
+                </button>
+              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
 
-        {/* Total */}
-        <div style={{ background: WHITE, borderRadius: 14, padding: "16px 18px",
+        <div style={{ background: WHITE, borderRadius: 12, padding: "16px",
           border: `0.5px solid ${BORDER}`, marginTop: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between",
             fontWeight: 800, fontSize: 17, color: DARK }}>
             <span>Total</span>
-            <span style={{ color: BROWN }}>{fmt(cartTotal)}</span>
-          </div>
-          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
-            {cartCount} article{cartCount > 1 ? "s" : ""}
+            <span style={{ color: BROWN, fontFamily: FS, fontStyle: "italic" }}>{fmt(cartTotal)}</span>
           </div>
         </div>
       </div>
 
-      {/* Footer fixe */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, padding: "12px 20px 28px",
+        width: "100%", maxWidth: 480, padding: "12px 16px 24px",
         background: `linear-gradient(to top, ${CREAM} 70%, transparent)` }}>
-        <BtnBrown onClick={() => setStep("info")}>
-          Continuer →
-        </BtnBrown>
+        <BrownBtn onClick={() => setStep("info")}>Continuer →</BrownBtn>
       </div>
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════════════
      INFOS CLIENT
-  ══════════════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "info") return (
     <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
-      margin: "0 auto", fontFamily: FONT, paddingBottom: 120 }}>
-      <HeaderNav title="Vos informations" table={table} onBack={() => setStep("cart")} />
+      margin: "0 auto", fontFamily: FN, paddingBottom: 130 }}>
 
-      <div style={{ padding: "24px 20px" }}>
+      <BBRHeader restoName={resto.name} table={table} cartCount={cartCount} onBack={() => setStep("cart")} />
 
-        {/* Champs */}
+      <div style={{ padding: "24px 16px" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 400, fontFamily: FS, color: DARK, margin: "0 0 20px" }}>
+          Vos informations
+        </h2>
+
         {[
-          { label: "Nom complet *", value: clientName, set: setClientName, ph: "Jean Kouassi", required: true },
+          { label: "Nom complet *", value: clientName, set: setClientName, ph: "Jean Kouassi" },
           { label: "Téléphone", value: clientPhone, set: setClientPhone, ph: "+225 07 00 00 00 00", type: "tel" },
-        ].map(({ label, value, set, ph, required, type }) => (
+        ].map(({ label, value, set, ph, type }) => (
           <div key={label} style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: MUTED,
-              textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
-              {label}
-            </label>
-            <input value={value} onChange={e => set(e.target.value)}
-              placeholder={ph} type={type || "text"}
+              textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 7 }}>{label}</label>
+            <input value={value} onChange={e => set(e.target.value)} placeholder={ph} type={type||"text"}
               style={{ width: "100%", background: WHITE, border: `0.5px solid ${value ? BROWN : BORDER}`,
-                borderRadius: 10, padding: "13px 14px", fontSize: 15, color: DARK,
-                outline: "none", fontFamily: FONT, boxSizing: "border-box",
-                transition: "border-color .2s" }} />
+                borderRadius: 8, padding: "13px 14px", fontSize: 15, color: DARK,
+                outline: "none", fontFamily: FN, boxSizing: "border-box", transition: "border-color .2s" }} />
           </div>
         ))}
 
-        {/* Notes */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: MUTED,
-            textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+            textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 7 }}>
             Notes / allergies (optionnel)
           </label>
           <textarea value={orderNote} onChange={e => setOrderNote(e.target.value)}
-            placeholder="Sans gluten, pas d'oignons, anniversaire…" rows={3}
+            placeholder="Sans gluten, pas d'oignons…" rows={3}
             style={{ width: "100%", background: WHITE, border: `0.5px solid ${BORDER}`,
-              borderRadius: 10, padding: "13px 14px", fontSize: 14, color: DARK,
-              outline: "none", fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
+              borderRadius: 8, padding: "13px 14px", fontSize: 13, color: DARK,
+              outline: "none", fontFamily: FN, resize: "none", boxSizing: "border-box" }} />
         </div>
 
-        {/* Récapitulatif compact */}
-        <div style={{ background: WHITE, borderRadius: 12, padding: "14px 16px",
+        {/* Récap */}
+        <div style={{ background: WHITE, borderRadius: 10, padding: "14px 16px",
           border: `0.5px solid ${BORDER}`, marginBottom: 20 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
             letterSpacing: "1.5px", marginBottom: 10 }}>Récapitulatif</div>
-          {cartItems.map(({ item, qty, options }) => (
+          {cartItems.map(({ item, qty }) => (
             <div key={item.id} style={{ display: "flex", justifyContent: "space-between",
               fontSize: 13, color: DARK, marginBottom: 5 }}>
-              <span style={{ color: MUTED }}>{qty}× {item.name}
-                {options?.cuisson ? ` — ${options.cuisson}` : ""}
-              </span>
-              <span style={{ fontWeight: 600, color: BROWN }}>{fmt(item.price * qty)}</span>
+              <span style={{ color: MUTED }}>{qty}× {item.name}</span>
+              <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(item.price * qty)}</span>
             </div>
           ))}
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800,
-            fontSize: 15, marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between",
+            fontWeight: 800, fontSize: 16, marginTop: 10, paddingTop: 10,
+            borderTop: `0.5px solid ${BORDER}` }}>
             <span>Total</span>
-            <span style={{ color: BROWN }}>{fmt(cartTotal)}</span>
+            <span style={{ color: BROWN, fontFamily: FS, fontStyle: "italic" }}>{fmt(cartTotal)}</span>
           </div>
         </div>
 
-        {/* ── Case à cocher OBLIGATOIRE ── */}
+        {/* Checkbox obligatoire */}
         <motion.div onClick={() => setAgreed(p => !p)}
           animate={{ borderColor: agreed ? BROWN : BORDER }}
-          style={{ background: agreed ? BROWN + "0A" : WHITE,
-            borderRadius: 12, padding: "14px 16px", marginBottom: 4,
+          style={{ background: agreed ? BROWN+"0A" : WHITE, borderRadius: 10,
+            padding: "14px 16px", marginBottom: 4,
             border: `1.5px solid ${agreed ? BROWN : BORDER}`,
             cursor: "pointer", transition: "all .2s" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <motion.div animate={{ background: agreed ? BROWN : WHITE, scale: agreed ? [1.1, 1] : 1 }}
-              style={{ width: 22, height: 22, borderRadius: 6,
-                border: `2px solid ${agreed ? BROWN : BORDER}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, marginTop: 1, transition: "all .2s" }}>
+            <div style={{ width: 22, height: 22, borderRadius: 6,
+              border: `2px solid ${agreed ? BROWN : BORDER}`,
+              background: agreed ? BROWN : WHITE,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, marginTop: 1, transition: "all .2s" }}>
               {agreed && <Check size={13} color={WHITE} strokeWidth={3} />}
-            </motion.div>
-            <div style={{ fontSize: 12, color: agreed ? DARK : MUTED, lineHeight: 1.65,
-              transition: "color .2s" }}>
+            </div>
+            <div style={{ fontSize: 12, color: agreed ? DARK : MUTED, lineHeight: 1.65 }}>
               <strong style={{ color: agreed ? BROWN : MUTED }}>
                 J'ai vérifié ma commande et je m'engage à la régler en totalité.
-              </strong>
-              {" "}En cas d'erreur de ma part sur les articles commandés, je suis entièrement responsable.
+              </strong>{" "}
+              En cas d'erreur de ma part, je suis entièrement responsable.
             </div>
           </div>
           {!agreed && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8,
-              fontSize: 10, color: "#B8860B", paddingLeft: 34 }}>
+            <div style={{ fontSize: 10, color: "#B8860B", marginTop: 7, paddingLeft: 34,
+              display: "flex", alignItems: "center", gap: 4 }}>
               <AlertTriangle size={10} /> Obligatoire pour valider
             </div>
           )}
         </motion.div>
       </div>
 
-      {/* Footer */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, padding: "12px 20px 28px",
-        background: `linear-gradient(to top, ${CREAM} 70%, transparent)` }}>
-        <BtnBrown onClick={placeOrder} disabled={submitting || !clientName.trim() || !agreed}>
+        width: "100%", maxWidth: 480, padding: "10px 16px 24px",
+        background: `linear-gradient(to top, ${CREAM} 70%, transparent)`, zIndex: 20 }}>
+        <BrownBtn onClick={placeOrder} disabled={submitting || !clientName.trim() || !agreed}>
           {submitting ? "Envoi en cours…" : `Confirmer · ${fmt(cartTotal)}`}
-        </BtnBrown>
+        </BrownBtn>
         {!clientName.trim() && (
-          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 6 }}>
-            Votre nom est requis
-          </div>
+          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 6 }}>Votre nom est requis</div>
+        )}
+        {errorMsg && (
+          <div style={{ textAlign: "center", fontSize: 12, color: "#8B1414", marginTop: 8 }}>{errorMsg}</div>
         )}
       </div>
-
-      {errorMsg && (
-        <div style={{ position: "fixed", bottom: 100, left: "50%", transform: "translateX(-50%)",
-          background: "#8B1414", color: WHITE, borderRadius: 10, padding: "10px 20px",
-          fontSize: 13, maxWidth: 440, textAlign: "center" }}>
-          {errorMsg}
-        </div>
-      )}
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
-     CONFIRMATION
-  ══════════════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════════
+     CONFIRMATION — Style BBR (photo héro + tracking statut)
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "confirm") return (
     <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
-      margin: "0 auto", fontFamily: FONT, display: "flex",
-      flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      margin: "0 auto", fontFamily: FN }}>
 
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        style={{ textAlign: "center", width: "100%", maxWidth: 360 }}>
+      {/* Photo héro avec overlay "Commande envoyée" */}
+      <div style={{ position: "relative", height: 200, background: SAND, overflow: "hidden" }}>
+        {resto.logo_url && (
+          <img src={resto.logo_url} alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", opacity: .55 }}
+            onError={e => { e.target.style.display = "none"; }} />
+        )}
+        <div style={{ position: "absolute", inset: 0,
+          background: "rgba(30,18,9,.45)", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center" }}>
+          {/* Logo + nom */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+            <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+              <rect width="40" height="40" rx="8" fill="rgba(255,255,255,.18)" />
+              <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+              <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+              <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5" stroke="rgba(255,255,255,.5)" strokeWidth="1.3" fill="none"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.9)",
+              letterSpacing: "1px", textTransform: "uppercase" }}>{resto.name}</span>
+          </div>
+          {/* Icône check */}
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 300, damping: 22, delay: .15 }}
+            style={{ width: 48, height: 48, borderRadius: "50%", border: "2px solid rgba(255,255,255,.7)",
+              display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+            <Check size={24} color="white" strokeWidth={2.5} />
+          </motion.div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "white", fontFamily: FS }}>
+            Commande envoyée
+          </div>
+          {table && <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", marginTop: 4 }}>Table {table}</div>}
+        </div>
+      </div>
 
-        {/* Icône succès */}
-        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ delay: 0.2, duration: 0.4 }}
-          style={{ width: 72, height: 72, borderRadius: "50%", background: BROWN,
-            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-          <Check size={36} color={WHITE} strokeWidth={2.5} />
-        </motion.div>
+      {/* Contenu */}
+      <div style={{ padding: "16px" }}>
+        {/* Statut En ligne */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: SAND, borderRadius: 8, padding: "8px 14px", marginBottom: 12,
+          fontSize: 12, color: MUTED }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4CAF50",
+              animation: "pulse 2s infinite" }} />
+            En ligne
+          </div>
+          <span>{new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
 
-        <h2 style={{ fontSize: 26, fontWeight: 400, color: DARK, fontFamily: FONT_S,
-          margin: "0 0 8px" }}>Commande envoyée !</h2>
-        {clientName && <div style={{ fontSize: 14, color: MUTED, marginBottom: 4 }}>Merci, {clientName}</div>}
-        {table && <div style={{ fontSize: 12, color: BROWN, fontWeight: 700, marginBottom: 16 }}>Table {table}</div>}
+        {/* Card tracking */}
+        <div style={{ background: WHITE, borderRadius: 12, padding: "16px",
+          border: `0.5px solid ${BORDER}`, marginBottom: 12 }}>
+          {/* Réf */}
+          <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: MUTED,
+            letterSpacing: "1px", textTransform: "uppercase", marginBottom: 16 }}>
+            Réf. {lastOrder?.ref || "CMD-" + String(Math.random()).slice(2,8).toUpperCase()}
+          </div>
 
-        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, marginBottom: 28 }}>
-          Votre commande a été transmise à la cuisine.<br />
-          Nous vous apportons cela dans les plus brefs délais.
-        </p>
-
-        {/* Résumé */}
-        <div style={{ background: WHITE, borderRadius: 14, padding: "16px 18px",
-          border: `0.5px solid ${BORDER}`, marginBottom: 28, textAlign: "left" }}>
-          {(lastOrder?.items || []).map((it, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between",
-              fontSize: 13, color: DARK, marginBottom: 5 }}>
-              <span style={{ color: MUTED }}>{it.qty}× {it.name}</span>
-              <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(it.price * it.qty)}</span>
-            </div>
-          ))}
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800,
-            fontSize: 16, marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}` }}>
-            <span>Total</span>
-            <span style={{ color: BROWN }}>{fmt(lastOrder?.total)}</span>
+          {/* Progression */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", gap: 0 }}>
+            {[
+              { label: "Reçue",    done: true },
+              { label: "Acceptée", done: false },
+              { label: "Prête",    done: false },
+            ].map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", flex: i < 2 ? 1 : "none" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%",
+                    background: s.done ? BROWN : WHITE,
+                    border: `2px solid ${s.done ? BROWN : BORDER}`,
+                    display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Check size={13} color={s.done ? WHITE : BORDER} strokeWidth={3} />
+                  </div>
+                  <span style={{ fontSize: 11, color: s.done ? DARK : MUTED, fontWeight: s.done ? 600 : 400 }}>
+                    {s.label}
+                  </span>
+                </div>
+                {i < 2 && <div style={{ flex: 1, height: 1.5, background: BORDER, margin: "0 4px 20px" }} />}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <BtnBrown onClick={reset}>Nouvelle commande</BtnBrown>
-          <button onClick={() => setStep("history")}
-            style={{ padding: "14px 0", borderRadius: 40, border: `1.5px solid ${BORDER}`,
-              background: "transparent", color: MUTED, fontSize: 13, cursor: "pointer",
-              fontFamily: FONT }}>
-            Voir mes commandes
-          </button>
+        {/* Détail commande */}
+        <div style={{ background: WHITE, borderRadius: 12, padding: "16px",
+          border: `0.5px solid ${BORDER}`, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: DARK, fontFamily: FS, marginBottom: 12 }}>
+            Détail de votre commande
+          </div>
+          {(lastOrder?.items || []).map((it, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between",
+              fontSize: 13, color: DARK, marginBottom: 6 }}>
+              <span>{it.qty}× {it.name}</span>
+              <span style={{ color: MUTED }}>{fmt(it.price * it.qty)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between",
+            fontWeight: 800, fontSize: 16, marginTop: 12, paddingTop: 12,
+            borderTop: `0.5px solid ${BORDER}` }}>
+            <span>Total</span>
+            <span style={{ color: BROWN, fontFamily: FS, fontStyle: "italic" }}>{fmt(lastOrder?.total)}</span>
+          </div>
         </div>
-      </motion.div>
+
+        {/* Actions */}
+        <button style={{ width: "100%", padding: "12px 0", borderRadius: 8,
+          border: `0.5px solid ${BORDER}`, background: WHITE, color: MUTED,
+          fontSize: 12, cursor: "pointer", fontFamily: FN, marginBottom: 10,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <RefreshCw size={13} /> Actualiser
+        </button>
+
+        <button style={{ width: "100%", padding: "13px 0", borderRadius: 8,
+          border: `1px solid ${DARK}`, background: WHITE, color: DARK,
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FN, marginBottom: 12 }}
+          onClick={() => setStep("cart")}>
+          Modifier la commande
+        </button>
+
+        <button onClick={reset}
+          style={{ width: "100%", background: "none", border: "none",
+            color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: FN, padding: "8px 0" }}>
+          Nouvelle commande
+        </button>
+
+        <div style={{ marginTop: 24, textAlign: "center", fontSize: 10, color: "#D4C8BC",
+          letterSpacing: "1px", textTransform: "uppercase" }}>
+          Gardez cette page ouverte — elle sera mise à jour
+        </div>
+      </div>
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════════════
      HISTORIQUE
-  ══════════════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════════════ */
   if (step === "history") return (
-    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
-      margin: "0 auto", fontFamily: FONT }}>
-      <HeaderNav title="Mes commandes" table={table} onBack={() => setStep("menu")} />
-
-      <div style={{ padding: "16px 20px" }}>
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480, margin: "0 auto", fontFamily: FN }}>
+      <BBRHeader restoName={resto.name} table={table} onBack={() => setStep("menu")} />
+      <div style={{ padding: "20px 16px" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 400, fontFamily: FS, color: DARK, margin: "0 0 16px" }}>
+          Mes commandes
+        </h2>
         {localOrders.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
-            <ShoppingBag size={36} style={{ marginBottom: 12, opacity: 0.3 }} />
-            <div style={{ fontSize: 14 }}>Aucune commande dans cette session</div>
+          <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>🛒</div>
+            <div>Aucune commande dans cette session</div>
           </div>
         ) : localOrders.map((o, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            style={{ background: WHITE, borderRadius: 14, padding: 16,
-              marginBottom: 12, border: `0.5px solid ${BORDER}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between",
-              alignItems: "flex-start", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, color: MUTED }}>
-                  {new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
-                </div>
-                {o.table_label && <div style={{ fontSize: 11, color: MUTED }}>Table {o.table_label}</div>}
+          <div key={i} style={{ background: WHITE, borderRadius: 12, padding: 16,
+            marginBottom: 12, border: `0.5px solid ${BORDER}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: MUTED }}>
+                {new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
+                {o.table_label && ` · Table ${o.table_label}`}
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
-                background: (STATUS[o.status]?.color || "#888") + "18",
-                color: STATUS[o.status]?.color || "#888",
-                border: `0.5px solid ${(STATUS[o.status]?.color || "#888")}44` }}>
-                {STATUS[o.status]?.label || o.status}
+              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                background: SAND, color: BROWN }}>
+                {o.status === "en_attente" ? "Reçue" : o.status === "servi" ? "Prête" : "En cours"}
               </span>
             </div>
-            <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 10 }}>
-              {(o.items || []).map((it, j) => (
-                <div key={j} style={{ display: "flex", justifyContent: "space-between",
-                  fontSize: 13, color: DARK, marginBottom: 4 }}>
-                  <span style={{ color: MUTED }}>{it.qty}× {it.name}</span>
-                  <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(it.price * it.qty)}</span>
-                </div>
-              ))}
-              <div style={{ display: "flex", justifyContent: "space-between",
-                fontWeight: 800, fontSize: 14, marginTop: 8, paddingTop: 8,
-                borderTop: `0.5px solid ${BORDER}` }}>
-                <span style={{ color: DARK }}>Total</span>
-                <span style={{ color: BROWN }}>{fmt(o.total)}</span>
+            {(o.items||[]).map((it, j) => (
+              <div key={j} style={{ display: "flex", justifyContent: "space-between",
+                fontSize: 13, color: DARK, marginBottom: 4 }}>
+                <span style={{ color: MUTED }}>{it.qty}× {it.name}</span>
+                <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(it.price * it.qty)}</span>
               </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between",
+              fontWeight: 800, fontSize: 15, marginTop: 10, paddingTop: 10,
+              borderTop: `0.5px solid ${BORDER}` }}>
+              <span>Total</span>
+              <span style={{ color: BROWN, fontFamily: FS, fontStyle: "italic" }}>{fmt(o.total)}</span>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
     </div>

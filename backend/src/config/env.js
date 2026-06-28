@@ -24,12 +24,12 @@ export const env = {
   REDIS_PASSWORD: optional("REDIS_PASSWORD", ""),
 
   // App
-  APP_URL:      optional("APP_URL", "https://tabliereci.ci"),
+  APP_URL:      optional("APP_URL", "https://tabliereci.com"),
   FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
 
   // SendGrid (email)
   SENDGRID_API_KEY: optional("SENDGRID_API_KEY", ""),
-  EMAIL_FROM:       optional("EMAIL_FROM", "noreply@tabliereci.ci"),
+  EMAIL_FROM:       optional("EMAIL_FROM", "noreply@tabliereci.com"),
 
   // WhatsApp Business API
   WHATSAPP_TOKEN:    optional("WHATSAPP_TOKEN", ""),

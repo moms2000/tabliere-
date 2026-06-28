@@ -30,7 +30,7 @@ export default function MentionsLegales() {
         {[
           {
             title: "Éditeur du site",
-            content: `Raison sociale : TablièreCI\nForme juridique : SARL (Société à Responsabilité Limitée)\nCapital social : [À compléter lors de l'immatriculation]\nSiège social : Abidjan, Plateau, Côte d'Ivoire\nRCCM : [À compléter lors de l'immatriculation]\nNuméro fiscal : [À compléter]\nDirecteur de la publication : Mohamed Coulibaly\nTéléphone : +225 07 00 00 00 00\nE-mail : contact@tabliereci.ci`
+            content: `Raison sociale : TablièreCI\nForme juridique : SARL (Société à Responsabilité Limitée)\nCapital social : [À compléter lors de l'immatriculation]\nSiège social : Abidjan, Plateau, Côte d'Ivoire\nRCCM : [À compléter lors de l'immatriculation]\nNuméro fiscal : [À compléter]\nDirecteur de la publication : Mohamed Coulibaly\nTéléphone : +225 07 00 00 00 00\nE-mail : contact@tabliereci.com`
           },
           {
             title: "Hébergement",
@@ -38,11 +38,11 @@ export default function MentionsLegales() {
           },
           {
             title: "Propriété intellectuelle",
-            content: `L'ensemble des contenus présents sur tabliereci.ci (textes, images, graphismes, logo, icônes, sons, logiciels) est la propriété exclusive de TablièreCI ou de ses partenaires, et est protégé par les lois ivoiriennes et internationales relatives à la propriété intellectuelle.\n\nToute reproduction, représentation, modification, publication, adaptation ou exploitation, totale ou partielle, des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable de TablièreCI.\n\nToute exploitation non autorisée du site ou de son contenu sera considérée comme constitutive d'une contrefaçon et poursuivie conformément aux dispositions légales en vigueur en Côte d'Ivoire.`
+            content: `L'ensemble des contenus présents sur tabliereci.com (textes, images, graphismes, logo, icônes, sons, logiciels) est la propriété exclusive de TablièreCI ou de ses partenaires, et est protégé par les lois ivoiriennes et internationales relatives à la propriété intellectuelle.\n\nToute reproduction, représentation, modification, publication, adaptation ou exploitation, totale ou partielle, des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable de TablièreCI.\n\nToute exploitation non autorisée du site ou de son contenu sera considérée comme constitutive d'une contrefaçon et poursuivie conformément aux dispositions légales en vigueur en Côte d'Ivoire.`
           },
           {
             title: "Données personnelles",
-            content: `TablièreCI collecte et traite des données à caractère personnel dans le cadre de la fourniture de ses services. Ces traitements sont effectués conformément à notre Politique de Confidentialité, accessible depuis le pied de page du site.\n\nConformément à la réglementation en vigueur, notamment la loi ivoirienne n° 2013-450 du 19 juin 2013 relative à la protection des données à caractère personnel, vous disposez de droits sur vos données (accès, rectification, effacement, portabilité, opposition).\n\nResponsable du traitement : TablièreCI\nContact DPO : privacy@tabliereci.ci\n\nAutorité de contrôle compétente : ARTCI (Autorité de Régulation des Télécommunications de Côte d'Ivoire)`
+            content: `TablièreCI collecte et traite des données à caractère personnel dans le cadre de la fourniture de ses services. Ces traitements sont effectués conformément à notre Politique de Confidentialité, accessible depuis le pied de page du site.\n\nConformément à la réglementation en vigueur, notamment la loi ivoirienne n° 2013-450 du 19 juin 2013 relative à la protection des données à caractère personnel, vous disposez de droits sur vos données (accès, rectification, effacement, portabilité, opposition).\n\nResponsable du traitement : TablièreCI\nContact DPO : privacy@tabliereci.com\n\nAutorité de contrôle compétente : ARTCI (Autorité de Régulation des Télécommunications de Côte d'Ivoire)`
           },
           {
             title: "Cookies",
@@ -50,7 +50,7 @@ export default function MentionsLegales() {
           },
           {
             title: "Liens hypertextes",
-            content: `TablièreCI peut contenir des liens vers des sites tiers (restaurants partenaires, prestataires de paiement, réseaux sociaux). Ces liens sont fournis à titre informatif uniquement. TablièreCI n'exerce aucun contrôle sur le contenu de ces sites et décline toute responsabilité quant à leur contenu, leur disponibilité ou les pratiques de confidentialité de ces tiers.\n\nLa création de liens hypertextes pointant vers le site tabliereci.ci est soumise à l'accord préalable écrit de TablièreCI.`
+            content: `TablièreCI peut contenir des liens vers des sites tiers (restaurants partenaires, prestataires de paiement, réseaux sociaux). Ces liens sont fournis à titre informatif uniquement. TablièreCI n'exerce aucun contrôle sur le contenu de ces sites et décline toute responsabilité quant à leur contenu, leur disponibilité ou les pratiques de confidentialité de ces tiers.\n\nLa création de liens hypertextes pointant vers le site tabliereci.com est soumise à l'accord préalable écrit de TablièreCI.`
           },
           {
             title: "Limitation de responsabilité",
@@ -58,7 +58,7 @@ export default function MentionsLegales() {
           },
           {
             title: "Droit applicable et juridiction compétente",
-            content: `Les présentes mentions légales sont soumises au droit de la République de Côte d'Ivoire. En cas de litige relatif à l'utilisation du site tabliereci.ci, les tribunaux d'Abidjan seront seuls compétents.\n\nPour toute question relative aux présentes mentions légales :\nE-mail : legal@tabliereci.ci\nAdresse : TablièreCI, Abidjan Plateau, Côte d'Ivoire`
+            content: `Les présentes mentions légales sont soumises au droit de la République de Côte d'Ivoire. En cas de litige relatif à l'utilisation du site tabliereci.com, les tribunaux d'Abidjan seront seuls compétents.\n\nPour toute question relative aux présentes mentions légales :\nE-mail : legal@tabliereci.com\nAdresse : TablièreCI, Abidjan Plateau, Côte d'Ivoire`
           },
         ].map((s, i) => (
           <section key={i} style={{ marginBottom: 32 }}>

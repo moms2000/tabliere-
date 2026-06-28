@@ -54,7 +54,7 @@ export default function Confidentialite() {
           },
           {
             title: "7. Vos droits",
-            content: `Conformément à la réglementation applicable, vous disposez des droits suivants :\n\n• Droit d'accès : obtenir une copie de vos données\n• Droit de rectification : corriger des données inexactes\n• Droit à l'effacement : supprimer votre compte et vos données\n• Droit d'opposition : vous opposer à certains traitements\n• Droit à la portabilité : recevoir vos données dans un format lisible\n• Droit de retrait du consentement : à tout moment\n\nPour exercer vos droits, contactez-nous : privacy@tabliereci.ci`
+            content: `Conformément à la réglementation applicable, vous disposez des droits suivants :\n\n• Droit d'accès : obtenir une copie de vos données\n• Droit de rectification : corriger des données inexactes\n• Droit à l'effacement : supprimer votre compte et vos données\n• Droit d'opposition : vous opposer à certains traitements\n• Droit à la portabilité : recevoir vos données dans un format lisible\n• Droit de retrait du consentement : à tout moment\n\nPour exercer vos droits, contactez-nous : privacy@tabliereci.com`
           },
           {
             title: "8. Cookies",
@@ -66,7 +66,7 @@ export default function Confidentialite() {
           },
           {
             title: "10. Contact",
-            content: `Pour toute question relative à la protection de vos données :\n\nTablièreCI — Délégué à la protection des données\nE-mail : privacy@tabliereci.ci\nAdresse : Abidjan, Côte d'Ivoire\nTéléphone : +225 07 00 00 00 00\n\nVous pouvez également adresser une réclamation auprès de l'Autorité de Régulation des Télécommunications de Côte d'Ivoire (ARTCI).`
+            content: `Pour toute question relative à la protection de vos données :\n\nTablièreCI — Délégué à la protection des données\nE-mail : privacy@tabliereci.com\nAdresse : Abidjan, Côte d'Ivoire\nTéléphone : +225 07 00 00 00 00\n\nVous pouvez également adresser une réclamation auprès de l'Autorité de Régulation des Télécommunications de Côte d'Ivoire (ARTCI).`
           },
         ].map((s, i) => (
           <section key={i} style={{ marginBottom: 32 }}>

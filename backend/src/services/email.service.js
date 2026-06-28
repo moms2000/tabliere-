@@ -71,7 +71,7 @@ function baseLayout(content) {
     <!-- Footer -->
     <p style="text-align:center;color:#c0bab4;font-size:11px;margin-top:18px;line-height:1.6;">
       TablièreCI — La réservation facile en Côte d'Ivoire<br>
-      <a href="https://tabliereci.ci" style="color:#e8a045;text-decoration:none;">tabliereci.ci</a>
+      <a href="https://tabliereci.com" style="color:#e8a045;text-decoration:none;">tabliereci.com</a>
     </p>
   </div>
 </body>
@@ -155,7 +155,7 @@ async function sendCancellation({ email, name, restoName, ref, reason }) {
     </div>` : ""}
     <p style="color:#9ba89f;font-size:12px;text-align:center;margin:0;">
       Vous pouvez réserver une nouvelle table sur
-      <a href="https://tabliereci.ci" style="color:#e8a045;text-decoration:none;">tabliereci.ci</a>
+      <a href="https://tabliereci.com" style="color:#e8a045;text-decoration:none;">tabliereci.com</a>
     </p>
   `);
 

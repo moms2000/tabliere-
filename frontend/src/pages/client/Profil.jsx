@@ -170,7 +170,7 @@ export default function Profil() {
 
   // Partage réservation via WhatsApp
   const shareReservation = (r) => {
-    const text = `🗓️ J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi ! 🍽️\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliere.vercel.app`;
+    const text = `🗓️ J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi ! 🍽️\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliereci.com`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
     setShareToast("Lien WhatsApp ouvert !");

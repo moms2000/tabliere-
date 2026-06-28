@@ -465,7 +465,7 @@ export default function RestReservations() {
     localStorage.setItem("tci_waitlist", JSON.stringify(updated));
     const w = waitlist.find(x => x.id === id);
     if (w?.phone) {
-      const msg = encodeURIComponent(`🍽️ Une table se libère chez votre restaurant ! Cliquez ici pour confirmer votre réservation : tabliere.vercel.app`);
+      const msg = encodeURIComponent(`🍽️ Une table se libère chez votre restaurant ! Cliquez ici pour confirmer votre réservation : tabliereci.com`);
       window.open(`https://wa.me/${w.phone.replace(/\D/g,"")}?text=${msg}`, "_blank");
     }
   };

@@ -59,7 +59,7 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
   );
 
   const data = { restaurant: resto, categories };
-  await cache.set(cacheKey, data, 180).catch(() => {});
+  await cache.set(cacheKey, data, 600).catch(() => {}); // 10 min
   return ok(res, data);
 });
 

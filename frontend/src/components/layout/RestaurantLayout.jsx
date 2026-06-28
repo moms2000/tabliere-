@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag, Zap } from "lucide-react";
+import axios from "axios";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
@@ -136,6 +137,16 @@ export default function RestaurantLayout() {
       "reservation"
     ),
   }, !!user);
+
+  // Keep-alive ping
+  useEffect(() => {
+    if (!user) return;
+    const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1").replace("/api/v1", "");
+    const ping = () => axios.get(`${baseUrl}/ping`, { timeout: 5000 }).catch(() => {});
+    ping();
+    const id = setInterval(ping, 8 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [user]);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 

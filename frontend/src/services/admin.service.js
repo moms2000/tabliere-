@@ -1,23 +1,36 @@
 import api from "./api.js";
+import { memCache } from "./cache.js";
 
 export const adminService = {
   async getStats() {
+    const cKey = "admin:stats";
+    const hit = memCache.get(cKey);
+    if (hit) return hit;
     const res = await api.get("/admin/stats");
-    return res.data.data;
+    const data = res.data.data;
+    memCache.set(cKey, data, 5 * 60_000); // 5 min
+    return data;
   },
 
   async listRestaurants(params = {}) {
+    // Cache uniquement si pas de filtres dynamiques
+    const hasFilters = params.search || params.status || params.plan;
+    const cKey = hasFilters ? null : `admin:restaurants:${params.page || 1}:${params.limit || 20}`;
+    if (cKey) { const hit = memCache.get(cKey); if (hit) return hit; }
     const res = await api.get("/admin/restaurants", { params });
+    if (cKey) memCache.set(cKey, res.data, 2 * 60_000); // 2 min
     return res.data;
   },
 
   async setRestaurantStatus(id, status) {
     const res = await api.patch(`/admin/restaurants/${id}/status`, { status });
+    memCache.delPrefix("admin:"); // invalider stats + liste
     return res.data.data;
   },
 
   async setRestaurantPlan(id, plan) {
     const res = await api.patch(`/admin/restaurants/${id}/plan`, { plan });
+    memCache.delPrefix("admin:");
     return res.data.data;
   },
 

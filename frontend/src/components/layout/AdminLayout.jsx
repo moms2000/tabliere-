@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
 import api from "../../services/api.js";
+import axios from "axios";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -176,6 +177,17 @@ export default function AdminLayout() {
   };
 
   const unreadCount = notifs.filter(n => !n.is_read).length;
+
+  // ── Keep-alive : ping toutes les 8 min pour éviter le cold start Render ────
+  useEffect(() => {
+    if (!user) return;
+    const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1")
+      .replace("/api/v1", "");
+    const ping = () => axios.get(`${baseUrl}/ping`, { timeout: 5000 }).catch(() => {});
+    ping(); // ping immédiat au login admin
+    const id = setInterval(ping, 8 * 60 * 1000); // toutes les 8 min
+    return () => clearInterval(id);
+  }, [user]);
 
   // Fermer le drawer mobile à chaque changement de route
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);

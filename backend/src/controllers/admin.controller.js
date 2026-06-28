@@ -43,7 +43,7 @@ export const getStats = asyncHandler(async (_req, res) => {
   ]);
 
   const data = { global: global, byPlan, revenue, recentActivity };
-  await cache.set(cacheKey, data, 60); // 60s
+  await cache.set(cacheKey, data, 300); // 5 min
   return ok(res, data);
 });
 

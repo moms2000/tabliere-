@@ -1,7 +1,62 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./index.css";
 
+import { AuthProvider }     from "./context/AuthContext.jsx";
+import { LanguageProvider } from "./context/LanguageContext.jsx";
+import { ToastProvider }    from "./components/ui/Toast.jsx";
+import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
+
+// ── Lazy imports : chaque page est chargée à la demande ──────────────────────
+const AdminLayout       = lazy(() => import("./components/layout/AdminLayout"));
+const AdminOverview     = lazy(() => import("./pages/admin/AdminOverview"));
+const Restaurateurs     = lazy(() => import("./pages/admin/Restaurateurs"));
+const Utilisateurs      = lazy(() => import("./pages/admin/Utilisateurs"));
+const Reservations      = lazy(() => import("./pages/admin/Reservations"));
+const Finances          = lazy(() => import("./pages/admin/Finances"));
+const Systeme           = lazy(() => import("./pages/admin/Systeme"));
+const Parametres        = lazy(() => import("./pages/admin/Parametres"));
+const QRThemes          = lazy(() => import("./pages/admin/QRThemes"));
+
+const RestaurantLayout  = lazy(() => import("./components/layout/RestaurantLayout"));
+const RestDashboard     = lazy(() => import("./pages/restaurant/RestDashboard"));
+const RestMenu          = lazy(() => import("./pages/restaurant/RestMenu"));
+const RestReservations  = lazy(() => import("./pages/restaurant/RestReservations"));
+const RestPlanSalle     = lazy(() => import("./pages/restaurant/RestPlanSalle"));
+const RestProfil        = lazy(() => import("./pages/restaurant/RestProfil"));
+const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"));
+const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
+
+const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
+const Profil            = lazy(() => import("./pages/client/Profil"));
+
+// Pages publiques — préchargées car critiques au premier chargement
+import Home             from "./pages/public/Home";
+import Connexion        from "./pages/public/Connexion";
+import Inscription      from "./pages/public/Inscription";
+import RestaurantDetail from "./pages/public/RestaurantDetail";
+import NotFound         from "./pages/public/NotFound";
+
+// ── Fallback de chargement ────────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+      height: "100vh", background: "#F8F5EF" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ width: 36, height: 36, border: "3px solid #E4DFD8",
+          borderTopColor: "#E8A045", borderRadius: "50%",
+          animation: "spin 0.7s linear infinite", margin: "0 auto 12px" }} />
+        <div style={{ fontSize: 13, color: "#9BA89F", fontFamily: "'Avenir Next', sans-serif" }}>
+          Chargement…
+        </div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ── ErrorBoundary ─────────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
   state = { error: null };
   static getDerivedStateFromError(e) { return { error: e }; }
@@ -13,103 +68,77 @@ class ErrorBoundary extends React.Component {
           <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>
             {this.state.error?.message}{"\n\n"}{this.state.error?.stack}
           </pre>
+          <button onClick={() => window.location.reload()}
+            style={{ marginTop: 16, padding: "8px 20px", background: "#E8A045",
+              color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>
+            Recharger
+          </button>
         </div>
       );
     }
     return this.props.children;
   }
 }
-import NotFound from "./pages/public/NotFound.jsx";
-import "./index.css";
-
-import { AuthProvider }     from "./context/AuthContext.jsx";
-import { LanguageProvider } from "./context/LanguageContext.jsx";
-import { ToastProvider }    from "./components/ui/Toast.jsx";
-import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
-
-import AdminLayout   from "./components/layout/AdminLayout";
-import AdminOverview from "./pages/admin/AdminOverview";
-import Restaurateurs from "./pages/admin/Restaurateurs";
-import Utilisateurs  from "./pages/admin/Utilisateurs";
-import Reservations  from "./pages/admin/Reservations";
-import Finances      from "./pages/admin/Finances";
-import Systeme       from "./pages/admin/Systeme";
-import Parametres    from "./pages/admin/Parametres";
-import QRThemes      from "./pages/admin/QRThemes";
-
-import RestaurantLayout from "./components/layout/RestaurantLayout";
-import RestDashboard    from "./pages/restaurant/RestDashboard";
-import RestMenu         from "./pages/restaurant/RestMenu";
-import RestReservations from "./pages/restaurant/RestReservations";
-import RestPlanSalle    from "./pages/restaurant/RestPlanSalle";
-import RestProfil       from "./pages/restaurant/RestProfil";
-import RestCommandes    from "./pages/restaurant/RestCommandes";
-import RestPOS          from "./pages/restaurant/RestPOS";
-
-import ClientMenu       from "./pages/client/ClientMenu";
-import Profil           from "./pages/client/Profil";
-import Home             from "./pages/public/Home";
-import Connexion        from "./pages/public/Connexion";
-import Inscription      from "./pages/public/Inscription";
-import RestaurantDetail from "./pages/public/RestaurantDetail";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
-    <BrowserRouter>
-      <LanguageProvider>
-        <ToastProvider>
-        <AuthProvider>
-          <Routes>
-            {/* ── Pages publiques ─────────────────────────────────────────── */}
-            <Route path="/"                  element={<Home />} />
-            <Route path="/connexion"         element={<Connexion />} />
-            <Route path="/inscription"       element={<Inscription />} />
-            <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
+      <BrowserRouter>
+        <LanguageProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* ── Pages publiques ─────────────────────────────────── */}
+                  <Route path="/"                  element={<Home />} />
+                  <Route path="/connexion"         element={<Connexion />} />
+                  <Route path="/inscription"       element={<Inscription />} />
+                  <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
 
-            {/* ── Client — espace personnel ────────────────────────────────── */}
-            <Route path="/profil" element={
-              <ProtectedRoute roles={["client","restaurateur","admin"]}>
-                <Profil />
-              </ProtectedRoute>
-            } />
+                  {/* ── Client ──────────────────────────────────────────── */}
+                  <Route path="/profil" element={
+                    <ProtectedRoute roles={["client","restaurateur","admin"]}>
+                      <Profil />
+                    </ProtectedRoute>
+                  } />
 
-            {/* ── Admin ────────────────────────────────────────────────────── */}
-            <Route path="/admin" element={
-              <ProtectedRoute roles="admin"><AdminLayout /></ProtectedRoute>
-            }>
-              <Route index              element={<AdminOverview />} />
-              <Route path="restaurateurs" element={<Restaurateurs />} />
-              <Route path="utilisateurs"  element={<Utilisateurs />} />
-              <Route path="reservations"  element={<Reservations />} />
-              <Route path="finances"      element={<Finances />} />
-              <Route path="systeme"       element={<Systeme />} />
-              <Route path="parametres"    element={<Parametres />} />
-              <Route path="qr-themes"     element={<QRThemes />} />
-            </Route>
+                  {/* ── Admin ────────────────────────────────────────────── */}
+                  <Route path="/admin" element={
+                    <ProtectedRoute roles="admin"><AdminLayout /></ProtectedRoute>
+                  }>
+                    <Route index              element={<AdminOverview />} />
+                    <Route path="restaurateurs" element={<Restaurateurs />} />
+                    <Route path="utilisateurs"  element={<Utilisateurs />} />
+                    <Route path="reservations"  element={<Reservations />} />
+                    <Route path="finances"      element={<Finances />} />
+                    <Route path="systeme"       element={<Systeme />} />
+                    <Route path="parametres"    element={<Parametres />} />
+                    <Route path="qr-themes"     element={<QRThemes />} />
+                  </Route>
 
-            {/* ── Restaurateur ─────────────────────────────────────────────── */}
-            <Route path="/restaurant" element={
-              <ProtectedRoute roles="restaurateur"><RestaurantLayout /></ProtectedRoute>
-            }>
-              <Route index               element={<RestDashboard />} />
-              <Route path="menu"         element={<RestMenu />} />
-              <Route path="reservations" element={<RestReservations />} />
-              <Route path="plan"         element={<RestPlanSalle />} />
-              <Route path="profil"       element={<RestProfil />} />
-              <Route path="commandes"    element={<RestCommandes />} />
-              <Route path="pos"          element={<RestPOS />} />
-            </Route>
+                  {/* ── Restaurateur ─────────────────────────────────────── */}
+                  <Route path="/restaurant" element={
+                    <ProtectedRoute roles="restaurateur"><RestaurantLayout /></ProtectedRoute>
+                  }>
+                    <Route index               element={<RestDashboard />} />
+                    <Route path="menu"         element={<RestMenu />} />
+                    <Route path="reservations" element={<RestReservations />} />
+                    <Route path="plan"         element={<RestPlanSalle />} />
+                    <Route path="profil"       element={<RestProfil />} />
+                    <Route path="commandes"    element={<RestCommandes />} />
+                    <Route path="pos"          element={<RestPOS />} />
+                  </Route>
 
-            {/* ── Client — accès via QR (public) ───────────────────────────── */}
-            <Route path="/menu/:slug" element={<ClientMenu />} />
+                  {/* ── QR Menu client ─────────────────────────────────── */}
+                  <Route path="/menu/:slug" element={<ClientMenu />} />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-        </ToastProvider>
-      </LanguageProvider>
-    </BrowserRouter>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </AuthProvider>
+          </ToastProvider>
+        </LanguageProvider>
+      </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>
 );

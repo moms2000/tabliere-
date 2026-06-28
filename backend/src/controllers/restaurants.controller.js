@@ -77,7 +77,7 @@ export const getOne = asyncHandler(async (req, res) => {
   );
   resto.tables = tables;
 
-  await cache.set(cacheKey, resto, 120).catch(() => {});
+  await cache.set(cacheKey, resto, 600).catch(() => {}); // 10 min
   return ok(res, { restaurant: resto });
 });
 

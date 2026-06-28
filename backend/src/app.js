@@ -1,7 +1,8 @@
-import express from "express";
-import cors    from "cors";
-import helmet  from "helmet";
-import morgan  from "morgan";
+import express     from "express";
+import cors        from "cors";
+import helmet      from "helmet";
+import morgan      from "morgan";
+import compression from "compression";
 
 import { env }          from "./config/env.js";
 import { poolStats }    from "./config/db.js";
@@ -21,6 +22,9 @@ import notificationsRoutes from "./routes/notifications.routes.js";
 import ordersRoutes        from "./routes/orders.routes.js";
 
 const app = express();
+
+// ── Compression gzip (réduit les réponses de 60-80%) ────────────────────────
+app.use(compression({ level: 6, threshold: 1024 }));
 
 // ── Sécurité ────────────────────────────────────────────────────────────────
 app.use(helmet());
@@ -67,6 +71,9 @@ app.use(`${v1}/admin`,         adminRoutes);
 app.use(`${v1}/chat`,          chatRoutes);
 app.use(`${v1}/notifications`, notificationsRoutes);
 app.use(`${v1}/orders`,        ordersRoutes);
+
+// ── Ping keep-alive (ultra-léger, empêche le cold start Render) ─────────────
+app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

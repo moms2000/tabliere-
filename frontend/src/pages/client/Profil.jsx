@@ -8,6 +8,7 @@ import {
   Clock, ChevronRight, Loader2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import api from "../../services/api.js";
 import { useLang } from "../../context/LanguageContext.jsx";
 import { reservationsService } from "../../services/reservations.service.js";
 import { notificationsService, chatService } from "../../services/chat.service.js";
@@ -139,9 +140,24 @@ export default function Profil() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const b64 = ev.target.result;
-      setPhoto(b64);
-      localStorage.setItem("tci_avatar", b64);
+      // Comprimer à max 400px pour éviter les trop gros payloads
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        const b64 = canvas.toDataURL("image/jpeg", 0.78);
+        setPhoto(b64);
+        localStorage.setItem("tci_avatar", b64);
+        setSaved(false); // ← active le bouton Sauvegarder
+      };
+      img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   };
@@ -326,10 +342,24 @@ export default function Profil() {
                   value={form.phone} onChange={v => { setForm(p => ({ ...p, phone: v })); setSaved(false); }}
                   placeholder="+225 07 00 00 00" />
               </div>
-              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setSaved(true)}
+              <motion.button whileTap={{ scale: 0.97 }}
+                onClick={async () => {
+                  try {
+                    const payload = {
+                      full_name:  form.nom   || undefined,
+                      phone:      form.phone || undefined,
+                      avatar_url: photo      || undefined,
+                    };
+                    await api.patch("/users/me", payload);
+                    if (photo) localStorage.setItem("tci_avatar", photo);
+                    setSaved(true);
+                  } catch (e) {
+                    alert(e.response?.data?.message || "Erreur lors de la sauvegarde");
+                  }
+                }}
                 style={{ marginTop: 16, background: G, color: "white", border: "none",
                   borderRadius: 9, padding: "11px 0", width: "100%", fontSize: 14,
-                  fontWeight: 600, cursor: "pointer", opacity: saved ? 0.5 : 1 }}
+                  fontWeight: 600, cursor: saved ? "default" : "pointer", opacity: saved ? 0.5 : 1 }}
                 disabled={saved}>
                 {saved ? "✓ Enregistré" : t("profile_save")}
               </motion.button>

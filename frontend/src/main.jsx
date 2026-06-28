@@ -36,6 +36,9 @@ import Home             from "./pages/public/Home";
 import Connexion        from "./pages/public/Connexion";
 import Inscription      from "./pages/public/Inscription";
 import RestaurantDetail from "./pages/public/RestaurantDetail";
+const Confidentialite  = lazy(() => import("./pages/public/Confidentialite"));
+const CGU              = lazy(() => import("./pages/public/CGU"));
+const MentionsLegales  = lazy(() => import("./pages/public/MentionsLegales"));
 import NotFound         from "./pages/public/NotFound";
 
 // ── Fallback de chargement ────────────────────────────────────────────────────
@@ -94,6 +97,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/connexion"         element={<Connexion />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
+                  <Route path="/confidentialite"   element={<Confidentialite />} />
+                  <Route path="/cgu"               element={<CGU />} />
+                  <Route path="/mentions-legales"  element={<MentionsLegales />} />
 
                   {/* ── Client — profil personnel (clients uniquement) ── */}
                   <Route path="/profil" element={

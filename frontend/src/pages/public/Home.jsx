@@ -403,8 +403,17 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
               textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 14 }}>
               Restaurateurs
             </div>
-            {["Créer un compte", "Gérer mon restaurant", "QR Code menu", "Tarifs"].map((l, i) => (
-              <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>{l}</div>
+            {[
+              { label: "Créer un compte",     href: "/inscription?role=restaurateur" },
+              { label: "Gérer mon restaurant", href: "/connexion?role=restaurateur" },
+            ].map((l, i) => (
+              <a key={i} href={l.href}
+                style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.5)",
+                  marginBottom: 10, textDecoration: "none", transition: "color .15s" }}
+                onMouseEnter={e => e.target.style.color = WHITE}
+                onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.5)"}>
+                {l.label}
+              </a>
             ))}
           </div>
 
@@ -438,13 +447,23 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
 
         {/* Bottom bar */}
         <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.08)", paddingTop: 18,
-          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-            © 2025 TablièreCI. Tous droits réservés.
+            © 2026 TablièreCI. Tous droits réservés.
           </span>
           <div style={{ display: "flex", gap: 20 }}>
-            {["Confidentialité", "CGU", "Mentions légales"].map((l, i) => (
-              <span key={i} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", cursor: "pointer" }}>{l}</span>
+            {[
+              { label: "Confidentialité",  href: "/confidentialite" },
+              { label: "CGU",              href: "/cgu" },
+              { label: "Mentions légales", href: "/mentions-legales" },
+            ].map(({ label, href }, i) => (
+              <a key={i} href={href}
+                style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", cursor: "pointer",
+                  textDecoration: "none", transition: "color .15s" }}
+                onMouseEnter={e => e.target.style.color = "rgba(255,255,255,0.7)"}
+                onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.35)"}>
+                {label}
+              </a>
             ))}
           </div>
         </div>
@@ -501,8 +520,29 @@ export default function Home() {
   const [resaTime,   setResaTime]   = useState("19:00");
   const [resaGuests, setResaGuests] = useState(2);
   const [openFilter, setOpenFilter] = useState(null); // "date" | "time" | "guests" | null
+  const [locating,   setLocating]   = useState(false);
+  const [locCity,    setLocCity]    = useState("");
 
   const toggleFilter = (name) => setOpenFilter(f => f === name ? null : name);
+
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) { alert("Géolocalisation non supportée"); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        // Détection simple basée sur les coordonnées CI
+        const city = latitude >= 4.8 && latitude <= 6.2 && longitude >= -5.5 && longitude <= -3.5
+          ? "Abidjan" : latitude >= 6.5 ? "Bouaké" : latitude >= 7.3 ? "Korhogo" : "Abidjan";
+        setLocCity(city);
+        setSearch(city);
+        setLocating(false);
+        scrollTo(listRef);
+      },
+      () => { setLocating(false); alert("Impossible de détecter votre position"); },
+      { timeout: 8000 }
+    );
+  };
 
   const TABS = [
     { key: "tab_all",       params: {} },
@@ -846,12 +886,12 @@ export default function Home() {
               {t("hero_sub")}
             </motion.p>
 
-            {/* ── Barre OpenTable ── */}
+            {/* ── Barre de recherche ── */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              style={{ display: "flex", background: WHITE, borderRadius: 12,
-                border: `0.5px solid ${BORDER}`, overflow: "visible",
-                maxWidth: 680, boxShadow: "0 2px 20px rgba(30,46,40,.08)" }}>
+              style={{ display: "flex", background: WHITE, borderRadius: 14,
+                border: `1px solid ${BORDER}`, overflow: "visible",
+                maxWidth: 780, boxShadow: "0 4px 32px rgba(30,46,40,.12)" }}>
 
               {/* Date */}
               <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>
@@ -933,6 +973,20 @@ export default function Home() {
                   flexShrink: 0, fontFamily: FONT, letterSpacing: "0.2px" }}>
                 {t("search_btn")}
               </motion.button>
+            </motion.div>
+
+            {/* Géolocalisation */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
+              style={{ marginTop: 14 }}>
+              <button onClick={handleGeolocate} disabled={locating}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent",
+                  border: "none", cursor: locating ? "default" : "pointer",
+                  fontSize: 12, color: MUTED, fontFamily: FONT, padding: 0 }}>
+                <MapPin size={13} color={locating ? BORDER : S} />
+                {locating ? "Localisation en cours…"
+                  : locCity ? `📍 Position détectée : ${locCity}`
+                  : "📍 Utiliser ma position (facultatif)"}
+              </button>
             </motion.div>
           </div>
 
@@ -1189,7 +1243,7 @@ const menuBtn = {
 };
 
 const filterCell = {
-  display: "flex", alignItems: "center", gap: 8, padding: "14px 16px",
+  display: "flex", alignItems: "center", gap: 8, padding: "18px 18px",
   background: "transparent", border: "none", cursor: "pointer",
   fontFamily: FONT, whiteSpace: "nowrap",
 };

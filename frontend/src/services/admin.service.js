@@ -61,6 +61,31 @@ export const adminService = {
     return res.data.data;
   },
 
+  async deleteUser(id) {
+    const res = await api.delete(`/admin/users/${id}`);
+    return res.data;
+  },
+
+  async toggleRestaurantQR(id, active) {
+    const res = await api.patch(`/admin/restaurants/${id}/qr`, { active });
+    return res.data.data;
+  },
+
+  async getSettings() {
+    const res = await api.get("/admin/settings");
+    return res.data.data.settings;
+  },
+
+  async updateSettings(settings) {
+    const res = await api.patch("/admin/settings", settings);
+    return res.data;
+  },
+
+  async changePassword(current_password, new_password) {
+    const res = await api.post("/admin/change-password", { current_password, new_password });
+    return res.data;
+  },
+
   async exportCSV(type) {
     const res = await api.get("/admin/export", { params: { type }, responseType: "blob" });
     const url  = URL.createObjectURL(res.data);

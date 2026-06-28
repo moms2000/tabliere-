@@ -201,6 +201,67 @@ export default function Systeme() {
           </Card>
         </motion.div>
       )}
+
+      {/* Alertes système */}
+      {health && (() => {
+        const alerts = [];
+        if (health.latency > 500) alerts.push({ level: "ERROR", msg: `Latence API critique : ${health.latency}ms (seuil : 500ms) — vérifier la charge serveur` });
+        else if (health.latency > 200) alerts.push({ level: "WARN", msg: `Latence API élevée : ${health.latency}ms — surveiller` });
+        if (health.memory_mb > 400) alerts.push({ level: "WARN", msg: `Mémoire élevée : ${health.memory_mb} MB — envisager un redémarrage` });
+        if ((health.db?.pool_waiting || 0) > 0) alerts.push({ level: "ERROR", msg: `${health.db.pool_waiting} requête(s) DB en file d'attente — risque de timeout` });
+        if ((health.db?.pool_total || 0) >= (health.db?.pool_max || 10) - 1) alerts.push({ level: "WARN", msg: "Pool de connexions presque saturé — augmenter pool_max si besoin" });
+        if (health.status !== "ok") alerts.push({ level: "ERROR", msg: `Santé serveur dégradée : ${health.status}` });
+
+        if (alerts.length === 0) return (
+          <motion.div variants={fadeUp} style={{ marginTop: 14 }}>
+            <div style={{ padding: "12px 16px", background: "#f0f6f2", borderRadius: 10,
+              fontSize: 13, color: "#1D9E75", display: "flex", alignItems: "center", gap: 8 }}>
+              ✓ Aucune alerte — tous les indicateurs sont dans les normes
+            </div>
+          </motion.div>
+        );
+
+        return (
+          <motion.div variants={fadeUp} style={{ marginTop: 14 }}>
+            <Card>
+              <SectionHeader title={`⚠ ${alerts.length} alerte${alerts.length > 1 ? "s" : ""} système`} />
+              {alerts.map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, padding: "9px 0",
+                  borderBottom: i < alerts.length - 1 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap",
+                    background: LOG_BG[a.level], color: LOG_COLOR[a.level], flexShrink: 0, marginTop: 1 }}>
+                    {a.level}
+                  </span>
+                  <div style={{ fontSize: 12, color: "#333" }}>{a.msg}</div>
+                </div>
+              ))}
+            </Card>
+          </motion.div>
+        );
+      })()}
+
+      {/* Recommandations */}
+      <motion.div variants={fadeUp} style={{ marginTop: 14 }}>
+        <Card>
+          <SectionHeader title="Recommandations & bonnes pratiques" icon={CheckCircle} />
+          {[
+            { ok: (health?.db?.pool_waiting || 0) === 0, msg: "Pool DB : 0 connexion en attente", tip: "Augmenter DATABASE_POOL_MAX si > 0 fréquemment" },
+            { ok: (health?.memory_mb || 0) < 400,         msg: `Mémoire < 400 MB (actuel : ${health?.memory_mb || 0} MB)`, tip: "Redémarrer le service si > 450 MB en continu" },
+            { ok: (health?.latency || 0) < 300,           msg: `Latence API < 300ms (actuel : ${health?.latency || 0}ms)`, tip: "Activer le cache Redis pour réduire la latence" },
+            { ok: true,                                    msg: "CORS configuré (domaines Vercel autorisés)", tip: "" },
+            { ok: true,                                    msg: "Rate limiting activé (/api/*)", tip: "" },
+          ].map((r, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0",
+              borderBottom: i < 4 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>{r.ok ? "✅" : "⚠️"}</span>
+              <div>
+                <div style={{ fontSize: 12, color: r.ok ? "#1e2e28" : "#993C1D", fontWeight: r.ok ? 400 : 500 }}>{r.msg}</div>
+                {!r.ok && r.tip && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{r.tip}</div>}
+              </div>
+            </div>
+          ))}
+        </Card>
+      </motion.div>
     </motion.div>
   );
 }

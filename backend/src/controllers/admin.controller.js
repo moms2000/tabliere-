@@ -141,22 +141,31 @@ export const setRestaurantPlan = asyncHandler(async (req, res) => {
 // GET /admin/users
 // ---------------------------------------------------------------------------
 export const listUsers = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, role, status, search } = req.query;
+  const { page = 1, limit = 30, role, status, search, sort = "name" } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
   const conditions = [];
 
-  if (role)   { params.push(role);         conditions.push(`role = $${params.length}`); }
-  if (status) { params.push(status);       conditions.push(`status = $${params.length}`); }
+  // Exclure les comptes anonymisés (supprimés)
+  conditions.push(`full_name != 'Compte supprimé'`);
+
+  if (role)   { params.push(role);          conditions.push(`role = $${params.length}`); }
+  if (status) {
+    // "bloque" → chercher suspendu en DB
+    const dbStatus = status === "bloque" ? "suspendu" : status;
+    params.push(dbStatus); conditions.push(`status = $${params.length}`);
+  }
   if (search) { params.push(`%${search}%`); conditions.push(`(full_name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const ORDER_MAP = { name: "full_name ASC", recent: "created_at DESC", old: "created_at ASC" };
+  const orderBy = ORDER_MAP[sort] || "full_name ASC";
 
   const { rows } = await query(
     `SELECT id, full_name, email, phone, role, status, created_at,
        (SELECT COUNT(*) FROM reservations WHERE client_id = users.id) AS resa_count
      FROM users ${where}
-     ORDER BY created_at DESC
+     ORDER BY ${orderBy}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
@@ -175,16 +184,46 @@ export const setUserStatus = asyncHandler(async (req, res) => {
   const allowed = ["actif","bloque","suspendu"];
   if (!allowed.includes(status)) throw new AppError(`Statut invalide. Valeurs: ${allowed.join(", ")}`, 400);
 
+  // "bloque" → "suspendu" (même effet DB, même restriction de connexion)
+  const dbStatus = status === "bloque" ? "suspendu" : status;
+
   const { rows: [user] } = await query(
     "UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, full_name, email, status",
-    [status, req.params.id]
+    [dbStatus, req.params.id]
   );
   if (!user) return notFound(res, "Utilisateur introuvable");
 
-  // Invalider le cache de session de cet utilisateur
   await cache.del(`user:${req.params.id}`);
-  logger.info("Statut utilisateur mis à jour", { userId: user.id, status });
-  return ok(res, { user }, "Statut utilisateur mis à jour");
+  logger.info("Statut utilisateur mis à jour", { userId: user.id, status: dbStatus });
+  return ok(res, { user: { ...user, status: status === "bloque" ? "bloque" : user.status } }, "Statut utilisateur mis à jour");
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /admin/users/:id
+// ---------------------------------------------------------------------------
+export const deleteUser = asyncHandler(async (req, res) => {
+  const { rows: [user] } = await query(
+    "SELECT id, full_name, role FROM users WHERE id = $1", [req.params.id]
+  );
+  if (!user) return notFound(res, "Utilisateur introuvable");
+  if (user.role === "admin") throw new AppError("Impossible de supprimer un administrateur", 403);
+
+  // Soft delete : anonymiser + suspendre
+  await query(
+    `UPDATE users SET
+       email        = 'deleted_' || id || '@tabliereci.ci',
+       full_name    = 'Compte supprimé',
+       phone        = NULL,
+       password_hash = 'DELETED',
+       status       = 'suspendu',
+       updated_at   = NOW()
+     WHERE id = $1`,
+    [req.params.id]
+  );
+
+  await cache.del(`user:${req.params.id}`);
+  logger.info("Utilisateur supprimé (anonymisé)", { userId: req.params.id });
+  return ok(res, null, "Utilisateur supprimé");
 });
 
 // ---------------------------------------------------------------------------
@@ -379,4 +418,118 @@ export const updateReservation = asyncHandler(async (req, res) => {
     values
   );
   return ok(res, { reservation: updated }, "Réservation mise à jour");
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /admin/restaurants/:id/qr — activer/désactiver QR
+// ---------------------------------------------------------------------------
+export const toggleRestaurantQR = asyncHandler(async (req, res) => {
+  const { active } = req.body;
+  if (typeof active !== "boolean") throw new AppError("active (boolean) requis", 400);
+
+  const { rows: [resto] } = await query(
+    "UPDATE restaurants SET qr_active = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, qr_active",
+    [active, req.params.id]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+
+  await cache.delPattern("restaurant:*");
+  logger.info("QR restaurant mis à jour", { restoId: resto.id, qr_active: active });
+  return ok(res, { restaurant: resto }, active ? "QR Menu activé" : "QR Menu désactivé");
+});
+
+// ---------------------------------------------------------------------------
+// GET  /admin/settings — paramètres de la plateforme
+// PATCH /admin/settings — mettre à jour les paramètres
+// ---------------------------------------------------------------------------
+const SETTINGS_DEFAULTS = {
+  notif_reservations: "true",
+  notif_abonnements:  "true",
+  notif_paiements:    "false",
+  notif_whatsapp:     "true",
+  maintenance_mode:   "false",
+  inscriptions_open:  "true",
+  commission_pct:     "5",
+  price_gratuit:      "0",
+  price_standard:     "25000",
+  price_premium:      "60000",
+  session_duration_h: "4",
+};
+
+let settingsMigrated = false;
+async function ensureSettingsTable() {
+  if (settingsMigrated) return;
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS platform_settings (
+        key        VARCHAR(100) PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // Insérer les valeurs par défaut si la table vient d'être créée
+    for (const [k, v] of Object.entries(SETTINGS_DEFAULTS)) {
+      await query(
+        `INSERT INTO platform_settings (key, value) VALUES ($1, $2)
+         ON CONFLICT (key) DO NOTHING`,
+        [k, v]
+      );
+    }
+  } catch (_) {}
+  settingsMigrated = true;
+}
+
+export const getSettings = asyncHandler(async (req, res) => {
+  await ensureSettingsTable();
+  const { rows } = await query("SELECT key, value FROM platform_settings ORDER BY key");
+  const settings = { ...SETTINGS_DEFAULTS };
+  rows.forEach(r => { settings[r.key] = r.value; });
+  return ok(res, { settings });
+});
+
+export const updateSettings = asyncHandler(async (req, res) => {
+  await ensureSettingsTable();
+  const updates = req.body; // { key: value, ... }
+  if (!updates || typeof updates !== "object") throw new AppError("Body invalide", 400);
+
+  for (const [k, v] of Object.entries(updates)) {
+    if (!(k in SETTINGS_DEFAULTS)) continue; // ignorer les clés inconnues
+    await query(
+      `INSERT INTO platform_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [k, String(v)]
+    );
+  }
+
+  // Si maintenance_mode change, loguer
+  if ("maintenance_mode" in updates) {
+    logger.info("Mode maintenance mis à jour", { active: updates.maintenance_mode });
+  }
+
+  return ok(res, null, "Paramètres enregistrés");
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/users/:id/reset-password — envoyer email de réinitialisation
+// ---------------------------------------------------------------------------
+export const changeAdminPassword = asyncHandler(async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) throw new AppError("Mot de passe actuel et nouveau requis", 400);
+  if (new_password.length < 8) throw new AppError("Le nouveau mot de passe doit faire au moins 8 caractères", 400);
+
+  const bcrypt = await import("bcryptjs");
+  const { rows: [admin] } = await query(
+    "SELECT id, password_hash FROM users WHERE id = $1 AND role = 'admin'",
+    [req.user.id]
+  );
+  if (!admin) return notFound(res, "Administrateur introuvable");
+
+  const valid = await bcrypt.default.compare(current_password, admin.password_hash);
+  if (!valid) throw new AppError("Mot de passe actuel incorrect", 401);
+
+  const hash = await bcrypt.default.hash(new_password, 12);
+  await query("UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2", [hash, req.user.id]);
+
+  logger.info("Mot de passe admin changé", { userId: req.user.id });
+  return ok(res, null, "Mot de passe mis à jour avec succès");
 });

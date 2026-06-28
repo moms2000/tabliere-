@@ -1,78 +1,93 @@
 /**
- * ClientMenu — Interface QR premium TablièreCI
- * Design plein écran, immersif, marque TablièreCI en fond
+ * ClientMenu — Interface QR style BBR (Boulay Beach Resort)
+ * Design premium : fond crème, chocolat foncé, typographie serif
+ * Identique à https://bbr-boulay-beach-resort.vercel.app/order
  */
 import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ShoppingBag, Plus, Minus, CheckCircle, ChevronDown, ChevronUp,
-  X, Clock, User, Phone, FileText, History, ArrowLeft, Check, AlertTriangle,
-} from "lucide-react";
+import { Plus, Minus, X, Check, AlertTriangle, History, ArrowLeft, ShoppingBag } from "lucide-react";
 import { menuService }        from "../../services/menu.service.js";
 import { ordersService }      from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 
-const STORAGE_KEY = "tci_qr_orders";
-const saveOrderLocally = (order) => {
-  try {
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    existing.unshift(order);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing.slice(0, 20)));
-  } catch (_) {}
-};
-const loadLocalOrders = () => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
-};
-
-const STATUS_LABELS = { en_attente: "En attente", en_cours: "En préparation", servi: "Servi", annule: "Annulé" };
-const STATUS_COLORS = { en_attente: "#F59E0B", en_cours: "#3B82F6", servi: "#10B981", annule: "#EF4444" };
+/* ── Design tokens BBR ────────────────────────────────────────────────────── */
+const CREAM   = "#FAF6EF";   // fond principal
+const SAND    = "#F2ECE3";   // fond secondaire / cards hover
+const DARK    = "#1C1209";   // texte principal
+const BROWN   = "#3B2010";   // bouton principal (chocolat)
+const TEAL    = "#5B8989";   // accent (tagline "LIFE IS HERE")
+const MUTED   = "#9B8E7E";   // texte secondaire
+const BORDER  = "#E5DDD0";   // séparateurs
+const WHITE   = "#FFFFFF";
+const FONT_S  = "Georgia, 'Times New Roman', serif";
+const FONT    = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
 
 const fmt = (n) => n ? Number(n).toLocaleString("fr-CI") + " F" : "—";
 
-/* ── Logo TablièreCI SVG ──────────────────────────────────────────────────── */
-function TCI({ size = 22, color = "white" }) {
+/* ── Storage commandes ─────────────────────────────────────────────────────── */
+const KEY = "tci_qr_orders";
+const saveOrder = (o) => {
+  try {
+    const arr = JSON.parse(localStorage.getItem(KEY) || "[]");
+    arr.unshift(o);
+    localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 20)));
+  } catch (_) {}
+};
+const loadOrders = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
+
+const STATUS = {
+  en_attente: { label: "En attente",     color: "#8B6914" },
+  en_cours:   { label: "En préparation", color: "#185FA5" },
+  servi:      { label: "Servi",          color: "#1D6B45" },
+  annule:     { label: "Annulé",         color: "#8B1414" },
+};
+
+/* ── Composants ────────────────────────────────────────────────────────────── */
+
+function BtnBrown({ children, onClick, disabled, style = {} }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-      <rect width="40" height="40" rx="9" fill={color} fillOpacity="0.15" />
-      <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill={color} />
-      <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill={color} />
-      <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
-        stroke={color} strokeWidth="1.3" strokeOpacity="0.5" fill="none" />
-    </svg>
+    <motion.button whileTap={{ scale: disabled ? 1 : 0.97 }}
+      onClick={disabled ? undefined : onClick}
+      style={{ background: disabled ? "#C4B8A8" : BROWN, color: WHITE,
+        border: "none", borderRadius: 40, padding: "15px 0",
+        fontSize: 13, fontWeight: 700, letterSpacing: "1.5px",
+        textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: FONT, width: "100%", ...style }}>
+      {children}
+    </motion.button>
   );
 }
 
-/* ── Fond décoratif TablièreCI ─────────────────────────────────────────────── */
-function TCIWatermark({ color }) {
+function HeaderNav({ title, onBack, table }) {
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
-      {/* Cercles décoratifs */}
-      <div style={{ position: "absolute", top: -120, right: -80, width: 400, height: 400,
-        borderRadius: "50%", background: color, opacity: 0.06 }} />
-      <div style={{ position: "absolute", bottom: -100, left: -60, width: 300, height: 300,
-        borderRadius: "50%", background: color, opacity: 0.05 }} />
-      {/* Motif wax ivoirien */}
-      <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0.03 }}
-        viewBox="0 0 400 800" fill="none">
-        {[0,1,2,3].map(row => [0,1,2].map(col => (
-          <g key={`${row}-${col}`} transform={`translate(${col * 140 - 20},${row * 200 - 20})`}>
-            <circle cx="60" cy="60" r="40" fill={color} />
-            <circle cx="60" cy="60" r="24" fill="white" />
-            <circle cx="60" cy="60" r="10" fill={color} />
-          </g>
-        )))}
-      </svg>
-      {/* Logo TablièreCI en filigramme */}
-      <div style={{ position: "absolute", bottom: 80, right: 20, opacity: 0.07, fontSize: 11,
-        color, fontWeight: 900, letterSpacing: "3px", textTransform: "uppercase",
-        writingMode: "vertical-rl", fontFamily: "'Avenir Next', sans-serif" }}>
-        TABLIÈRECI
+    <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
+      padding: "14px 20px", position: "sticky", top: 0, zIndex: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {onBack && (
+          <button onClick={onBack}
+            style={{ background: "none", border: "none", cursor: "pointer",
+              color: MUTED, display: "flex", alignItems: "center", padding: 0 }}>
+            <ArrowLeft size={18} />
+          </button>
+        )}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: DARK, fontFamily: FONT_S }}>{title}</div>
+          {table && <div style={{ fontSize: 11, color: MUTED }}>Table {table}</div>}
+        </div>
+        {/* Petit logo TablièreCI */}
+        <div style={{ fontSize: 10, fontWeight: 800, color: BROWN,
+          letterSpacing: "1.5px", textTransform: "uppercase" }}>
+          TablièreCI
+        </div>
       </div>
     </div>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════════════════════════ */
 export default function ClientMenu() {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
@@ -82,8 +97,7 @@ export default function ClientMenu() {
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [cart,        setCart]        = useState({});
-  const [step,        setStep]        = useState("splash"); // splash → menu → cart → info → confirm
-  const [openCats,    setOpenCats]    = useState({});
+  const [step,        setStep]        = useState("splash");
   const [submitting,  setSubmitting]  = useState(false);
   const [errorMsg,    setErrorMsg]    = useState("");
   const [lastOrder,   setLastOrder]   = useState(null);
@@ -91,18 +105,12 @@ export default function ClientMenu() {
   const [activeCat,   setActiveCat]   = useState(null);
   const catRefs = useRef({});
 
-  // Infos client
   const [clientName,  setClientName]  = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [orderNote,   setOrderNote]   = useState("");
-  const [agreed,      setAgreed]      = useState(false); // case obligatoire
+  const [agreed,      setAgreed]      = useState(false);
 
-  const G    = resto?.theme_color || "#1D9E75";
-  const GL   = G + "18";
-  const DARK = "#0D1B18";
-  const MUTED= "rgba(255,255,255,0.55)";
-  const FONT = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
-  const BG   = "#0D1B18"; // fond sombre premium
+  const G = resto?.theme_color || BROWN;
 
   useEffect(() => {
     if (!slug) return;
@@ -112,23 +120,23 @@ export default function ClientMenu() {
     ]).then(([restoData, menuData]) => {
       const r = restoData.restaurant || restoData;
       setResto(r);
-      const cats = menuData.categories || menuData || [];
+      const cats = (menuData.categories || []).filter(c => (c.items||[]).some(i => i.is_active !== false));
       setCategories(cats);
-      if (cats.length > 0) { setOpenCats({ [cats[0].id]: true }); setActiveCat(cats[0].id); }
+      if (cats.length > 0) setActiveCat(cats[0].id);
     }).catch(console.error).finally(() => setLoading(false));
-    setLocalOrders(loadLocalOrders());
+    setLocalOrders(loadOrders());
   }, [slug]);
 
+  /* ── Cart helpers ── */
   const cartItems = Object.values(cart);
   const cartCount = cartItems.reduce((a, c) => a + c.qty, 0);
   const cartTotal = cartItems.reduce((a, c) => a + c.item.price * c.qty, 0);
 
   const addItem = (item) =>
     setCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty || 0) + 1, note: p[item.id]?.note || "", options: p[item.id]?.options || {} } }));
-  const removeItem = (id) =>
+  const remItem = (id) =>
     setCart(p => { const qty = (p[id]?.qty || 0) - 1; if (qty <= 0) { const n = {...p}; delete n[id]; return n; } return { ...p, [id]: {...p[id], qty} }; });
-  const setItemNote = (id, note) => setCart(p => ({ ...p, [id]: { ...p[id], note } }));
-  const setItemOption = (id, key, val) =>
+  const setItemOpt = (id, key, val) =>
     setCart(p => ({ ...p, [id]: { ...p[id], options: { ...(p[id]?.options || {}), [key]: val } } }));
 
   const scrollToCat = (catId) => {
@@ -136,625 +144,212 @@ export default function ClientMenu() {
     catRefs.current[catId]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  /* ── Place order ── */
   const placeOrder = async () => {
-    if (!resto) return;
     setSubmitting(true); setErrorMsg("");
     try {
       const items = cartItems.map(({ item, qty, note, options }) => ({
         id: item.id, name: item.name, price: item.price, qty,
         note: note || undefined,
-        options: Object.keys(options || {}).length > 0 ? options : undefined,
+        options: options && Object.keys(options).length ? options : undefined,
       }));
       const result = await ordersService.create({
-        restaurant_id: resto.id,
-        table_label:   table || undefined,
-        client_name:   clientName || undefined,
-        client_phone:  clientPhone || undefined,
-        note:          orderNote || undefined,
-        items,
-        total: cartTotal,
+        restaurant_id: resto.id, table_label: table || undefined,
+        client_name: clientName || undefined, client_phone: clientPhone || undefined,
+        note: orderNote || undefined, items, total: cartTotal,
       });
-      const newOrder = {
-        id: result?.order?.id || String(Date.now()),
-        status: "en_attente", total: cartTotal, items,
-        created_at: new Date().toISOString(), table_label: table, client_name: clientName,
-      };
-      setLastOrder(newOrder);
-      saveOrderLocally(newOrder);
-      setLocalOrders(loadLocalOrders());
-      setStep("confirm");
+      const newOrder = { id: result?.order?.id || String(Date.now()), status: "en_attente",
+        total: cartTotal, items, created_at: new Date().toISOString(), table_label: table, client_name: clientName };
+      setLastOrder(newOrder); saveOrder(newOrder); setLocalOrders(loadOrders()); setStep("confirm");
     } catch (e) {
       setErrorMsg(e.response?.data?.message || "Impossible d'envoyer la commande. Réessayez.");
-      setStep("error");
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
+
+  const reset = () => { setCart({}); setClientName(""); setClientPhone(""); setOrderNote(""); setAgreed(false); setLastOrder(null); setErrorMsg(""); setStep("menu"); };
 
   /* ── Loading ── */
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: DARK, display: "flex", alignItems: "center",
+    <div style={{ minHeight: "100vh", background: CREAM, display: "flex", alignItems: "center",
       justifyContent: "center", fontFamily: FONT }}>
       <div style={{ textAlign: "center" }}>
-        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          style={{ width: 40, height: 40, border: `3px solid rgba(255,255,255,.1)`,
-            borderTopColor: G, borderRadius: "50%", margin: "0 auto 16px" }} />
-        <div style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Chargement du menu…</div>
+        <motion.div animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1.5 }}
+          style={{ fontSize: 22, fontFamily: FONT_S, color: BROWN, fontStyle: "italic" }}>
+          Chargement…
+        </motion.div>
       </div>
     </div>
   );
 
   if (!resto) return (
-    <div style={{ minHeight: "100vh", background: DARK, display: "flex", alignItems: "center",
-      justifyContent: "center", fontFamily: FONT, color: "rgba(255,255,255,.5)", padding: 24, textAlign: "center" }}>
+    <div style={{ minHeight: "100vh", background: CREAM, display: "flex", alignItems: "center",
+      justifyContent: "center", fontFamily: FONT, color: MUTED, fontSize: 14 }}>
       Menu introuvable
     </div>
   );
 
-  /* ── Splash screen style BBR ── */
+  /* ══════════════════════════════════════════════════════════════════════════
+     SPLASH — BBR Style
+  ══════════════════════════════════════════════════════════════════════════ */
   if (step === "splash") return (
-    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", fontFamily: FONT,
-      position: "relative", overflow: "hidden", background: DARK }}>
+    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto",
+      background: CREAM, fontFamily: FONT, overflowX: "hidden" }}>
 
-      {/* Photo héro — logo du restaurant si disponible, sinon gradient thème */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+      {/* Zone photo — 58vh */}
+      <div style={{ position: "relative", height: "58vh", overflow: "hidden" }}>
         {resto.logo_url ? (
           <img src={resto.logo_url} alt={resto.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={e => { e.target.style.display = "none"; }} />
         ) : (
           <div style={{ width: "100%", height: "100%",
-            background: `linear-gradient(160deg, ${G}22 0%, ${DARK} 60%, ${DARK} 100%)` }} />
+            background: `linear-gradient(150deg, ${G}99 0%, ${DARK} 100%)` }} />
         )}
-        {/* Overlay dégradé vers le bas */}
+
+        {/* Overlay dégradé photo → crème */}
         <div style={{ position: "absolute", inset: 0,
-          background: "linear-gradient(to bottom, rgba(0,0,0,.25) 0%, rgba(0,0,0,.15) 30%, rgba(13,27,24,.95) 65%, " + DARK + " 100%)" }} />
-      </div>
+          background: "linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 50%, " + CREAM + " 100%)" }} />
 
-      {/* Décor watermark TablièreCI */}
-      <TCIWatermark color={G} />
-
-      {/* Badge table — en haut à droite */}
-      {table && (
-        <div style={{ position: "absolute", top: 20, right: 20, zIndex: 10,
-          background: "rgba(255,255,255,.92)", backdropFilter: "blur(10px)",
-          borderRadius: 20, padding: "4px 14px" }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: DARK,
-            letterSpacing: "2px", textTransform: "uppercase" }}>
+        {/* Badge TABLE — haut droite */}
+        {table && (
+          <div style={{ position: "absolute", top: 20, right: 20,
+            background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
+            borderRadius: 20, padding: "4px 14px",
+            fontSize: 10, fontWeight: 800, color: DARK,
+            letterSpacing: "2.5px", textTransform: "uppercase" }}>
             TABLE {table}
-          </span>
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Logo TablièreCI — en haut à gauche */}
-      <div style={{ position: "absolute", top: 20, left: 20, zIndex: 10,
-        display: "flex", alignItems: "center", gap: 7 }}>
-        <TCI size={26} color="white" />
-        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.7)",
-          letterSpacing: "1.5px", textTransform: "uppercase" }}>TablièreCI</span>
+        {/* Logo TablièreCI — haut gauche */}
+        <div style={{ position: "absolute", top: 20, left: 20,
+          display: "flex", alignItems: "center", gap: 6 }}>
+          <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="8" fill="rgba(255,255,255,0.18)" />
+            <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+            <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+            <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
+              stroke="rgba(255,255,255,0.5)" strokeWidth="1.3" fill="none" />
+          </svg>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.75)",
+            letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
+        </div>
+
+        {/* Nom restaurant — énorme, blanc, sur la photo (comme BBr) */}
+        <div style={{ position: "absolute", bottom: 40, left: 0, right: 0, textAlign: "center",
+          padding: "0 20px" }}>
+          <div style={{ fontSize: "clamp(46px, 13vw, 72px)", fontWeight: 900, color: "rgba(255,255,255,0.92)",
+            letterSpacing: "-1px", lineHeight: 1, fontFamily: FONT_S, textShadow: "0 2px 20px rgba(0,0,0,0.25)" }}>
+            {resto.name?.toUpperCase()}
+          </div>
+          {resto.cuisine_type && (
+            <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.65)",
+              letterSpacing: "4px", textTransform: "uppercase", marginTop: 6 }}>
+              {resto.cuisine_type?.toUpperCase()}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Contenu central */}
-      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh",
-        display: "flex", flexDirection: "column", justifyContent: "flex-end",
-        padding: "0 28px 52px" }}>
+      {/* Zone crème — contenu */}
+      <div style={{ background: CREAM, padding: "32px 28px 40px", textAlign: "center" }}>
 
-        {/* Sous-titre style italic gold */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: G,
-            letterSpacing: "3px", textTransform: "uppercase",
-            fontStyle: "italic", marginBottom: 14 }}>
-            {resto.cuisine_type || "Restaurant"}
+        {/* Tagline style "LIFE IS HERE" */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: TEAL, letterSpacing: "3px",
+            textTransform: "uppercase", fontStyle: "italic", marginBottom: 16 }}>
+            {resto.quartier ? `${resto.quartier}${resto.ville ? ", " + resto.ville : ""}` : "La table est prête"}
           </div>
         </motion.div>
 
-        {/* Titre principal */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: 900, color: "white",
-            lineHeight: 1.15, margin: "0 0 10px",
-            textShadow: "0 2px 20px rgba(0,0,0,.5)" }}>
-            {table ? `Bienvenue —\nTable ${table}` : `Bienvenue\nchez ${resto.name}`}
+        {/* Titre "Bienvenue — Table X" */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 400, color: DARK, margin: "0 0 14px",
+            fontFamily: FONT_S, lineHeight: 1.25 }}>
+            {table ? `Bienvenue — Table ${table}` : `Bienvenue`}
           </h1>
         </motion.div>
 
         {/* Description */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,.6)",
-            lineHeight: 1.7, marginBottom: 36, maxWidth: 320 }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+          <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.75, margin: "0 0 36px",
+            fontFamily: FONT }}>
             {resto.description ||
               "Découvrez notre carte et commandez directement depuis votre table."}
           </p>
         </motion.div>
 
-        {/* CTA principal */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setStep("menu")}
-            style={{ width: "100%", padding: "18px 0", borderRadius: 14, border: "none",
-              background: G, color: "white", fontSize: 15, fontWeight: 800,
-              cursor: "pointer", fontFamily: FONT, letterSpacing: "1px", textTransform: "uppercase",
-              boxShadow: `0 8px 32px ${G}60` }}>
+        {/* CTA "DÉCOUVRIR LA CARTE" */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <BtnBrown onClick={() => setStep("menu")}>
             Découvrir la carte
-          </motion.button>
+          </BtnBrown>
         </motion.div>
 
-        {/* Historique si déjà commandé */}
+        {/* Lien historique si déjà commandé */}
         {localOrders.length > 0 && (
           <motion.button
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
             onClick={() => setStep("history")}
-            style={{ marginTop: 14, width: "100%", padding: "14px 0", borderRadius: 14,
-              border: "0.5px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)",
-              color: "rgba(255,255,255,.7)", fontSize: 14, fontWeight: 600,
-              cursor: "pointer", fontFamily: FONT, display: "flex",
-              alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <History size={16} /> Voir mes commandes ({localOrders.length})
+            style={{ marginTop: 16, background: "none", border: "none", cursor: "pointer",
+              fontSize: 12, color: MUTED, fontFamily: FONT,
+              display: "flex", alignItems: "center", gap: 6, margin: "16px auto 0" }}>
+            <History size={14} /> Voir mes commandes ({localOrders.length})
           </motion.button>
         )}
 
-        {/* Footer restaurateur */}
-        {resto.name && (
-          <div style={{ marginTop: 32, textAlign: "center",
-            fontSize: 11, color: "rgba(255,255,255,.25)", letterSpacing: "0.5px" }}>
-            {resto.name}
-            {resto.quartier && ` · ${resto.quartier}`}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ── Confirmation ── */
-  if (step === "confirm") return (
-    <div style={{ minHeight: "100vh", background: DARK, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT }}>
-      <TCIWatermark color={G} />
-      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        style={{ textAlign: "center", background: "rgba(255,255,255,.06)",
-          backdropFilter: "blur(20px)", borderRadius: 24, padding: 32,
-          maxWidth: 380, width: "100%", border: "0.5px solid rgba(255,255,255,.1)",
-          position: "relative", zIndex: 1 }}>
-        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5, delay: 0.2 }}
-          style={{ width: 72, height: 72, borderRadius: "50%", background: G,
-            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-          <CheckCircle size={38} color="white" />
-        </motion.div>
-        <h2 style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 6 }}>Commande envoyée !</h2>
-        {clientName && <div style={{ fontSize: 14, color: MUTED, marginBottom: 4 }}>Bonjour {clientName} 👋</div>}
-        {table && <div style={{ fontSize: 13, color: G, fontWeight: 700, marginBottom: 4 }}>Table {table}</div>}
-        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 16 }}>
-          Votre commande a été transmise à la cuisine.<br />
-          Merci de votre confiance.
-        </p>
-        <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: "12px 16px",
-          marginBottom: 24, fontSize: 13, color: "white" }}>
-          <strong style={{ color: G }}>{fmt(cartTotal)}</strong>
-          <span style={{ color: MUTED }}> · {cartCount} article{cartCount > 1 ? "s" : ""}</span>
+        {/* Footer discret */}
+        <div style={{ marginTop: 40, fontSize: 9, color: "#C4B8A8",
+          letterSpacing: "2px", textTransform: "uppercase" }}>
+          Tablière CI
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button onClick={() => { setCart({}); setClientName(""); setClientPhone(""); setOrderNote(""); setAgreed(false); setStep("menu"); }}
-            style={{ padding: "13px 0", borderRadius: 12, border: "none",
-              background: G, color: "white", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-            Nouvelle commande
-          </button>
-          <button onClick={() => setStep("history")}
-            style={{ padding: "13px 0", borderRadius: 12, border: `0.5px solid rgba(255,255,255,.15)`,
-              background: "transparent", color: "rgba(255,255,255,.7)", fontSize: 14, cursor: "pointer", fontFamily: FONT }}>
-            Voir mes commandes
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-
-  /* ── Erreur ── */
-  if (step === "error") return (
-    <div style={{ minHeight: "100vh", background: DARK, display: "flex", alignItems: "center",
-      justifyContent: "center", padding: 24, fontFamily: FONT }}>
-      <TCIWatermark color={G} />
-      <div style={{ textAlign: "center", background: "rgba(255,255,255,.06)", borderRadius: 20,
-        padding: 32, maxWidth: 360, width: "100%", position: "relative", zIndex: 1,
-        border: "0.5px solid rgba(255,255,255,.1)" }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-        <div style={{ fontSize: 15, color: "#FCA5A5", marginBottom: 16 }}>{errorMsg}</div>
-        <button onClick={() => setStep("cart")}
-          style={{ padding: "11px 24px", borderRadius: 10, border: "none",
-            background: G, color: "white", fontSize: 13, fontWeight: 600,
-            cursor: "pointer", fontFamily: FONT }}>
-          Retour au panier
-        </button>
       </div>
     </div>
   );
 
-  /* ── Historique ── */
-  if (step === "history") return (
-    <div style={{ minHeight: "100vh", background: DARK, maxWidth: 480, margin: "0 auto", fontFamily: FONT }}>
-      <TCIWatermark color={G} />
-      <div style={{ background: G, padding: "20px 16px 16px", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <TCI size={24} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.7)",
-            letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
-        </div>
-        <button onClick={() => setStep("menu")} style={{ background: "rgba(255,255,255,.15)",
-          border: "none", color: "white", fontSize: 13, cursor: "pointer",
-          marginBottom: 8, padding: "5px 12px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
-          <ArrowLeft size={13} /> Retour au menu
-        </button>
-        <h2 style={{ color: "white", fontSize: 20, fontWeight: 800, margin: 0 }}>Mes commandes</h2>
-        {table && <p style={{ color: "rgba(255,255,255,.65)", fontSize: 12, margin: "3px 0 0" }}>Table {table}</p>}
-      </div>
-      <div style={{ padding: "16px", position: "relative", zIndex: 1 }}>
-        {localOrders.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "50px 0", color: "rgba(255,255,255,.3)" }}>
-            <History size={36} style={{ marginBottom: 12, opacity: 0.4 }} />
-            <div style={{ fontSize: 14 }}>Aucune commande dans cette session</div>
-          </div>
-        ) : localOrders.map((o, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: 16,
-              marginBottom: 12, border: "0.5px solid rgba(255,255,255,.08)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>
-                  {new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
-                </div>
-                {o.table_label && <div style={{ fontSize: 11, color: MUTED }}>Table {o.table_label}</div>}
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-                background: (STATUS_COLORS[o.status] || "#888") + "28",
-                color: STATUS_COLORS[o.status] || "#aaa", border: `0.5px solid ${STATUS_COLORS[o.status] || "#888"}44` }}>
-                {STATUS_LABELS[o.status] || o.status}
-              </span>
-            </div>
-            <div style={{ borderTop: "0.5px solid rgba(255,255,255,.06)", paddingTop: 10 }}>
-              {(o.items || []).map((it, j) => (
-                <div key={j} style={{ display: "flex", justifyContent: "space-between",
-                  fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 4 }}>
-                  <span>{it.qty}× {it.name}</span>
-                  <span style={{ color: MUTED }}>{fmt(it.price * it.qty)}</span>
-                </div>
-              ))}
-              <div style={{ display: "flex", justifyContent: "space-between",
-                fontWeight: 700, fontSize: 14, marginTop: 8, paddingTop: 8,
-                borderTop: "0.5px solid rgba(255,255,255,.06)" }}>
-                <span style={{ color: "rgba(255,255,255,.7)" }}>Total</span>
-                <span style={{ color: G }}>{fmt(o.total)}</span>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-
-  /* ── Infos client ── */
-  if (step === "info") return (
-    <div style={{ minHeight: "100vh", background: DARK, maxWidth: 480, margin: "0 auto", fontFamily: FONT }}>
-      <TCIWatermark color={G} />
+  /* ══════════════════════════════════════════════════════════════════════════
+     MENU PRINCIPAL — Catégories + Plats
+  ══════════════════════════════════════════════════════════════════════════ */
+  if (step === "menu") return (
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+      margin: "0 auto", fontFamily: FONT, paddingBottom: cartCount > 0 ? 96 : 24 }}>
 
       {/* Header */}
-      <div style={{ background: G, padding: "20px 16px 20px", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <TCI size={22} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.65)",
-            letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
-        </div>
-        <button onClick={() => setStep("cart")} style={{ background: "rgba(255,255,255,.15)",
-          border: "none", color: "white", fontSize: 12, cursor: "pointer",
-          marginBottom: 10, padding: "5px 12px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
-          <ArrowLeft size={12} /> Retour au panier
-        </button>
-        <h2 style={{ color: "white", fontSize: 20, fontWeight: 800, margin: 0 }}>Vos informations</h2>
-        {table && <p style={{ color: "rgba(255,255,255,.65)", fontSize: 12, margin: "3px 0 0" }}>Table {table}</p>}
-      </div>
-
-      <div style={{ padding: "20px 16px 120px", position: "relative", zIndex: 1 }}>
-        {/* Nom */}
-        <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "16px 18px",
-          marginBottom: 12, border: "0.5px solid rgba(255,255,255,.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <User size={15} color={G} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Nom complet *</span>
+      <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
+        position: "sticky", top: 0, zIndex: 20 }}>
+        {/* Infos resto */}
+        <div style={{ padding: "14px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: DARK, fontFamily: FONT_S }}>{resto.name}</div>
+            {table && <div style={{ fontSize: 11, color: MUTED }}>Table {table}</div>}
           </div>
-          <input value={clientName} onChange={e => setClientName(e.target.value)}
-            placeholder="Jean Kouassi"
-            style={{ width: "100%", background: "rgba(255,255,255,.08)", border: `0.5px solid ${clientName ? G+"88" : "rgba(255,255,255,.12)"}`,
-              borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "white",
-              outline: "none", fontFamily: FONT, boxSizing: "border-box" }} />
-        </div>
-
-        {/* Téléphone */}
-        <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "16px 18px",
-          marginBottom: 12, border: "0.5px solid rgba(255,255,255,.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <Phone size={15} color={G} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Téléphone</span>
-          </div>
-          <input value={clientPhone} onChange={e => setClientPhone(e.target.value)}
-            placeholder="+225 07 00 00 00 00" type="tel"
-            style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "0.5px solid rgba(255,255,255,.12)",
-              borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "white",
-              outline: "none", fontFamily: FONT, boxSizing: "border-box" }} />
-        </div>
-
-        {/* Notes */}
-        <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "16px 18px",
-          marginBottom: 16, border: "0.5px solid rgba(255,255,255,.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <FileText size={15} color={G} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Notes / allergies</span>
-          </div>
-          <textarea value={orderNote} onChange={e => setOrderNote(e.target.value)}
-            placeholder="Sans gluten, pas d'oignons, anniversaire…" rows={3}
-            style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "0.5px solid rgba(255,255,255,.12)",
-              borderRadius: 10, padding: "12px 14px", fontSize: 13, color: "white",
-              outline: "none", fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
-        </div>
-
-        {/* Récapitulatif */}
-        <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "16px 18px",
-          marginBottom: 20, border: "0.5px solid rgba(255,255,255,.08)" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "white", marginBottom: 12 }}>
-            Récapitulatif
-          </div>
-          {cartItems.map(({ item, qty, options, note }) => (
-            <div key={item.id} style={{ display: "flex", justifyContent: "space-between",
-              fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 6 }}>
-              <span>{qty}× {item.name}
-                {options?.cuisson ? ` — ${options.cuisson}` : ""}
-                {note ? ` (${note})` : ""}
-              </span>
-              <span style={{ color: G, flexShrink: 0, marginLeft: 8, fontWeight: 600 }}>{fmt(item.price * qty)}</span>
-            </div>
-          ))}
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800,
-            fontSize: 16, marginTop: 12, paddingTop: 12, borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
-            <span style={{ color: "rgba(255,255,255,.8)" }}>Total</span>
-            <span style={{ color: G }}>{fmt(cartTotal)}</span>
-          </div>
-        </div>
-
-        {/* ── Case à cocher OBLIGATOIRE ── */}
-        <motion.div
-          animate={{ borderColor: agreed ? G : "rgba(255,255,255,.15)" }}
-          style={{ background: agreed ? G + "12" : "rgba(255,255,255,.04)",
-            borderRadius: 14, padding: "14px 16px", marginBottom: 20,
-            border: `1.5px solid ${agreed ? G : "rgba(255,255,255,.15)"}`,
-            cursor: "pointer", transition: "all .2s" }}
-          onClick={() => setAgreed(p => !p)}>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <motion.div animate={{ background: agreed ? G : "rgba(255,255,255,.08)", scale: agreed ? [1.2, 1] : 1 }}
-              style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${agreed ? G : "rgba(255,255,255,.3)"}`,
-                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-              {agreed && <Check size={13} color="white" strokeWidth={3} />}
-            </motion.div>
-            <div style={{ fontSize: 12, color: agreed ? "white" : "rgba(255,255,255,.55)", lineHeight: 1.6 }}>
-              <strong style={{ color: agreed ? G : "rgba(255,255,255,.7)" }}>J'ai vérifié ma commande et je m'engage à la régler en totalité.</strong>
-              {" "}En cas d'erreur de ma part sur les articles commandés, j'en suis entièrement responsable.
-            </div>
-          </div>
-          {!agreed && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8,
-              fontSize: 10, color: "rgba(255,165,0,.8)", paddingLeft: 34 }}>
-              <AlertTriangle size={10} /> Obligatoire pour valider la commande
-            </div>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Bouton fixe bas */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, padding: "12px 16px 28px",
-        background: "linear-gradient(to top, " + DARK + " 70%, transparent)",
-        zIndex: 10 }}>
-        <motion.button
-          whileTap={{ scale: agreed && clientName.trim() ? 0.97 : 1 }}
-          onClick={agreed && clientName.trim() ? placeOrder : undefined}
-          disabled={submitting || !clientName.trim() || !agreed}
-          animate={{ opacity: agreed && clientName.trim() ? 1 : 0.5 }}
-          style={{ width: "100%", padding: "16px 0", borderRadius: 14, border: "none",
-            background: agreed && clientName.trim() ? G : "rgba(255,255,255,.12)",
-            color: agreed && clientName.trim() ? "white" : "rgba(255,255,255,.4)",
-            fontSize: 16, fontWeight: 800, cursor: agreed && clientName.trim() ? "pointer" : "not-allowed",
-            fontFamily: FONT }}>
-          {submitting ? "Envoi en cours…" : `Confirmer · ${fmt(cartTotal)}`}
-        </motion.button>
-        {!clientName.trim() && (
-          <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 6 }}>
-            Le nom est requis
-          </p>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ── Panier ── */
-  if (step === "cart") return (
-    <div style={{ minHeight: "100vh", background: DARK, maxWidth: 480, margin: "0 auto", fontFamily: FONT }}>
-      <TCIWatermark color={G} />
-
-      <div style={{ background: G, padding: "16px 16px 14px", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <TCI size={20} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.65)",
-            letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
-        </div>
-        <button onClick={() => setStep("menu")} style={{ background: "rgba(255,255,255,.15)",
-          border: "none", color: "white", fontSize: 12, cursor: "pointer",
-          marginBottom: 8, padding: "5px 12px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
-          <ArrowLeft size={12} /> Retour au menu
-        </button>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ color: "white", fontSize: 20, fontWeight: 800, margin: 0 }}>Mon panier</h2>
-          {table && <span style={{ color: "rgba(255,255,255,.65)", fontSize: 12 }}>Table {table}</span>}
-        </div>
-      </div>
-
-      <div style={{ padding: "16px 16px 140px", position: "relative", zIndex: 1 }}>
-        {cartItems.map(({ item, qty, note, options }) => (
-          <motion.div key={item.id} layout
-            style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "14px 14px",
-              marginBottom: 12, border: "0.5px solid rgba(255,255,255,.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {item.image_url && (
-                <img src={item.image_url} alt={item.name}
-                  style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
-                  onError={e => { e.target.style.display = "none"; }} />
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "white" }}>{item.name}</div>
-                <div style={{ fontSize: 13, color: G, fontWeight: 700, marginTop: 2 }}>{fmt(item.price)}</div>
-                {options?.cuisson && <div style={{ fontSize: 11, color: MUTED }}>Cuisson : {options.cuisson}</div>}
-                {options?.accompagnement && <div style={{ fontSize: 11, color: MUTED }}>Avec : {options.accompagnement}</div>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button onClick={() => removeItem(item.id)}
-                  style={{ width: 32, height: 32, borderRadius: "50%", border: "0.5px solid rgba(255,255,255,.2)",
-                    background: "rgba(255,255,255,.08)", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Minus size={13} color="rgba(255,255,255,.7)" />
-                </button>
-                <span style={{ fontSize: 16, fontWeight: 800, color: "white", minWidth: 20, textAlign: "center" }}>{qty}</span>
-                <button onClick={() => addItem(item)}
-                  style={{ width: 32, height: 32, borderRadius: "50%", border: "none",
-                    background: G, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Plus size={13} color="white" />
-                </button>
-              </div>
-            </div>
-
-            {/* Note par article */}
-            <input value={note || ""} onChange={e => setItemNote(item.id, e.target.value)}
-              placeholder="Note (ex : sans oignons)"
-              style={{ width: "100%", marginTop: 10, background: "rgba(255,255,255,.06)",
-                border: "0.5px solid rgba(255,255,255,.1)", borderRadius: 8,
-                padding: "8px 12px", fontSize: 12, color: "rgba(255,255,255,.7)",
-                outline: "none", fontFamily: FONT, boxSizing: "border-box" }} />
-
-            {/* Options cuisson/accompagnement */}
-            {item.options && (() => {
-              let opts = null;
-              try { opts = typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch(_) {}
-              if (!opts) return null;
-              return (
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {opts.cuissons?.length > 0 && (
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5 }}>Cuisson</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {opts.cuissons.map(c => (
-                          <button key={c} onClick={() => setItemOption(item.id, "cuisson", c)}
-                            style={{ padding: "4px 10px", borderRadius: 20, border: "none",
-                              fontSize: 11, cursor: "pointer",
-                              background: options?.cuisson === c ? G : "rgba(255,255,255,.1)",
-                              color: options?.cuisson === c ? "white" : "rgba(255,255,255,.6)" }}>
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {opts.accompagnements?.length > 0 && (
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5 }}>Accompagnement</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {opts.accompagnements.map(a => (
-                          <button key={a} onClick={() => setItemOption(item.id, "accompagnement", a)}
-                            style={{ padding: "4px 10px", borderRadius: 20, border: "none",
-                              fontSize: 11, cursor: "pointer",
-                              background: options?.accompagnement === a ? G : "rgba(255,255,255,.1)",
-                              color: options?.accompagnement === a ? "white" : "rgba(255,255,255,.6)" }}>
-                            {a}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </motion.div>
-        ))}
-      </div>
-
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, padding: "12px 16px 28px",
-        background: "linear-gradient(to top, " + DARK + " 60%, transparent)", zIndex: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, padding: "0 4px" }}>
-          <span style={{ color: MUTED, fontSize: 14 }}>Total</span>
-          <span style={{ fontWeight: 800, color: "white", fontSize: 18 }}>{fmt(cartTotal)}</span>
-        </div>
-        <button onClick={() => setStep("info")}
-          style={{ width: "100%", padding: "16px 0", borderRadius: 14, border: "none",
-            background: G, color: "white", fontSize: 16, fontWeight: 800,
-            cursor: "pointer", fontFamily: FONT }}>
-          Continuer → Mes informations
-        </button>
-      </div>
-    </div>
-  );
-
-  /* ── Menu principal ── */
-  return (
-    <div style={{ minHeight: "100vh", background: DARK, maxWidth: 480, margin: "0 auto",
-      fontFamily: FONT, paddingBottom: cartCount > 0 ? 100 : 24, position: "relative" }}>
-      <TCIWatermark color={G} />
-
-      {/* ── Header ── */}
-      <div style={{ position: "sticky", top: 0, zIndex: 20,
-        background: G, boxShadow: "0 4px 24px rgba(0,0,0,.3)" }}>
-        <div style={{ padding: "16px 16px 0" }}>
-          {/* Branding TablièreCI */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <TCI size={20} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.6)",
-                letterSpacing: "2px", textTransform: "uppercase" }}>TablièreCI</span>
-            </div>
+          <div style={{ display: "flex", gap: 8 }}>
             {localOrders.length > 0 && (
               <button onClick={() => setStep("history")}
-                style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 20,
-                  padding: "5px 12px", color: "white", cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
-                <History size={13} />Historique
+                style={{ background: SAND, border: "none", borderRadius: 20, padding: "5px 12px",
+                  fontSize: 11, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                <History size={12} /> Historique
               </button>
             )}
           </div>
-
-          {/* Nom du restaurant */}
-          <h1 style={{ color: "white", fontSize: 24, fontWeight: 900, margin: "0 0 4px",
-            textShadow: "0 2px 10px rgba(0,0,0,.2)" }}>
-            {resto.name}
-          </h1>
-          {table && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 14,
-              background: "rgba(255,255,255,.2)", borderRadius: 20, padding: "3px 10px" }}>
-              <span style={{ fontSize: 11, color: "white", fontWeight: 700 }}>Table {table}</span>
-            </div>
-          )}
-          {!table && <div style={{ marginBottom: 14 }} />}
         </div>
 
-        {/* Tabs catégories */}
-        <div style={{ display: "flex", gap: 0, overflowX: "auto",
-          padding: "0 12px", scrollbarWidth: "none" }}>
+        {/* Tabs catégories — scrollable */}
+        <div style={{ display: "flex", gap: 0, overflowX: "auto", padding: "10px 16px 0",
+          scrollbarWidth: "none" }}>
           {categories.map(cat => {
             const items = (cat.items || []).filter(i => i.is_active !== false);
-            if (items.length === 0) return null;
-            const isActive = activeCat === cat.id;
+            if (!items.length) return null;
+            const active = activeCat === cat.id;
             return (
               <button key={cat.id} onClick={() => scrollToCat(cat.id)}
-                style={{ padding: "10px 16px", border: "none", cursor: "pointer",
-                  background: "transparent", color: isActive ? "white" : "rgba(255,255,255,.55)",
-                  fontWeight: isActive ? 700 : 500, fontSize: 13, whiteSpace: "nowrap",
-                  borderBottom: isActive ? "2.5px solid white" : "2.5px solid transparent",
-                  transition: "all .15s", fontFamily: FONT }}>
+                style={{ padding: "8px 14px", border: "none", cursor: "pointer",
+                  background: "transparent", whiteSpace: "nowrap", fontFamily: FONT,
+                  fontSize: 13, fontWeight: active ? 700 : 400,
+                  color: active ? BROWN : MUTED,
+                  borderBottom: `2px solid ${active ? BROWN : "transparent"}`,
+                  transition: "all .15s" }}>
                 {cat.name}
               </button>
             );
@@ -762,114 +357,108 @@ export default function ClientMenu() {
         </div>
       </div>
 
-      {/* ── Contenu ── */}
-      <div style={{ padding: "8px 0", position: "relative", zIndex: 1 }}>
-        {categories.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: 14 }}>
-            Menu non disponible
-          </div>
-        ) : categories.map(cat => {
+      {/* Liste produits par catégorie */}
+      <div>
+        {categories.map(cat => {
           const items = (cat.items || []).filter(i => i.is_active !== false && i.is_available !== false);
-          if (items.length === 0) return null;
+          if (!items.length) return null;
           return (
-            <div key={cat.id} ref={el => { catRefs.current[cat.id] = el; }}
-              style={{ marginBottom: 8 }}>
+            <div key={cat.id} ref={el => { catRefs.current[cat.id] = el; }}>
               {/* Titre catégorie */}
-              <div style={{ padding: "14px 16px 10px", fontSize: 13, fontWeight: 800,
-                color: "rgba(255,255,255,.4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>
-                {cat.name} <span style={{ fontSize: 11, opacity: 0.6 }}>({items.length})</span>
+              <div style={{ padding: "20px 20px 8px",
+                fontSize: 11, fontWeight: 700, color: MUTED,
+                letterSpacing: "2px", textTransform: "uppercase" }}>
+                {cat.name}
               </div>
 
-              {/* Grille plats */}
+              {/* Items */}
               {items.map(item => {
                 const inCart = cart[item.id]?.qty || 0;
-                const opts = (() => {
-                  try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; }
-                })();
+                const opts = (() => { try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; } })();
                 return (
                   <div key={item.id}
-                    style={{ display: "flex", gap: 12, padding: "12px 16px",
-                      borderBottom: "0.5px solid rgba(255,255,255,.04)",
-                      background: inCart > 0 ? G + "08" : "transparent",
-                      transition: "background .2s" }}>
+                    style={{ display: "flex", gap: 14, padding: "14px 20px",
+                      borderBottom: `0.5px solid ${BORDER}`, background: WHITE,
+                      transition: "background .15s" }}>
 
-                    {/* Image */}
+                    {/* Photo ou placeholder */}
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.name}
-                        style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover",
-                          flexShrink: 0, border: `1.5px solid ${inCart > 0 ? G + "60" : "rgba(255,255,255,.08)"}` }}
+                        style={{ width: 84, height: 84, borderRadius: 12, objectFit: "cover", flexShrink: 0, border: `0.5px solid ${BORDER}` }}
                         onError={e => { e.target.style.display = "none"; }} />
                     ) : (
-                      <div style={{ width: 80, height: 80, borderRadius: 12, flexShrink: 0,
-                        background: "rgba(255,255,255,.05)", display: "flex",
-                        alignItems: "center", justifyContent: "center", fontSize: 28 }}>
-                        🍽️
-                      </div>
+                      <div style={{ width: 84, height: 84, borderRadius: 12, flexShrink: 0,
+                        background: SAND, display: "flex", alignItems: "center",
+                        justifyContent: "center", fontSize: 26 }}>🍽️</div>
                     )}
 
+                    {/* Infos */}
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "white", marginBottom: 3 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: DARK,
+                        fontFamily: FONT_S, marginBottom: 4, lineHeight: 1.3 }}>
                         {item.name}
                       </div>
                       {item.description && (
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", lineHeight: 1.4, marginBottom: 5 }}>
+                        <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 6,
+                          overflow: "hidden", display: "-webkit-box",
+                          WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                           {item.description}
                         </div>
                       )}
 
-                      {/* Tags options */}
-                      {opts && (opts.cuissons?.length > 0 || opts.accompagnements?.length > 0) && (
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                      {/* Options tags */}
+                      {opts && (opts.cuissons?.length || opts.accompagnements?.length) ? (
+                        <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
                           {opts.cuissons?.length > 0 && (
-                            <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 10,
-                              background: G + "25", color: G, fontWeight: 700 }}>
-                              Cuisson au choix
+                            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
+                              background: "#F0EBE3", color: BROWN, fontWeight: 700, letterSpacing: "0.5px" }}>
+                              Cuisson
                             </span>
                           )}
                           {opts.accompagnements?.length > 0 && (
-                            <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 10,
-                              background: G + "25", color: G, fontWeight: 700 }}>
+                            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10,
+                              background: "#F0EBE3", color: BROWN, fontWeight: 700, letterSpacing: "0.5px" }}>
                               Accompagnement
                             </span>
                           )}
                         </div>
-                      )}
+                      ) : null}
 
-                      <div style={{ fontSize: 15, fontWeight: 800, color: G }}>{fmt(item.price)}</div>
-                    </div>
-
-                    {/* Boutons +/- */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end",
-                      justifyContent: "flex-end", flexShrink: 0 }}>
-                      {inCart > 0 ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <button onClick={() => removeItem(item.id)}
-                            style={{ width: 32, height: 32, borderRadius: "50%",
-                              border: `1.5px solid rgba(255,255,255,.2)`, background: "rgba(255,255,255,.08)",
-                              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Minus size={13} color="rgba(255,255,255,.8)" />
-                          </button>
-                          <motion.span key={inCart} initial={{ scale: 1.3 }} animate={{ scale: 1 }}
-                            style={{ fontSize: 16, fontWeight: 900, color: G, minWidth: 18, textAlign: "center" }}>
-                            {inCart}
-                          </motion.span>
-                          <button onClick={() => addItem(item)}
-                            style={{ width: 32, height: 32, borderRadius: "50%",
-                              border: "none", background: G, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              boxShadow: `0 4px 12px ${G}60` }}>
-                            <Plus size={13} color="white" />
-                          </button>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: BROWN }}>
+                          {fmt(item.price)}
                         </div>
-                      ) : (
-                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => addItem(item)}
-                          style={{ width: 36, height: 36, borderRadius: "50%",
-                            border: "none", background: G, cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            boxShadow: `0 4px 16px ${G}60` }}>
-                          <Plus size={16} color="white" />
-                        </motion.button>
-                      )}
+
+                        {/* Contrôle quantité */}
+                        {inCart > 0 ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <button onClick={() => remItem(item.id)}
+                              style={{ width: 30, height: 30, borderRadius: "50%",
+                                border: `1.5px solid ${BORDER}`, background: WHITE,
+                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Minus size={12} color={MUTED} />
+                            </button>
+                            <motion.span key={inCart} initial={{ scale: 1.3 }} animate={{ scale: 1 }}
+                              style={{ fontSize: 15, fontWeight: 800, color: BROWN, minWidth: 16, textAlign: "center" }}>
+                              {inCart}
+                            </motion.span>
+                            <button onClick={() => addItem(item)}
+                              style={{ width: 30, height: 30, borderRadius: "50%",
+                                border: "none", background: BROWN,
+                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Plus size={12} color={WHITE} />
+                            </button>
+                          </div>
+                        ) : (
+                          <motion.button whileTap={{ scale: 0.92 }} onClick={() => addItem(item)}
+                            style={{ width: 34, height: 34, borderRadius: "50%",
+                              border: "none", background: BROWN,
+                              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                              boxShadow: `0 3px 12px ${BROWN}40` }}>
+                            <Plus size={15} color={WHITE} />
+                          </motion.button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -877,25 +466,31 @@ export default function ClientMenu() {
             </div>
           );
         })}
+        {categories.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: MUTED }}>
+            Menu non disponible
+          </div>
+        )}
       </div>
 
-      {/* ── Bouton panier flottant ── */}
+      {/* Bouton panier flottant */}
       <AnimatePresence>
         {cartCount > 0 && (
           <motion.div
-            initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
             style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
-              width: "calc(100% - 32px)", maxWidth: 448, zIndex: 30 }}>
+              width: "calc(100% - 40px)", maxWidth: 440, zIndex: 30 }}>
             <button onClick={() => setStep("cart")}
-              style={{ width: "100%", padding: "16px 20px", borderRadius: 18, border: "none",
-                background: G, color: "white", fontSize: 15, fontWeight: 800,
+              style={{ width: "100%", padding: "16px 20px", borderRadius: 40, border: "none",
+                background: BROWN, color: WHITE, fontSize: 14, fontWeight: 700,
                 cursor: "pointer", fontFamily: FONT, display: "flex",
                 alignItems: "center", justifyContent: "space-between",
-                boxShadow: `0 8px 32px ${G}60` }}>
-              <span style={{ background: "rgba(255,255,255,.25)", borderRadius: "50%",
-                width: 28, height: 28, display: "flex", alignItems: "center",
-                justifyContent: "center", fontSize: 13, fontWeight: 900 }}>
+                letterSpacing: "0.5px",
+                boxShadow: `0 6px 24px ${BROWN}55` }}>
+              <span style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%",
+                width: 26, height: 26, display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 12, fontWeight: 900 }}>
                 {cartCount}
               </span>
               <span>Voir mon panier</span>
@@ -906,4 +501,346 @@ export default function ClientMenu() {
       </AnimatePresence>
     </div>
   );
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     PANIER
+  ══════════════════════════════════════════════════════════════════════════ */
+  if (step === "cart") return (
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+      margin: "0 auto", fontFamily: FONT, paddingBottom: 100 }}>
+      <HeaderNav title="Mon panier" table={table} onBack={() => setStep("menu")} />
+
+      <div style={{ padding: "16px 20px" }}>
+        {cartItems.map(({ item, qty, note, options }) => {
+          const opts = (() => { try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; } })();
+          return (
+            <div key={item.id} style={{ background: WHITE, borderRadius: 14, padding: "14px 16px",
+              marginBottom: 10, border: `0.5px solid ${BORDER}` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                {item.image_url && (
+                  <img src={item.image_url} alt={item.name}
+                    style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                    onError={e => { e.target.style.display = "none"; }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: DARK, fontFamily: FONT_S }}>{item.name}</div>
+                  <div style={{ fontSize: 13, color: BROWN, fontWeight: 700, marginTop: 2 }}>{fmt(item.price)}</div>
+                  {options?.cuisson && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>Cuisson : {options.cuisson}</div>}
+                  {options?.accompagnement && <div style={{ fontSize: 11, color: MUTED }}>Avec : {options.accompagnement}</div>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  <button onClick={() => remItem(item.id)}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`,
+                      background: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Minus size={11} color={MUTED} />
+                  </button>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
+                  <button onClick={() => addItem(item)}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
+                      background: BROWN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Plus size={11} color={WHITE} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Options cuisson/accompagnement */}
+              {opts && (opts.cuissons?.length || opts.accompagnements?.length) && (
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {opts.cuissons?.length > 0 && (
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: "1px" }}>Cuisson</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {opts.cuissons.map(c => (
+                          <button key={c} onClick={() => setItemOpt(item.id, "cuisson", c)}
+                            style={{ padding: "4px 11px", borderRadius: 20, border: "none", fontSize: 11, cursor: "pointer",
+                              background: options?.cuisson === c ? BROWN : SAND,
+                              color: options?.cuisson === c ? WHITE : MUTED,
+                              fontWeight: options?.cuisson === c ? 600 : 400 }}>
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {opts.accompagnements?.length > 0 && (
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: "1px" }}>Accompagnement</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {opts.accompagnements.map(a => (
+                          <button key={a} onClick={() => setItemOpt(item.id, "accompagnement", a)}
+                            style={{ padding: "4px 11px", borderRadius: 20, border: "none", fontSize: 11, cursor: "pointer",
+                              background: options?.accompagnement === a ? BROWN : SAND,
+                              color: options?.accompagnement === a ? WHITE : MUTED,
+                              fontWeight: options?.accompagnement === a ? 600 : 400 }}>
+                            {a}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Total */}
+        <div style={{ background: WHITE, borderRadius: 14, padding: "16px 18px",
+          border: `0.5px solid ${BORDER}`, marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between",
+            fontWeight: 800, fontSize: 17, color: DARK }}>
+            <span>Total</span>
+            <span style={{ color: BROWN }}>{fmt(cartTotal)}</span>
+          </div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
+            {cartCount} article{cartCount > 1 ? "s" : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer fixe */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+        width: "100%", maxWidth: 480, padding: "12px 20px 28px",
+        background: `linear-gradient(to top, ${CREAM} 70%, transparent)` }}>
+        <BtnBrown onClick={() => setStep("info")}>
+          Continuer →
+        </BtnBrown>
+      </div>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     INFOS CLIENT
+  ══════════════════════════════════════════════════════════════════════════ */
+  if (step === "info") return (
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+      margin: "0 auto", fontFamily: FONT, paddingBottom: 120 }}>
+      <HeaderNav title="Vos informations" table={table} onBack={() => setStep("cart")} />
+
+      <div style={{ padding: "24px 20px" }}>
+
+        {/* Champs */}
+        {[
+          { label: "Nom complet *", value: clientName, set: setClientName, ph: "Jean Kouassi", required: true },
+          { label: "Téléphone", value: clientPhone, set: setClientPhone, ph: "+225 07 00 00 00 00", type: "tel" },
+        ].map(({ label, value, set, ph, required, type }) => (
+          <div key={label} style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: MUTED,
+              textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+              {label}
+            </label>
+            <input value={value} onChange={e => set(e.target.value)}
+              placeholder={ph} type={type || "text"}
+              style={{ width: "100%", background: WHITE, border: `0.5px solid ${value ? BROWN : BORDER}`,
+                borderRadius: 10, padding: "13px 14px", fontSize: 15, color: DARK,
+                outline: "none", fontFamily: FONT, boxSizing: "border-box",
+                transition: "border-color .2s" }} />
+          </div>
+        ))}
+
+        {/* Notes */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: MUTED,
+            textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+            Notes / allergies (optionnel)
+          </label>
+          <textarea value={orderNote} onChange={e => setOrderNote(e.target.value)}
+            placeholder="Sans gluten, pas d'oignons, anniversaire…" rows={3}
+            style={{ width: "100%", background: WHITE, border: `0.5px solid ${BORDER}`,
+              borderRadius: 10, padding: "13px 14px", fontSize: 14, color: DARK,
+              outline: "none", fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
+        </div>
+
+        {/* Récapitulatif compact */}
+        <div style={{ background: WHITE, borderRadius: 12, padding: "14px 16px",
+          border: `0.5px solid ${BORDER}`, marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+            letterSpacing: "1.5px", marginBottom: 10 }}>Récapitulatif</div>
+          {cartItems.map(({ item, qty, options }) => (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between",
+              fontSize: 13, color: DARK, marginBottom: 5 }}>
+              <span style={{ color: MUTED }}>{qty}× {item.name}
+                {options?.cuisson ? ` — ${options.cuisson}` : ""}
+              </span>
+              <span style={{ fontWeight: 600, color: BROWN }}>{fmt(item.price * qty)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800,
+            fontSize: 15, marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}` }}>
+            <span>Total</span>
+            <span style={{ color: BROWN }}>{fmt(cartTotal)}</span>
+          </div>
+        </div>
+
+        {/* ── Case à cocher OBLIGATOIRE ── */}
+        <motion.div onClick={() => setAgreed(p => !p)}
+          animate={{ borderColor: agreed ? BROWN : BORDER }}
+          style={{ background: agreed ? BROWN + "0A" : WHITE,
+            borderRadius: 12, padding: "14px 16px", marginBottom: 4,
+            border: `1.5px solid ${agreed ? BROWN : BORDER}`,
+            cursor: "pointer", transition: "all .2s" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <motion.div animate={{ background: agreed ? BROWN : WHITE, scale: agreed ? [1.1, 1] : 1 }}
+              style={{ width: 22, height: 22, borderRadius: 6,
+                border: `2px solid ${agreed ? BROWN : BORDER}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, marginTop: 1, transition: "all .2s" }}>
+              {agreed && <Check size={13} color={WHITE} strokeWidth={3} />}
+            </motion.div>
+            <div style={{ fontSize: 12, color: agreed ? DARK : MUTED, lineHeight: 1.65,
+              transition: "color .2s" }}>
+              <strong style={{ color: agreed ? BROWN : MUTED }}>
+                J'ai vérifié ma commande et je m'engage à la régler en totalité.
+              </strong>
+              {" "}En cas d'erreur de ma part sur les articles commandés, je suis entièrement responsable.
+            </div>
+          </div>
+          {!agreed && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8,
+              fontSize: 10, color: "#B8860B", paddingLeft: 34 }}>
+              <AlertTriangle size={10} /> Obligatoire pour valider
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+        width: "100%", maxWidth: 480, padding: "12px 20px 28px",
+        background: `linear-gradient(to top, ${CREAM} 70%, transparent)` }}>
+        <BtnBrown onClick={placeOrder} disabled={submitting || !clientName.trim() || !agreed}>
+          {submitting ? "Envoi en cours…" : `Confirmer · ${fmt(cartTotal)}`}
+        </BtnBrown>
+        {!clientName.trim() && (
+          <div style={{ textAlign: "center", fontSize: 11, color: MUTED, marginTop: 6 }}>
+            Votre nom est requis
+          </div>
+        )}
+      </div>
+
+      {errorMsg && (
+        <div style={{ position: "fixed", bottom: 100, left: "50%", transform: "translateX(-50%)",
+          background: "#8B1414", color: WHITE, borderRadius: 10, padding: "10px 20px",
+          fontSize: 13, maxWidth: 440, textAlign: "center" }}>
+          {errorMsg}
+        </div>
+      )}
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONFIRMATION
+  ══════════════════════════════════════════════════════════════════════════ */
+  if (step === "confirm") return (
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+      margin: "0 auto", fontFamily: FONT, display: "flex",
+      flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        style={{ textAlign: "center", width: "100%", maxWidth: 360 }}>
+
+        {/* Icône succès */}
+        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ delay: 0.2, duration: 0.4 }}
+          style={{ width: 72, height: 72, borderRadius: "50%", background: BROWN,
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+          <Check size={36} color={WHITE} strokeWidth={2.5} />
+        </motion.div>
+
+        <h2 style={{ fontSize: 26, fontWeight: 400, color: DARK, fontFamily: FONT_S,
+          margin: "0 0 8px" }}>Commande envoyée !</h2>
+        {clientName && <div style={{ fontSize: 14, color: MUTED, marginBottom: 4 }}>Merci, {clientName}</div>}
+        {table && <div style={{ fontSize: 12, color: BROWN, fontWeight: 700, marginBottom: 16 }}>Table {table}</div>}
+
+        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, marginBottom: 28 }}>
+          Votre commande a été transmise à la cuisine.<br />
+          Nous vous apportons cela dans les plus brefs délais.
+        </p>
+
+        {/* Résumé */}
+        <div style={{ background: WHITE, borderRadius: 14, padding: "16px 18px",
+          border: `0.5px solid ${BORDER}`, marginBottom: 28, textAlign: "left" }}>
+          {(lastOrder?.items || []).map((it, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between",
+              fontSize: 13, color: DARK, marginBottom: 5 }}>
+              <span style={{ color: MUTED }}>{it.qty}× {it.name}</span>
+              <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(it.price * it.qty)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800,
+            fontSize: 16, marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}` }}>
+            <span>Total</span>
+            <span style={{ color: BROWN }}>{fmt(lastOrder?.total)}</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <BtnBrown onClick={reset}>Nouvelle commande</BtnBrown>
+          <button onClick={() => setStep("history")}
+            style={{ padding: "14px 0", borderRadius: 40, border: `1.5px solid ${BORDER}`,
+              background: "transparent", color: MUTED, fontSize: 13, cursor: "pointer",
+              fontFamily: FONT }}>
+            Voir mes commandes
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     HISTORIQUE
+  ══════════════════════════════════════════════════════════════════════════ */
+  if (step === "history") return (
+    <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
+      margin: "0 auto", fontFamily: FONT }}>
+      <HeaderNav title="Mes commandes" table={table} onBack={() => setStep("menu")} />
+
+      <div style={{ padding: "16px 20px" }}>
+        {localOrders.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
+            <ShoppingBag size={36} style={{ marginBottom: 12, opacity: 0.3 }} />
+            <div style={{ fontSize: 14 }}>Aucune commande dans cette session</div>
+          </div>
+        ) : localOrders.map((o, i) => (
+          <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04 }}
+            style={{ background: WHITE, borderRadius: 14, padding: 16,
+              marginBottom: 12, border: `0.5px solid ${BORDER}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between",
+              alignItems: "flex-start", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, color: MUTED }}>
+                  {new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
+                </div>
+                {o.table_label && <div style={{ fontSize: 11, color: MUTED }}>Table {o.table_label}</div>}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                background: (STATUS[o.status]?.color || "#888") + "18",
+                color: STATUS[o.status]?.color || "#888",
+                border: `0.5px solid ${(STATUS[o.status]?.color || "#888")}44` }}>
+                {STATUS[o.status]?.label || o.status}
+              </span>
+            </div>
+            <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 10 }}>
+              {(o.items || []).map((it, j) => (
+                <div key={j} style={{ display: "flex", justifyContent: "space-between",
+                  fontSize: 13, color: DARK, marginBottom: 4 }}>
+                  <span style={{ color: MUTED }}>{it.qty}× {it.name}</span>
+                  <span style={{ color: BROWN, fontWeight: 600 }}>{fmt(it.price * it.qty)}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between",
+                fontWeight: 800, fontSize: 14, marginTop: 8, paddingTop: 8,
+                borderTop: `0.5px solid ${BORDER}` }}>
+                <span style={{ color: DARK }}>Total</span>
+                <span style={{ color: BROWN }}>{fmt(o.total)}</span>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return null;
 }

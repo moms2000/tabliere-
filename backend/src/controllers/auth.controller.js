@@ -5,9 +5,11 @@
 
 import bcrypt   from "bcryptjs";
 import jwt      from "jsonwebtoken";
+import crypto   from "crypto";
 import { query, withTransaction } from "../config/db.js";
 import { cache } from "../config/redis.js";
 import { env }   from "../config/env.js";
+import { emailService } from "../services/email.service.js";
 import { ok, created, badRequest, unauthorized, conflict } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { revokeToken }            from "../middleware/auth.js";
@@ -84,9 +86,24 @@ export const register = asyncHandler(async (req, res) => {
     return newUser;
   });
 
+  // Générer et envoyer un token de vérification d'email
+  const emailToken = crypto.randomBytes(32).toString("hex");
+  const emailTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+  await query(
+    `UPDATE users SET email_verified = FALSE, email_token = $1, email_token_expires = $2
+     WHERE id = $3`,
+    [emailToken, emailTokenExpires.toISOString(), user.id]
+  ).catch(() => {}); // ne pas bloquer si la colonne n'existe pas encore
+
+  // Envoyer l'email de vérification
+  const verifyUrl = `${env.FRONTEND_URL}/verify-email?token=${emailToken}`;
+  emailService.sendVerificationEmail({ email: user.email, name: user.full_name, verifyUrl })
+    .catch(() => {}); // asynchrone, ne pas bloquer
+
   const tokens = generateTokens(user.id, user.role);
   logger.info("Nouveau compte créé", { userId: user.id, role: user.role });
-  return created(res, { user, ...tokens }, "Compte créé avec succès");
+  return created(res, { user, ...tokens, email_sent: true }, "Compte créé — vérifiez votre e-mail");
 });
 
 // ── POST /auth/login ───────────────────────────────────────────────────────────
@@ -176,4 +193,64 @@ export const me = asyncHandler(async (req, res) => {
 
   await cache.set(cacheKey, user, 300).catch(() => {});
   return ok(res, { user });
+});
+
+// ── GET /auth/verify-email?token=xxx ──────────────────────────────────────────
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.query;
+  if (!token) throw new AppError("Token manquant", 400);
+
+  const { rows: [user] } = await query(
+    `SELECT id, full_name, email FROM users
+     WHERE email_token = $1 AND email_token_expires > NOW() AND email_verified = FALSE`,
+    [token]
+  );
+
+  if (!user) {
+    // Peut-être déjà vérifié ou token expiré
+    const { rows: [existing] } = await query(
+      "SELECT id, email_verified FROM users WHERE email_token = $1", [token]
+    );
+    if (existing?.email_verified) {
+      return ok(res, { already_verified: true }, "E-mail déjà vérifié");
+    }
+    throw new AppError("Lien de vérification invalide ou expiré", 400);
+  }
+
+  await query(
+    `UPDATE users SET email_verified = TRUE, email_token = NULL, email_token_expires = NULL
+     WHERE id = $1`,
+    [user.id]
+  );
+  await cache.del(`user:${user.id}`).catch(() => {});
+
+  logger.info("E-mail vérifié", { userId: user.id });
+  return ok(res, { verified: true, email: user.email }, "E-mail vérifié avec succès");
+});
+
+// ── POST /auth/resend-verification ────────────────────────────────────────────
+export const resendVerification = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) throw new AppError("E-mail requis", 400);
+
+  const { rows: [user] } = await query(
+    "SELECT id, full_name, email, email_verified FROM users WHERE email = $1",
+    [email]
+  );
+
+  if (!user) return ok(res, null, "Si ce compte existe, un email a été envoyé");
+  if (user.email_verified) return ok(res, null, "E-mail déjà vérifié");
+
+  const emailToken = crypto.randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await query(
+    "UPDATE users SET email_token = $1, email_token_expires = $2 WHERE id = $3",
+    [emailToken, expires.toISOString(), user.id]
+  );
+
+  const verifyUrl = `${env.FRONTEND_URL}/verify-email?token=${emailToken}`;
+  await emailService.sendVerificationEmail({ email: user.email, name: user.full_name, verifyUrl });
+
+  return ok(res, null, "Email de vérification envoyé");
 });

@@ -110,7 +110,7 @@ export const update = asyncHandler(async (req, res) => {
 
   const ALLOWED = [
     "name","description","cuisine_type","address","quartier","ville",
-    "phone","email","website","opening_hours","price_range","capacity","theme_color","logo_url",
+    "phone","email","website","opening_hours","price_range","capacity","theme_color","logo_url","photos",
   ];
   const updates = [];
   const values  = [];
@@ -118,6 +118,14 @@ export const update = asyncHandler(async (req, res) => {
   for (const field of ALLOWED) {
     if (req.body[field] === undefined) continue;
     let val = req.body[field];
+    // photos est JSONB (array d'URLs/base64)
+    if (field === "photos") {
+      if (val === null) { val = "[]"; }
+      else if (Array.isArray(val)) { val = JSON.stringify(val.slice(0, 4)); }
+      else if (typeof val === "string") {
+        try { const parsed = JSON.parse(val); val = JSON.stringify(parsed.slice(0, 4)); } catch(_) { val = "[]"; }
+      }
+    }
     // opening_hours est JSONB — s'assurer d'envoyer une valeur JSON valide
     if (field === "opening_hours") {
       if (val === null || val === "") {

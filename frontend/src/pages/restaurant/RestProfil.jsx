@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Store, MapPin, Clock, Phone, Globe, DollarSign, Palette, Check } from "lucide-react";
+import { Save, Store, MapPin, Clock, Phone, Globe, DollarSign, Palette, Check, Camera, X, Images } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Btn, FormField, Input, PhotoUpload } from "../../components/ui";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -54,6 +54,7 @@ export default function RestProfil() {
           capacity:      r.capacity      || "",
           theme_color:   r.theme_color   || P,
           logo_url:      r.logo_url      || "",
+          photos:        Array.isArray(r.photos) ? r.photos : [],
         });
       })
       .catch(console.error)
@@ -278,6 +279,87 @@ export default function RestProfil() {
                 onChange={b64 => setForm(p => ({ ...p, logo_url: b64 }))}
                 height={130}
               />
+            </Card>
+          </motion.div>
+
+          {/* Photos du restaurant — jusqu'à 4 */}
+          <motion.div variants={fadeUp}>
+            <Card>
+              <SectionHeader title="Photos du restaurant" icon={Images} />
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+                Ajoutez jusqu'à 4 photos pour présenter votre restaurant
+                <span style={{ color: P, marginLeft: 6 }}>({(form.photos || []).length}/4)</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[0, 1, 2, 3].map(idx => {
+                  const existing = (form.photos || [])[idx];
+                  return (
+                    <div key={idx} style={{ position: "relative" }}>
+                      {existing ? (
+                        <div style={{ position: "relative", borderRadius: 10, overflow: "hidden",
+                          border: `0.5px solid ${BORDER}`, height: 110 }}>
+                          <img src={existing} alt={`Photo ${idx + 1}`}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <button
+                            onClick={() => {
+                              const updated = [...(form.photos || [])];
+                              updated.splice(idx, 1);
+                              setForm(p => ({ ...p, photos: updated }));
+                            }}
+                            style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,.6)",
+                              border: "none", borderRadius: "50%", width: 22, height: 22,
+                              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <X size={11} color="white" />
+                          </button>
+                          <div style={{ position: "absolute", bottom: 4, left: 6,
+                            fontSize: 9, background: "rgba(0,0,0,.5)", color: "white",
+                            borderRadius: 4, padding: "1px 5px" }}>
+                            Photo {idx + 1}
+                          </div>
+                        </div>
+                      ) : (
+                        <label style={{ display: "flex", flexDirection: "column",
+                          alignItems: "center", justifyContent: "center",
+                          height: 110, borderRadius: 10, border: `1.5px dashed ${BORDER}`,
+                          background: BG, cursor: (form.photos || []).length <= idx ? "pointer" : "default",
+                          opacity: (form.photos || []).length < idx ? 0.4 : 1 }}>
+                          <Camera size={20} color={MUTED} style={{ marginBottom: 6 }} />
+                          <span style={{ fontSize: 11, color: MUTED }}>Photo {idx + 1}</span>
+                          <input type="file" accept="image/*" style={{ display: "none" }}
+                            disabled={(form.photos || []).length < idx}
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = ev => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const MAX = 1000;
+                                  let w = img.width, h = img.height;
+                                  if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; } }
+                                  const canvas = document.createElement("canvas");
+                                  canvas.width = w; canvas.height = h;
+                                  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                                  const b64 = canvas.toDataURL("image/jpeg", 0.80);
+                                  setForm(p => ({
+                                    ...p,
+                                    photos: [...(p.photos || []).slice(0, idx), b64, ...(p.photos || []).slice(idx + 1)].slice(0, 4)
+                                  }));
+                                };
+                                img.src = ev.target.result;
+                              };
+                              reader.readAsDataURL(file);
+                              e.target.value = "";
+                            }} />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 8 }}>
+                Ces photos seront visibles sur la page de votre restaurant
+              </div>
             </Card>
           </motion.div>
 

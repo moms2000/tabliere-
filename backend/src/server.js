@@ -43,6 +43,40 @@ async function runStartupMigrations() {
   logger.info(`Migrations démarrage : ${ok} ok, ${fail} ignorées`);
 }
 
+/**
+ * Migrations métier : nouvelles fonctionnalités
+ * Photos restaurant, avis clients, vérification email
+ */
+async function runBusinessMigrations() {
+  const stmts = [
+    // Photos restaurant (jusqu'à 4, stockées en JSON)
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`,
+
+    // Email vérification (TRUE par défaut pour les comptes existants)
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified     BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token        VARCHAR(64)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token_expires TIMESTAMPTZ`,
+
+    // Table avis clients
+    `CREATE TABLE IF NOT EXISTS reviews (
+       id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       restaurant_id   UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+       client_id       UUID NOT NULL REFERENCES users(id)       ON DELETE CASCADE,
+       rating          INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+       comment         TEXT,
+       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       UNIQUE(restaurant_id, client_id)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_reviews_restaurant ON reviews(restaurant_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reviews_client     ON reviews(client_id)`,
+  ];
+
+  for (const sql of stmts) {
+    try { await query(sql); } catch (_) {}
+  }
+  logger.info("Migrations métier exécutées");
+}
+
 let server;
 
 async function start() {
@@ -62,8 +96,9 @@ async function start() {
     // Connexion Redis (optionnelle)
     await connectRedis();
 
-    // Migrations silencieuses (colonnes optionnelles)
+    // Migrations démarrage (idempotentes)
     await runStartupMigrations();
+    await runBusinessMigrations();
 
     // BullMQ workers
     try {

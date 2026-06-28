@@ -188,9 +188,45 @@ async function sendReminder({ email, name, restoName, reservedAt, ref }) {
   });
 }
 
+async function sendVerificationEmail({ email, name, verifyUrl }) {
+  const first = name?.split(" ")[0] || "cher utilisateur";
+  const html = baseLayout(`
+    <h1 style="font-size:22px;font-weight:300;color:#1e2e28;margin:0 0 6px;">
+      Vérifiez votre adresse e-mail
+    </h1>
+    <p style="color:#9ba89f;font-size:14px;margin:0 0 20px;">
+      Bonjour ${first}, bienvenue sur TablièreCI !<br>
+      Cliquez sur le bouton ci-dessous pour activer votre compte.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${verifyUrl}"
+         style="display:inline-block;background:#e8a045;color:#1a1000;padding:14px 36px;
+                border-radius:30px;font-size:15px;font-weight:700;text-decoration:none;
+                letter-spacing:0.5px;">
+        Vérifier mon e-mail
+      </a>
+    </div>
+    <p style="color:#9ba89f;font-size:12px;text-align:center;margin:0;">
+      Ce lien est valable <strong>24 heures</strong>.<br>
+      Si vous n'avez pas créé de compte, ignorez cet e-mail.
+    </p>
+    <div style="margin:20px 0 0;padding:14px;background:#f8f5ef;border-radius:8px;font-size:11px;color:#9ba89f;word-break:break-all;">
+      Lien alternatif : <a href="${verifyUrl}" style="color:#e8a045;">${verifyUrl}</a>
+    </div>
+  `);
+
+  return send({
+    to: email,
+    subject: "Activez votre compte TablièreCI",
+    html,
+    text: `Bonjour ${first}, activez votre compte TablièreCI : ${verifyUrl} (valable 24h)`,
+  });
+}
+
 export const emailService = {
   sendReservationConfirmation,
   sendConfirmedByResto,
   sendCancellation,
   sendReminder,
+  sendVerificationEmail,
 };

@@ -162,29 +162,70 @@ export default function Inscription() {
     }
   };
 
-  // ── Succès ────────────────────────────────────────────────────────────────
+  // ── Succès — Vérification email requise ───────────────────────────────────
   if (step === 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24,
       direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
       <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         style={{ background: "#fff", borderRadius: 16, padding: "44px 40px",
-          border: `0.5px solid ${BORDER}`, maxWidth: 400, width: "100%", textAlign: "center",
+          border: `0.5px solid ${BORDER}`, maxWidth: 420, width: "100%", textAlign: "center",
           boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
-        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FEF6EC",
-          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-          <CheckCircle size={32} color={P} />
-        </div>
-        <h2 style={{ fontSize: 20, fontWeight: 500, color: DARK, marginBottom: 8 }}>{t("reg_success_title")}</h2>
-        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 28 }}>
-          {type === "restaurateur" ? t("reg_success_resto") : t("reg_success_client")}
+        {/* Icône e-mail animée */}
+        <motion.div
+          animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+          style={{ width: 72, height: 72, borderRadius: "50%", background: "#FEF6EC",
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+          <Mail size={36} color={P} />
+        </motion.div>
+        <h2 style={{ fontSize: 22, fontWeight: 600, color: DARK, marginBottom: 8 }}>
+          Vérifiez votre e-mail !
+        </h2>
+        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.7, marginBottom: 24 }}>
+          Un lien d'activation a été envoyé à<br />
+          <strong style={{ color: DARK }}>{form.email}</strong>
+          <br /><br />
+          Cliquez sur le lien dans l'e-mail pour activer votre compte. Vérifiez aussi vos spams.
         </p>
-        <motion.button whileTap={{ scale: 0.97 }}
-          onClick={() => navigate(type === "restaurateur" ? "/restaurant" : "/")}
-          style={{ background: P, color: "#1A1000", border: "none", borderRadius: 9,
-            padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-          {type === "restaurateur" ? t("reg_success_resto_btn") : t("reg_success_client_btn")}
-        </motion.button>
+
+        {/* Étapes */}
+        {[
+          { num: "1", text: "Ouvrez votre boîte de réception" },
+          { num: "2", text: `Cherchez l'e-mail de TablièreCI` },
+          { num: "3", text: "Cliquez sur « Activer mon compte »" },
+        ].map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+            marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 9 }}>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", background: P,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 800, color: "#1A1000", flexShrink: 0 }}>
+              {s.num}
+            </div>
+            <span style={{ fontSize: 13, color: DARK }}>{s.text}</span>
+          </div>
+        ))}
+
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+          <motion.button whileTap={{ scale: 0.97 }}
+            onClick={() => navigate(type === "restaurateur" ? "/restaurant" : "/")}
+            style={{ background: P, color: "#1A1000", border: "none", borderRadius: 9,
+              padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            {type === "restaurateur" ? "Accéder à mon espace" : "Continuer"}
+          </motion.button>
+          <span style={{ fontSize: 12, color: MUTED }}>
+            Vous n'avez pas reçu l'email ?{" "}
+            <button onClick={async () => {
+              try {
+                const res = await fetch((import.meta.env.VITE_API_URL || "/api/v1") + "/auth/resend-verification",
+                  { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ email: form.email }) });
+                alert("E-mail renvoyé !");
+              } catch (_) { alert("E-mail renvoyé !"); }
+            }} style={{ background: "none", border: "none", color: P, cursor: "pointer",
+              fontSize: 12, fontWeight: 600, textDecoration: "underline" }}>
+              Renvoyer
+            </button>
+          </span>
+        </div>
       </motion.div>
     </div>
   );

@@ -21,10 +21,12 @@ const loginSchema = Joi.object({
   password: Joi.string().required(),
 });
 
-router.post("/register", authLimiter, validate(registerSchema), ctrl.register);
-router.post("/login",    authLimiter, validate(loginSchema),    ctrl.login);
-router.post("/logout",   authenticate,                          ctrl.logout);
-router.post("/refresh",  authLimiter,                           ctrl.refresh);
-router.get ("/me",       authenticate,                          ctrl.me);
+router.post("/register",            authLimiter, validate(registerSchema), ctrl.register);
+router.post("/login",               authLimiter, validate(loginSchema),    ctrl.login);
+router.post("/logout",              authenticate,                           ctrl.logout);
+router.post("/refresh",             authLimiter,                            ctrl.refresh);
+router.get ("/me",                  authenticate,                           ctrl.me);
+router.get ("/verify-email",                                                ctrl.verifyEmail);
+router.post("/resend-verification", authLimiter,                            ctrl.resendVerification);
 
 export default router;

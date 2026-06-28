@@ -357,6 +357,17 @@ export default function RestaurantDetail() {
   const [special,  setSpecial]  = useState("");
   const [resaRef,  setResaRef]  = useState(null);
 
+  // Reviews
+  const [reviews,   setReviews]   = useState([]);
+  const [canReview, setCanReview] = useState(false);
+  const [myReview,  setMyReview]  = useState(null);
+  const [reviewForm,setReviewForm]= useState({ rating: 0, comment: "" });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewMsg,        setReviewMsg]        = useState("");
+
+  // Galerie photos
+  const [photoIdx, setPhotoIdx] = useState(0);
+
   // Responsive
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   useEffect(() => {
@@ -370,7 +381,25 @@ export default function RestaurantDetail() {
       .then(d => setResto(d.restaurant || d))
       .catch(() => setResto(null))
       .finally(() => setLoading(false));
-  }, [slug]);
+
+    // Charger les avis
+    import("../../services/api.js").then(({ default: api }) => {
+      api.get(`/restaurants/${slug}/reviews`, { params: { limit: 20 } })
+        .then(r => setReviews(r.data?.data || []))
+        .catch(() => {});
+      if (user) {
+        api.get(`/restaurants/${slug}/reviews/can-review`)
+          .then(r => {
+            setCanReview(r.data?.data?.can_review || false);
+            setMyReview(r.data?.data?.existing_review || null);
+            if (r.data?.data?.existing_review) {
+              setReviewForm({ rating: r.data.data.existing_review.rating, comment: r.data.data.existing_review.comment || "" });
+            }
+          })
+          .catch(() => {});
+      }
+    });
+  }, [slug, user]);
 
   const openModal = useCallback(({ date, slot, pers: p }) => {
     setSelDate(date); setSelSlot(slot); setPers(p);
@@ -446,17 +475,47 @@ export default function RestaurantDetail() {
         <span style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{resto.name}</span>
       </nav>
 
-      {/* Photo banner */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr",
-        gap: 3, height: 240, overflow: "hidden" }}>
-        {[`${PL}cc`, `${PL}99`, `${PL}66`].map((c, i) => (
-          <div key={i} style={{ background: c, display: "flex",
-            alignItems: "center", justifyContent: "center",
-            gridRow: i === 0 ? "1 / 3" : "auto", minHeight: 100 }}>
-            <UtensilsCrossed size={i === 0 ? 48 : 28} color={P} style={{ opacity: 0.5 }} />
+      {/* Photo gallery */}
+      {(() => {
+        const photos = Array.isArray(resto.photos) && resto.photos.length > 0 ? resto.photos : null;
+        if (photos) {
+          return (
+            <div style={{ position: "relative", height: 280, overflow: "hidden", background: "#1E2E28" }}>
+              <img src={photos[photoIdx]} alt={`${resto.name} photo ${photoIdx + 1}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover", transition: "opacity .3s" }} />
+              {photos.length > 1 && (
+                <>
+                  <div style={{ position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)",
+                    display: "flex", gap: 6 }}>
+                    {photos.map((_, i) => (
+                      <button key={i} onClick={() => setPhotoIdx(i)}
+                        style={{ width: i === photoIdx ? 20 : 7, height: 7, borderRadius: 4,
+                          background: i === photoIdx ? P : "rgba(255,255,255,.5)",
+                          border: "none", cursor: "pointer", padding: 0, transition: "all .2s" }} />
+                    ))}
+                  </div>
+                  <div style={{ position: "absolute", bottom: 12, right: 14,
+                    background: "rgba(0,0,0,.5)", color: "white", borderRadius: 20,
+                    padding: "2px 9px", fontSize: 11 }}>
+                    {photoIdx + 1}/{photos.length}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr",
+            gap: 3, height: 240, overflow: "hidden" }}>
+            {[`${PL}cc`, `${PL}99`, `${PL}66`].map((c, i) => (
+              <div key={i} style={{ background: c, display: "flex", alignItems: "center",
+                justifyContent: "center", gridRow: i === 0 ? "1 / 3" : "auto", minHeight: 100 }}>
+                <UtensilsCrossed size={i === 0 ? 48 : 28} color={P} style={{ opacity: 0.5 }} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       {/* Body */}
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "28px 20px",
@@ -545,6 +604,145 @@ export default function RestaurantDetail() {
 
         {/* Sidebar — desktop seulement */}
         {!isMobile && <BookingWidget onBook={openModal} />}
+      </div>
+
+      {/* ── Section Avis ── */}
+      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 60px" }}>
+        <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 32 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: DARK, margin: "0 0 4px" }}>
+                Avis clients
+              </h2>
+              {resto.review_count > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Stars rating={resto.rating} />
+                  <span style={{ fontSize: 14, color: DARK, fontWeight: 600 }}>
+                    {Number(resto.rating || 0).toFixed(1)}
+                  </span>
+                  <span style={{ color: MUTED, fontSize: 13 }}>
+                    ({resto.review_count} avis)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Formulaire avis */}
+          {canReview && (
+            <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 14,
+              padding: "20px 20px", marginBottom: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: DARK, marginBottom: 14 }}>
+                {myReview ? "Modifier votre avis" : "Laisser un avis"}
+              </div>
+              {/* Étoiles */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                {[1,2,3,4,5].map(i => (
+                  <button key={i} onClick={() => setReviewForm(p => ({ ...p, rating: i }))}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill={i <= reviewForm.rating ? P : "none"}
+                      stroke={P} strokeWidth="1.5">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  </button>
+                ))}
+                {reviewForm.rating > 0 && (
+                  <span style={{ marginLeft: 6, color: MUTED, fontSize: 13, alignSelf: "center" }}>
+                    {["","Mauvais","Moyen","Bien","Très bien","Excellent"][reviewForm.rating]}
+                  </span>
+                )}
+              </div>
+              <textarea value={reviewForm.comment}
+                onChange={e => setReviewForm(p => ({ ...p, comment: e.target.value }))}
+                placeholder="Partagez votre expérience (optionnel)…"
+                rows={3}
+                style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+                  padding: "10px 12px", fontSize: 13, color: DARK, background: BG,
+                  outline: "none", fontFamily: FONT, resize: "none", boxSizing: "border-box",
+                  marginBottom: 12 }} />
+              {reviewMsg && (
+                <div style={{ fontSize: 12, color: reviewMsg.includes("succès") ? "#1D9E75" : "#DC2626",
+                  marginBottom: 8 }}>{reviewMsg}</div>
+              )}
+              <motion.button whileTap={{ scale: 0.97 }}
+                onClick={async () => {
+                  if (!reviewForm.rating) { setReviewMsg("Veuillez sélectionner une note"); return; }
+                  setSubmittingReview(true); setReviewMsg("");
+                  try {
+                    const { default: api } = await import("../../services/api.js");
+                    const r = await api.post(`/restaurants/${slug}/reviews`, reviewForm);
+                    setMyReview(r.data?.data?.review);
+                    setReviewMsg("Avis publié avec succès !");
+                    // Recharger les avis
+                    const list = await api.get(`/restaurants/${slug}/reviews`);
+                    setReviews(list.data?.data || []);
+                  } catch (e) {
+                    setReviewMsg(e.response?.data?.message || "Erreur lors de la publication");
+                  }
+                  setSubmittingReview(false);
+                }}
+                disabled={submittingReview || !reviewForm.rating}
+                style={{ background: P, color: "#1A1000", border: "none", borderRadius: 9,
+                  padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  opacity: !reviewForm.rating ? 0.5 : 1, fontFamily: FONT }}>
+                {submittingReview ? "Publication…" : myReview ? "Mettre à jour" : "Publier"}
+              </motion.button>
+            </div>
+          )}
+
+          {/* Liste avis */}
+          {reviews.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: MUTED, fontSize: 14 }}>
+              Aucun avis pour ce restaurant. Soyez le premier à partager votre expérience !
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {reviews.map((rv, i) => (
+                <motion.div key={rv.id || i}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12,
+                    padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                    {rv.client_avatar ? (
+                      <img src={rv.client_avatar} alt="" style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: PL,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 14, fontWeight: 700, color: P, flexShrink: 0 }}>
+                        {(rv.client_name || "?").slice(0,1).toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: DARK }}>
+                          {rv.client_name || "Client"}
+                        </span>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          {[1,2,3,4,5].map(i => (
+                            <svg key={i} width="13" height="13" viewBox="0 0 24 24"
+                              fill={i <= rv.rating ? P : "none"} stroke={P} strokeWidth="1.5">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: 11, color: MUTED }}>
+                          {new Date(rv.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {rv.comment && (
+                    <p style={{ fontSize: 13, color: "#555", lineHeight: 1.65, margin: 0 }}>
+                      {rv.comment}
+                    </p>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Modal réservation ── */}

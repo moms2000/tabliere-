@@ -56,3 +56,82 @@ a { text-decoration: none; color: inherit; }
   scrollbar-width: none;
 }
 .tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Tablette ──────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  /* Grilles 2 colonnes → 1 */
+  .grid-2col { grid-template-columns: 1fr !important; }
+
+  /* Admin stats 4 col → 2 */
+  .admin-4col { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Plan de salle */
+  .pos-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important; }
+}
+
+/* ── Mobile strict ──────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Landing hero — passer en colonne */
+  .hero-grid { grid-template-columns: 1fr !important; }
+  .hero-decor { display: none !important; }
+  .hero-left  { padding: 28px 20px !important; }
+
+  /* Landing search bar — passer en colonne */
+  .search-bar { flex-direction: column !important; border-radius: 12px !important; }
+  .search-bar > * { border-right: none !important; border-bottom: 0.5px solid #E4DFD8 !important; }
+  .search-bar button { border-radius: 0 0 12px 12px !important; }
+
+  /* Stats band 4 → 2 × 2 */
+  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Footer 4 col → 1 */
+  .footer-grid { grid-template-columns: 1fr !important; }
+
+  /* Admin grids */
+  .admin-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .admin-2col      { grid-template-columns: 1fr !important; }
+
+  /* Restaurant detail photo banner */
+  .photo-banner { height: 160px !important; }
+
+  /* Tables inline → scroll */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Modales full-width */
+  .modal-desktop { width: calc(100vw - 32px) !important; max-width: 100% !important; }
+
+  /* Texte headings adaptatifs */
+  h1 { font-size: clamp(20px, 6vw, 32px) !important; }
+
+  /* Padding réduit */
+  .page-padding { padding: 12px !important; }
+
+  /* Cards en colonne */
+  .card-row { flex-direction: column !important; }
+
+  /* Filtres admin */
+  .admin-filters { flex-wrap: wrap !important; }
+  .admin-filters button { font-size: 10px !important; padding: 3px 7px !important; }
+
+  /* Masquer les colonnes secondaires dans les tableaux */
+  .col-hide-mobile { display: none !important; }
+
+  /* Stat cards min-width */
+  .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ── Utilitaires touch ──────────────────────────────────────────────────────── */
+@media (hover: none) {
+  /* Supprimer les hover effects sur mobile */
+  button:hover { opacity: 1 !important; }
+}
+
+/* ── Safe area pour iOS (notch) ─────────────────────────────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .ios-bottom-safe { padding-bottom: env(safe-area-inset-bottom) !important; }
+}
+
+/* ── Input mobile — empêcher zoom iOS (font >= 16px sur focus) ─────────────── */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px !important; }
+}

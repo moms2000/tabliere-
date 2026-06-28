@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag, Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
@@ -30,7 +30,8 @@ const NAV = [
   { to: "/restaurant/reservations",  label: "Réservations",    icon: CalendarCheck },
   { to: "/restaurant/plan",          label: "Plan de salle",   icon: LayoutTemplate },
   { to: "/restaurant/menu",          label: "Menu & QR Code",  icon: Notebook },
-  { to: "/restaurant/commandes",     label: "Commandes QR",    icon: ShoppingBag },
+  { to: "/restaurant/pos",           label: "Service rapide",  icon: Zap, highlight: true },
+  { to: "/restaurant/commandes",     label: "Commandes",       icon: ShoppingBag },
   { to: "/restaurant/profil",        label: "Mon restaurant",  icon: Store },
 ];
 
@@ -74,18 +75,22 @@ function SidebarContent({ navigate, user, logout, onClose }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "10px 8px" }}>
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+        {NAV.map(({ to, label, icon: Icon, end, highlight }) => (
           <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
             onClick={() => onClose?.()}>
             {({ isActive }) => (
-              <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
+              <motion.div whileHover={{ background: highlight && !isActive ? "rgba(232,160,69,.2)" : "rgba(232,160,69,.10)" }}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
                   borderRadius: 9, marginBottom: 1, cursor: "pointer",
-                  background: isActive ? "rgba(232,160,69,.15)" : "transparent",
-                  borderLeft: isActive ? `3px solid ${P}` : "3px solid transparent",
-                  color: isActive ? P : "rgba(255,255,255,.5)" }}>
+                  background: isActive ? "rgba(232,160,69,.15)" : highlight ? "rgba(232,160,69,.08)" : "transparent",
+                  borderLeft: isActive ? `3px solid ${P}` : highlight ? `3px solid ${P}55` : "3px solid transparent",
+                  color: isActive ? P : highlight ? P + "cc" : "rgba(255,255,255,.5)" }}>
                 <Icon size={16} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: isActive || highlight ? 600 : 400 }}>{label}</span>
+                {highlight && !isActive && (
+                  <span style={{ marginLeft: "auto", fontSize: 8, background: P, color: "#1a1000",
+                    borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>LIVE</span>
+                )}
               </motion.div>
             )}
           </NavLink>

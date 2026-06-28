@@ -11,17 +11,18 @@ import { notificationQueue }      from "../queues/index.js";
 import { logger }                 from "../utils/logger.js";
 import { emitToUser }             from "../utils/sse.js";
 
-// Migration silencieuse : colonnes walk-in
+// Migration silencieuse : colonnes walk-in (une par une pour éviter les échecs silencieux)
 let resaMigrated = false;
 async function ensureResaColumns() {
   if (resaMigrated) return;
-  try {
-    await query(`
-      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_name  VARCHAR(255);
-      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(30);
-      ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_noshow     BOOLEAN NOT NULL DEFAULT FALSE;
-    `);
-  } catch (_) {}
+  const stmts = [
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_name  VARCHAR(255)`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(30)`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_noshow     BOOLEAN DEFAULT FALSE`,
+  ];
+  for (const sql of stmts) {
+    try { await query(sql); } catch (_) {}
+  }
   resaMigrated = true;
 }
 
@@ -65,19 +66,33 @@ export const create = asyncHandler(async (req, res) => {
     "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
   );
 
-  // Statut initial : confirmé pour réservation créée par restaurateur
-  const initialStatus = req.user.role === "restaurateur" ? "confirme" : "en_attente";
+  const isResto = req.user.role === "restaurateur";
+  const initialStatus = isResto ? "confirme" : "en_attente";
 
   const resa = await withTransaction(async (client) => {
-    const { rows: [newResa] } = await client.query(
-      `INSERT INTO reservations
-         (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
-          special_request, status, walk_in_name, walk_in_phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
-       special_request || null, initialStatus, walk_in_name || null, walk_in_phone || null]
-    );
+    let newResa;
+    if (isResto && (walk_in_name || walk_in_phone)) {
+      // Walk-in : nécessite les colonnes migrées
+      const { rows: [r] } = await client.query(
+        `INSERT INTO reservations
+           (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
+            special_request, status, walk_in_name, walk_in_phone)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
+         special_request || null, initialStatus, walk_in_name, walk_in_phone || null]
+      );
+      newResa = r;
+    } else {
+      // Réservation standard (client ou restaurateur sans walk-in)
+      const { rows: [r] } = await client.query(
+        `INSERT INTO reservations
+           (ref, restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
+         special_request || null, initialStatus]
+      );
+      newResa = r;
+    }
 
     // Marquer la table comme réservée
     if (table_id) {

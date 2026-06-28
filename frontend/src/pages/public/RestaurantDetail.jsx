@@ -209,6 +209,134 @@ function BookingWidget({ onBook }) {
   );
 }
 
+/* Contenu des étapes partagé mobile/desktop */
+function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers, resto,
+  special, setSpecial, user, error, booking, handleBook, closeModal, navigate,
+  resaRef, P, PL, DARK, BG, BORDER, MUTED, FONT }) {
+  return (
+    <>
+      <button onClick={closeModal}
+        style={{ position: "absolute", top: 14, right: 14, background: "transparent",
+          border: "none", cursor: "pointer", color: MUTED, zIndex: 1, padding: 4 }}>
+        <X size={18} />
+      </button>
+
+      {step === 3 ? (
+        <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
+          <div style={{ width: 60, height: 60, borderRadius: "50%", background: PL,
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
+            <CheckCircle size={30} color={P} />
+          </div>
+          <h3 style={{ fontSize: 19, fontWeight: 700, color: DARK, marginBottom: 8 }}>Réservation envoyée !</h3>
+          {resaRef && <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", marginBottom: 8 }}>Réf. {resaRef}</div>}
+          <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 26 }}>
+            <strong style={{ color: DARK }}>{resto.name}</strong><br />
+            {fmtDate(selDate)} · {selSlot} · {pers} personne{pers > 1 ? "s" : ""}
+          </p>
+          <p style={{ fontSize: 12, color: MUTED, marginBottom: 24, lineHeight: 1.5 }}>
+            Le restaurant confirmera votre réservation par SMS ou email.
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={() => { closeModal(); navigate("/profil"); }}
+              style={{ background: PL, color: P, border: `0.5px solid ${P}`, borderRadius: 9,
+                padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+              Mes réservations
+            </button>
+            <button onClick={() => { closeModal(); navigate("/"); }}
+              style={{ background: P, color: "white", border: "none", borderRadius: 9,
+                padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+              Retour à l'accueil
+            </button>
+          </div>
+        </div>
+
+      ) : step === 2 ? (
+        <>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 18 }}>Confirmer la réservation</h3>
+          <div style={{ background: PL, borderRadius: 12, padding: "14px 16px", marginBottom: 16, border: `0.5px solid ${P}44` }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 8 }}>{resto.name}</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[{ icon: Calendar, label: fmtDate(selDate) }, { icon: Clock, label: selSlot }, { icon: Users, label: `${pers} personne${pers > 1 ? "s" : ""}` }]
+                .map(({ icon: Icon, label }) => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, background: "white",
+                    borderRadius: 8, padding: "5px 9px", fontSize: 12, color: DARK, fontWeight: 600 }}>
+                    <Icon size={12} color={P} /> {label}
+                  </div>
+                ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.8px", display: "block", marginBottom: 6 }}>Demande spéciale (optionnel)</label>
+            <textarea value={special} onChange={e => setSpecial(e.target.value)}
+              placeholder="Anniversaire, allergie, chaise haute…" rows={2}
+              style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9,
+                padding: "9px 12px", fontSize: 13, color: DARK, background: BG, outline: "none",
+                fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
+          </div>
+          {!user && <div style={{ marginBottom: 12, padding: "8px 12px", background: PL, borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
+            Vous serez redirigé vers la connexion pour finaliser.
+          </div>}
+          {error && <div style={{ marginBottom: 12, padding: "8px 12px", background: "#FAECE7", borderRadius: 8, fontSize: 12, color: "#993C1D" }}>{error}</div>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setStep(1)}
+              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: `0.5px solid ${BORDER}`,
+                background: "white", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: FONT }}>
+              Retour
+            </button>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleBook} disabled={booking}
+              style={{ flex: 2, padding: "12px 0", borderRadius: 10, border: "none",
+                background: booking ? MUTED : P, color: "white", fontSize: 14, fontWeight: 700,
+                cursor: booking ? "not-allowed" : "pointer", fontFamily: FONT }}>
+              {booking ? "Envoi en cours…" : "Confirmer la réservation"}
+            </motion.button>
+          </div>
+        </>
+
+      ) : (
+        <>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 4 }}>Réserver une table</h3>
+          <p style={{ fontSize: 13, color: MUTED, marginBottom: 16 }}>{resto.name}</p>
+          <div style={{ background: PL, borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+            display: "flex", gap: 12, fontSize: 13, alignItems: "center", flexWrap: "wrap", border: `0.5px solid ${P}44` }}>
+            <span style={{ fontWeight: 700, color: P }}>{selSlot}</span>
+            <span style={{ color: DARK }}>{fmtDate(selDate)}</span>
+            <span style={{ color: MUTED }}>{pers} pers.</span>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>Changer de créneau</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 5 }}>Déjeuner</div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+              {LUNCH_SLOTS.map(s => (
+                <button key={s} onClick={() => setSelSlot(s)}
+                  style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+                    border: `0.5px solid ${selSlot === s ? P : BORDER}`, background: selSlot === s ? PL : "white", color: selSlot === s ? P : MUTED }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 5 }}>Dîner</div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {DINNER_SLOTS.map(s => (
+                <button key={s} onClick={() => setSelSlot(s)}
+                  style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+                    border: `0.5px solid ${selSlot === s ? P : BORDER}`, background: selSlot === s ? PL : "white", color: selSlot === s ? P : MUTED }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleBook}
+            style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
+              background: P, color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+            Continuer
+          </motion.button>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function RestaurantDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -424,221 +552,58 @@ export default function RestaurantDetail() {
         {modal && (
           <>
             {/* Overlay */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            <motion.div key="overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={closeModal}
               style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.45)", zIndex: 50 }} />
 
-            {/* Panel — bottom sheet sur mobile, modal centré sur desktop */}
-            <motion.div
-              initial={isMobile ? { y: "100%" } : { opacity: 0, y: 20, scale: 0.97 }}
-              animate={isMobile ? { y: 0 }       : { opacity: 1, y: 0,  scale: 1 }}
-              exit   ={isMobile ? { y: "100%" }   : { opacity: 0, y: 20, scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 340, damping: 32 }}
-              style={isMobile ? {
-                position: "fixed", bottom: 0, left: 0, right: 0,
-                background: "white", borderRadius: "18px 18px 0 0",
-                padding: "24px 24px 36px",
-                zIndex: 51, fontFamily: FONT,
-                maxHeight: "92vh", overflowY: "auto",
-                boxShadow: "0 -8px 40px rgba(0,0,0,.18)",
-              } : {
-                position: "fixed",
-                top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-                background: "white", borderRadius: 16, padding: "32px",
-                zIndex: 51, width: 440, maxWidth: "calc(100vw - 32px)",
-                boxShadow: "0 12px 48px rgba(0,0,0,.2)", fontFamily: FONT,
-                maxHeight: "90vh", overflowY: "auto",
-              }}>
+            {/* Mobile — bottom sheet */}
+            {isMobile && (
+              <motion.div key="sheet"
+                initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                transition={{ type: "spring", stiffness: 340, damping: 32 }}
+                style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 51,
+                  background: "white", borderRadius: "18px 18px 0 0", fontFamily: FONT,
+                  padding: "8px 20px 36px", maxHeight: "92vh", overflowY: "auto",
+                  boxShadow: "0 -8px 40px rgba(0,0,0,.18)" }}>
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER, margin: "12px auto 16px" }} />
+                <ModalSteps
+                  step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
+                  selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
+                  special={special} setSpecial={setSpecial} user={user}
+                  error={error} booking={booking} handleBook={handleBook}
+                  closeModal={closeModal} navigate={navigate}
+                  resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
+                />
+              </motion.div>
+            )}
 
-              {/* Drag handle sur mobile */}
-              {isMobile && (
-                <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER,
-                  margin: "0 auto 20px" }} />
-              )}
-
-              <button onClick={closeModal}
-                style={{ position: "absolute", top: 16, right: 16, background: "transparent",
-                  border: "none", cursor: "pointer", color: MUTED }}>
-                <X size={18} />
-              </button>
-
-              {/* ── Étape 3 — Succès ── */}
-              {step === 3 ? (
-                <div style={{ textAlign: "center", padding: "8px 0" }}>
-                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: PL,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    margin: "0 auto 18px" }}>
-                    <CheckCircle size={30} color={P} />
-                  </div>
-                  <h3 style={{ fontSize: 19, fontWeight: 700, color: DARK, marginBottom: 8 }}>
-                    Réservation envoyée !
-                  </h3>
-                  {resaRef && (
-                    <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", marginBottom: 8 }}>
-                      Réf. {resaRef}
-                    </div>
-                  )}
-                  <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 26 }}>
-                    <strong style={{ color: DARK }}>{resto.name}</strong><br />
-                    {fmtDate(selDate)} · {selSlot} · {pers} personne{pers > 1 ? "s" : ""}
-                  </p>
-                  <p style={{ fontSize: 12, color: MUTED, marginBottom: 24, lineHeight: 1.5 }}>
-                    Le restaurant confirmera votre réservation par SMS ou email.
-                  </p>
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-                    <button onClick={() => { closeModal(); navigate("/profil"); }}
-                      style={{ background: PL, color: P, border: `0.5px solid ${P}`,
-                        borderRadius: 9, padding: "10px 18px", fontSize: 13,
-                        fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                      Mes réservations
-                    </button>
-                    <button onClick={() => { closeModal(); navigate("/"); }}
-                      style={{ background: P, color: "white", border: "none",
-                        borderRadius: 9, padding: "10px 18px", fontSize: 13,
-                        fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                      Retour à l'accueil
-                    </button>
-                  </div>
-                </div>
-
-              ) : step === 2 ? (
-                /* ── Étape 2 — Confirmation ── */
-                <>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 20 }}>
-                    Confirmer la réservation
-                  </h3>
-
-                  {/* Résumé visuel */}
-                  <div style={{ background: PL, borderRadius: 12, padding: "16px",
-                    marginBottom: 18, border: `0.5px solid ${P}44` }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 4 }}>
-                      {resto.name}
-                    </div>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
-                      {[
-                        { icon: Calendar, label: fmtDate(selDate) },
-                        { icon: Clock,    label: selSlot },
-                        { icon: Users,    label: `${pers} personne${pers > 1 ? "s" : ""}` },
-                      ].map(({ icon: Icon, label }) => (
-                        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6,
-                          background: "white", borderRadius: 8, padding: "6px 10px",
-                          fontSize: 12, color: DARK, fontWeight: 600 }}>
-                          <Icon size={13} color={P} /> {label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Demande spéciale */}
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 10, color: MUTED, fontWeight: 700,
-                      textTransform: "uppercase", letterSpacing: "0.8px",
-                      display: "block", marginBottom: 6 }}>
-                      Demande spéciale (optionnel)
-                    </label>
-                    <textarea value={special} onChange={e => setSpecial(e.target.value)}
-                      placeholder="Anniversaire, allergie, chaise haute…"
-                      rows={2}
-                      style={{ width: "100%", border: `0.5px solid ${BORDER}`,
-                        borderRadius: 9, padding: "9px 12px", fontSize: 13,
-                        color: DARK, background: BG, outline: "none",
-                        fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
-                  </div>
-
-                  {!user && (
-                    <div style={{ marginBottom: 14, padding: "9px 12px", background: PL,
-                      borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
-                      Vous serez redirigé vers la connexion pour finaliser.
-                    </div>
-                  )}
-
-                  {error && (
-                    <div style={{ marginBottom: 14, padding: "9px 12px", background: "#FAECE7",
-                      borderRadius: 8, fontSize: 12, color: "#993C1D" }}>{error}</div>
-                  )}
-
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setStep(1)}
-                      style={{ flex: 1, padding: "12px 0", borderRadius: 10,
-                        border: `0.5px solid ${BORDER}`, background: "white",
-                        color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: FONT }}>
-                      Retour
-                    </button>
-                    <motion.button whileTap={{ scale: 0.97 }}
-                      onClick={handleBook} disabled={booking}
-                      style={{ flex: 2, padding: "12px 0", borderRadius: 10, border: "none",
-                        background: booking ? MUTED : P, color: "white",
-                        fontSize: 14, fontWeight: 700,
-                        cursor: booking ? "not-allowed" : "pointer", fontFamily: FONT }}>
-                      {booking ? "Envoi en cours…" : "Confirmer la réservation"}
-                    </motion.button>
-                  </div>
-                </>
-
-              ) : (
-                /* ── Étape 1 — Récap créneau sélectionné ── */
-                <>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: DARK, marginBottom: 4 }}>
-                    Réserver une table
-                  </h3>
-                  <p style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>{resto.name}</p>
-
-                  {/* Résumé sélection */}
-                  <div style={{ background: PL, borderRadius: 10, padding: "12px 16px",
-                    marginBottom: 20, display: "flex", gap: 12, fontSize: 13,
-                    alignItems: "center", flexWrap: "wrap",
-                    border: `0.5px solid ${P}44` }}>
-                    <span style={{ fontWeight: 700, color: P }}>{selSlot}</span>
-                    <span style={{ color: DARK }}>{fmtDate(selDate)}</span>
-                    <span style={{ color: MUTED }}>{pers} pers.</span>
-                  </div>
-
-                  {/* Changer de créneau inline */}
-                  <div style={{ marginBottom: 18 }}>
-                    <div style={{ fontSize: 10, color: MUTED, fontWeight: 700,
-                      textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>
-                      Changer de créneau
-                    </div>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
-                      letterSpacing: "0.6px", marginBottom: 5 }}>Déjeuner</div>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-                      {LUNCH_SLOTS.map((s, i) => (
-                        <button key={i} onClick={() => setSelSlot(s)}
-                          style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px",
-                            borderRadius: 8, cursor: "pointer", fontFamily: FONT,
-                            border: `0.5px solid ${selSlot === s ? P : BORDER}`,
-                            background: selSlot === s ? PL : "white",
-                            color: selSlot === s ? P : MUTED }}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
-                      letterSpacing: "0.6px", marginBottom: 5 }}>Dîner</div>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {DINNER_SLOTS.map((s, i) => (
-                        <button key={i} onClick={() => setSelSlot(s)}
-                          style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px",
-                            borderRadius: 8, cursor: "pointer", fontFamily: FONT,
-                            border: `0.5px solid ${selSlot === s ? P : BORDER}`,
-                            background: selSlot === s ? PL : "white",
-                            color: selSlot === s ? P : MUTED }}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <motion.button whileTap={{ scale: 0.97 }}
-                    onClick={handleBook}
-                    style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
-                      background: P, color: "white", fontSize: 14, fontWeight: 700,
-                      cursor: "pointer", fontFamily: FONT }}>
-                    Continuer
-                  </motion.button>
-                </>
-              )}
-            </motion.div>
+            {/* Desktop — flexbox centré (pas de transform conflictuel) */}
+            {!isMobile && (
+              <div key="desktop"
+                style={{ position: "fixed", inset: 0, zIndex: 51,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 16, pointerEvents: "none" }}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 34 }}
+                  style={{ background: "white", borderRadius: 16, padding: "32px",
+                    width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto",
+                    boxShadow: "0 12px 48px rgba(0,0,0,.2)", fontFamily: FONT,
+                    pointerEvents: "auto", position: "relative" }}>
+                  <ModalSteps
+                    step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
+                    selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
+                    special={special} setSpecial={setSpecial} user={user}
+                    error={error} booking={booking} handleBook={handleBook}
+                    closeModal={closeModal} navigate={navigate}
+                    resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
+                  />
+                </motion.div>
+              </div>
+            )}
           </>
         )}
       </AnimatePresence>

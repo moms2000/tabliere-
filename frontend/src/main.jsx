@@ -44,6 +44,7 @@ import RestReservations from "./pages/restaurant/RestReservations";
 import RestPlanSalle    from "./pages/restaurant/RestPlanSalle";
 import RestProfil       from "./pages/restaurant/RestProfil";
 import RestCommandes    from "./pages/restaurant/RestCommandes";
+import RestPOS          from "./pages/restaurant/RestPOS";
 
 import ClientMenu       from "./pages/client/ClientMenu";
 import Profil           from "./pages/client/Profil";
@@ -97,6 +98,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <Route path="plan"         element={<RestPlanSalle />} />
               <Route path="profil"       element={<RestProfil />} />
               <Route path="commandes"    element={<RestCommandes />} />
+              <Route path="pos"          element={<RestPOS />} />
             </Route>
 
             {/* ── Client — accès via QR (public) ───────────────────────────── */}

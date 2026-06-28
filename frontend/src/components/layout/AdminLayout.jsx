@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
+import api from "../../services/api.js";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -141,8 +142,11 @@ function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
 }
 
 export default function AdminLayout() {
-  const [collapsed,   setCollapsed]   = useState(false);
-  const [mobileOpen,  setMobileOpen]  = useState(false);
+  const [collapsed,     setCollapsed]     = useState(false);
+  const [mobileOpen,    setMobileOpen]    = useState(false);
+  const [showNotifs,    setShowNotifs]    = useState(false);
+  const [notifs,        setNotifs]        = useState([]);
+  const [notifsLoading, setNotifsLoading] = useState(false);
   const isMobile  = useIsMobile();
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -150,11 +154,41 @@ export default function AdminLayout() {
   const toast = useToast();
 
   useSSE({
-    new_reservation: (d) => toast(`Nouvelle réservation ${d.ref} — ${d.client_name || ""}`, "reservation"),
+    new_reservation: (d) => {
+      toast(`Nouvelle réservation ${d.ref} — ${d.client_name || ""}`, "reservation");
+      setNotifs(p => [{ id: Date.now(), title: `Réservation ${d.ref}`, body: d.client_name || "", is_read: false, created_at: new Date().toISOString() }, ...p.slice(0, 19)]);
+    },
   }, !!user);
+
+  const loadNotifs = async () => {
+    if (notifs.length > 0) return;
+    setNotifsLoading(true);
+    try {
+      const { data } = await api.get("/notifications");
+      setNotifs(data.data?.notifications || data.data || []);
+    } catch (_) {}
+    setNotifsLoading(false);
+  };
+
+  const markAllRead = async () => {
+    try { await api.patch("/notifications/read-all"); } catch (_) {}
+    setNotifs(p => p.map(n => ({ ...n, is_read: true })));
+  };
+
+  const unreadCount = notifs.filter(n => !n.is_read).length;
 
   // Fermer le drawer mobile à chaque changement de route
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Fermer le panel notifs au clic extérieur
+  useEffect(() => {
+    if (!showNotifs) return;
+    const close = (e) => {
+      if (!e.target.closest("[data-notif-panel]")) setShowNotifs(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showNotifs]);
 
   return (
     <div style={{ display: "flex", height: "100vh", background: BG,
@@ -213,14 +247,61 @@ export default function AdminLayout() {
                 <RefreshCw size={13} />Actualiser
               </button>
             )}
-            <motion.button whileTap={{ scale: 0.9 }}
-              style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
-                padding: "5px 10px", background: "white", cursor: "pointer",
-                display: "flex", alignItems: "center" }}>
-              <Bell size={15} color={MUTED} />
-              <span style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7,
-                borderRadius: "50%", background: P, border: "1.5px solid white" }} />
-            </motion.button>
+            <div style={{ position: "relative" }} data-notif-panel>
+              <motion.button whileTap={{ scale: 0.9 }}
+                onClick={() => { setShowNotifs(p => !p); if (!showNotifs) loadNotifs(); }}
+                style={{ position: "relative", border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                  padding: "5px 10px", background: "white", cursor: "pointer",
+                  display: "flex", alignItems: "center" }}>
+                <Bell size={15} color={MUTED} />
+                {unreadCount > 0 && (
+                  <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8,
+                    borderRadius: "50%", background: P, border: "1.5px solid white" }} />
+                )}
+              </motion.button>
+
+              <AnimatePresence>
+                {showNotifs && (
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}
+                    style={{ position: "absolute", top: "calc(100% + 8px)", right: 0,
+                      width: 320, background: "white", border: `0.5px solid ${BORDER}`,
+                      borderRadius: 12, boxShadow: "0 8px 32px rgba(30,46,40,.13)",
+                      zIndex: 200, overflow: "hidden" }}>
+                    <div style={{ padding: "11px 16px", borderBottom: `0.5px solid ${BORDER}`,
+                      display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28" }}>
+                        Notifications {unreadCount > 0 && <span style={{ fontSize: 11, color: P }}>({unreadCount})</span>}
+                      </span>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead}
+                          style={{ fontSize: 11, color: P, background: "none", border: "none", cursor: "pointer" }}>
+                          Tout lire
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: 340, overflowY: "auto" }}>
+                      {notifsLoading ? (
+                        <div style={{ padding: 24, textAlign: "center", color: MUTED, fontSize: 13 }}>Chargement…</div>
+                      ) : notifs.length === 0 ? (
+                        <div style={{ padding: 24, textAlign: "center", color: MUTED, fontSize: 13 }}>Aucune notification</div>
+                      ) : notifs.map(n => (
+                        <div key={n.id} style={{ padding: "10px 16px", borderBottom: `0.5px solid ${BG}`,
+                          background: n.is_read ? "transparent" : "#fef6ec" }}>
+                          <div style={{ fontSize: 12, color: "#1e2e28", fontWeight: n.is_read ? 400 : 600 }}>
+                            {n.title || n.message}
+                          </div>
+                          {n.body && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{n.body}</div>}
+                          <div style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>
+                            {new Date(n.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 

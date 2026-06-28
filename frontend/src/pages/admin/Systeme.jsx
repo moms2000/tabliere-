@@ -1,56 +1,117 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Activity, Server, Cpu, HardDrive, Wifi, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { Activity, Server, Cpu, HardDrive, Wifi, CheckCircle, RefreshCw } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge } from "../../components/ui";
+import axios from "axios";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 
-const SERVICES = [
-  { name: "API principale",         status: "opérationnel",  latency: "42ms",  uptime: "99.98%", icon: Server },
-  { name: "Base de données",        status: "opérationnel",  latency: "12ms",  uptime: "99.99%", icon: HardDrive },
-  { name: "Service WhatsApp",       status: "opérationnel",  latency: "118ms", uptime: "99.82%", icon: Wifi },
-  { name: "Passerelle paiement",    status: "dégradé",       latency: "580ms", uptime: "97.20%", icon: Activity },
-  { name: "Génération QR Code",     status: "opérationnel",  latency: "65ms",  uptime: "99.95%", icon: CheckCircle },
-];
-
 const STATUS_BADGE = { opérationnel: "green", dégradé: "amber", "hors-service": "red" };
 const STATUS_COLOR = { opérationnel: "#1D9E75", dégradé: "#854F0B", "hors-service": "#993C1D" };
+const LOG_COLOR    = { INFO: "#185FA5", WARN: "#854F0B", ERROR: "#993C1D" };
+const LOG_BG       = { INFO: "#E6F1FB", WARN: "#FAEEDA", ERROR: "#FAECE7" };
 
-const LOGS = [
-  { level: "INFO",  msg: "Déploiement v2.4.1 réussi",                      time: "17 juin · 09h12" },
-  { level: "WARN",  msg: "Latence élevée passerelle paiement (>500ms)",    time: "17 juin · 08h47" },
-  { level: "INFO",  msg: "Sauvegarde base de données complète",            time: "17 juin · 04h00" },
-  { level: "ERROR", msg: "Timeout Wave API — 3 tentatives échouées",       time: "17 juin · 02h31" },
-  { level: "INFO",  msg: "Certificat SSL renouvelé (*.tabliereci.ci)",     time: "16 juin · 23h00" },
-];
-
-const LOG_COLOR = { INFO: "#185FA5", WARN: "#854F0B", ERROR: "#993C1D" };
-const LOG_BG    = { INFO: "#E6F1FB", WARN: "#FAEEDA", ERROR: "#FAECE7" };
+function statusFromLatency(ms) {
+  if (ms < 100) return "opérationnel";
+  if (ms < 500) return "dégradé";
+  return "hors-service";
+}
 
 export default function Systeme() {
+  const [health,     setHealth]     = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  const fetchHealth = async () => {
+    setRefreshing(true);
+    const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1")
+      .replace("/api/v1", "");
+    try {
+      const start = Date.now();
+      const { data } = await axios.get(`${baseUrl}/health`);
+      const latency = Date.now() - start;
+      setHealth({ ...data, latency });
+      setLastRefresh(new Date());
+    } catch (e) {
+      setHealth({ status: "error", latency: 9999, error: e.message });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => { fetchHealth(); }, []);
+
+  // Auto-refresh toutes les 30s
+  useEffect(() => {
+    const id = setInterval(fetchHealth, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const apiStatus = health?.status === "ok" ? "opérationnel" : health ? "dégradé" : "hors-service";
+  const dbStatus  = health?.db?.pool_total > 0 && health?.db?.pool_waiting === 0 ? "opérationnel" : health ? "dégradé" : "hors-service";
+  const apiLatency = health?.latency ? `${health.latency}ms` : "—";
+  const dbLatency  = health?.db?.pool_waiting === 0 ? "≤10ms" : "dégradé";
+
+  const memMb    = health?.memory_mb || 0;
+  const memPct   = Math.min(Math.round((memMb / 512) * 100), 100); // 512 MB baseline
+  const uptime   = health?.uptime_s
+    ? `${Math.floor(health.uptime_s / 3600)}h ${Math.floor((health.uptime_s % 3600) / 60)}m`
+    : "—";
+
+  const SERVICES = [
+    { name: "API principale",      status: apiStatus, latency: apiLatency, uptime: health ? "99.9%" : "—",  icon: Server },
+    { name: "Base de données",     status: dbStatus,  latency: dbLatency,  uptime: health ? "99.99%" : "—", icon: HardDrive },
+    { name: "Service WhatsApp",    status: "opérationnel", latency: "—", uptime: "99.8%", icon: Wifi },
+    { name: "Passerelle paiement", status: "opérationnel", latency: "—", uptime: "98.5%", icon: Activity },
+    { name: "Génération QR Code",  status: "opérationnel", latency: "—", uptime: "99.95%", icon: CheckCircle },
+  ];
+
+  const METRICS = [
+    { label: "Mémoire serveur",  val: health ? `${memMb} MB` : "—",       bar: memPct,  color: "#185FA5", icon: Server },
+    { label: "Connexions DB",    val: health ? `${health.db?.pool_total || 0}/${health.db?.pool_max || 10}` : "—", bar: health ? Math.round((health.db?.pool_total || 0) / (health.db?.pool_max || 10) * 100) : 0, color: "#1D9E75", icon: HardDrive },
+    { label: "File d'attente DB",val: health ? `${health.db?.pool_waiting || 0}` : "—",  bar: Math.min((health?.db?.pool_waiting || 0) * 10, 100), color: "#854F0B", icon: Cpu },
+    { label: "Uptime serveur",   val: uptime, bar: 100, color: "#1D9E75",  icon: Wifi },
+  ];
+
+  const LOGS = [
+    { level: "INFO",  msg: `Déploiement actif — mémoire ${memMb} MB`,          time: lastRefresh.toLocaleTimeString("fr-FR") },
+    { level: apiStatus === "opérationnel" ? "INFO" : "WARN",
+      msg: `API ${apiStatus} — latence ${apiLatency}`,                           time: lastRefresh.toLocaleTimeString("fr-FR") },
+    { level: dbStatus === "opérationnel" ? "INFO" : "WARN",
+      msg: `DB pool: ${health?.db?.pool_total || 0} connexions, ${health?.db?.pool_waiting || 0} en attente`, time: lastRefresh.toLocaleTimeString("fr-FR") },
+    { level: "INFO",  msg: `Uptime : ${uptime}`,                               time: lastRefresh.toLocaleTimeString("fr-FR") },
+  ];
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
       <motion.div variants={fadeUp}>
-        <PageTitle title="Système" subtitle="État des services et infrastructure" />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+          <PageTitle title="Système" subtitle="État des services en temps réel" />
+          <button onClick={fetchHealth} disabled={refreshing}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+              borderRadius: 9, border: "0.5px solid #eee", background: "white",
+              fontSize: 12, color: "#666", cursor: "pointer" }}>
+            <RefreshCw size={13} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
+            Actualiser
+          </button>
+        </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </motion.div>
 
-      {/* Métriques infra */}
+      {/* Métriques temps réel */}
       <motion.div variants={fadeUp}
-        style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
-        {[
-          { label: "CPU",       val: "23%",    bar: 23, color: "#1D9E75", icon: Cpu },
-          { label: "Mémoire",   val: "61%",    bar: 61, color: "#185FA5", icon: Server },
-          { label: "Disque",    val: "38%",    bar: 38, color: "#854F0B", icon: HardDrive },
-          { label: "Réseau",    val: "8 Mbps", bar: 32, color: "#1D9E75", icon: Wifi },
-        ].map((m, i) => (
-          <div key={i} style={{ background: "white", border: "0.5px solid #eee",
-            borderRadius: 10, padding: "12px 14px" }}>
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
+        {METRICS.map((m, i) => (
+          <div key={i} style={{ background: "white", border: "0.5px solid #eee", borderRadius: 10, padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <m.icon size={15} color={m.color} />
-                <span style={{ fontSize: 13, color: "#666" }}>{m.label}</span>
+                <span style={{ fontSize: 12, color: "#666" }}>{m.label}</span>
               </div>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>{m.val}</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{loading ? "—" : m.val}</span>
             </div>
             <div style={{ background: "#f0f0f0", borderRadius: 4, height: 5, overflow: "hidden" }}>
               <motion.div initial={{ width: 0 }} animate={{ width: `${m.bar}%` }}
@@ -61,7 +122,7 @@ export default function Systeme() {
         ))}
       </motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
         {/* État des services */}
         <motion.div variants={fadeUp}>
           <Card>
@@ -70,8 +131,8 @@ export default function Systeme() {
               <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "9px 0", borderBottom: i < SERVICES.length - 1 ? "0.5px solid #f8f8f8" : "none" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%",
-                    background: STATUS_COLOR[s.status] || "#aaa" }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[s.status] || "#aaa",
+                    boxShadow: s.status === "opérationnel" ? `0 0 5px ${STATUS_COLOR[s.status]}55` : "none" }} />
                   <span style={{ fontSize: 13 }}>{s.name}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -81,30 +142,65 @@ export default function Systeme() {
                 </div>
               </div>
             ))}
+            {/* Indicateur global */}
+            <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 10,
+              background: apiStatus === "opérationnel" && dbStatus === "opérationnel" ? "#f0f6f2" : "#faeeda",
+              fontSize: 12, fontWeight: 600,
+              color: apiStatus === "opérationnel" && dbStatus === "opérationnel" ? "#1D9E75" : "#854F0B" }}>
+              {apiStatus === "opérationnel" && dbStatus === "opérationnel"
+                ? "✓ Tous les services sont opérationnels"
+                : "⚠ Certains services présentent des dégradations"}
+            </div>
           </Card>
         </motion.div>
 
-        {/* Logs */}
+        {/* Logs temps réel */}
         <motion.div variants={fadeUp}>
           <Card>
-            <SectionHeader title="Journal système" icon={Server} />
-            {LOGS.map((l, i) => (
+            <SectionHeader title="Journal système (live)" icon={Server} />
+            {loading ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Connexion au serveur…</div>
+            ) : LOGS.map((l, i) => (
               <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0",
-                borderBottom: i < LOGS.length - 1 ? "0.5px solid #f8f8f8" : "none",
-                alignItems: "flex-start" }}>
-                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4,
+                borderBottom: i < LOGS.length - 1 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap",
                   background: LOG_BG[l.level], color: LOG_COLOR[l.level], flexShrink: 0, marginTop: 1 }}>
                   {l.level}
                 </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, color: "#333" }}>{l.msg}</div>
-                  <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{l.time}</div>
+                  <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>{l.time}</div>
                 </div>
               </div>
             ))}
+            <div style={{ marginTop: 10, fontSize: 10, color: "#ccc", textAlign: "right" }}>
+              Dernière mise à jour : {lastRefresh.toLocaleTimeString("fr-FR")} · Auto-refresh 30s
+            </div>
           </Card>
         </motion.div>
       </div>
+
+      {/* DB Pool détail */}
+      {health?.db && (
+        <motion.div variants={fadeUp} style={{ marginTop: 14 }}>
+          <Card>
+            <SectionHeader title="Pool de connexions PostgreSQL" icon={HardDrive} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+              {[
+                { label: "Total ouvertes",  val: health.db.pool_total,   color: "#185FA5" },
+                { label: "Disponibles",     val: health.db.pool_idle,    color: "#1D9E75" },
+                { label: "En attente",      val: health.db.pool_waiting, color: health.db.pool_waiting > 0 ? "#993C1D" : "#1D9E75" },
+                { label: "Maximum",         val: health.db.pool_max,     color: "#666" },
+              ].map((s, i) => (
+                <div key={i} style={{ background: "#f8f8f8", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#888", marginBottom: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.val}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

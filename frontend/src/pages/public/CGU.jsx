@@ -34,7 +34,7 @@ export default function CGU() {
           },
           {
             title: "2. Description du service",
-            content: `TablièreCI permet à ses utilisateurs de :\n\n• Rechercher des restaurants en Côte d'Ivoire\n• Effectuer des réservations de tables en ligne\n• Consulter les menus via QR code\n• Passer des commandes depuis leur table\n• Gérer leurs réservations et leur historique\n\nLe service est accessible via le site web tabliereci.com. TablièreCI agit en qualité d'intermédiaire entre les clients et les restaurateurs partenaires.`
+            content: `TablièreCI permet à ses utilisateurs de :\n\n• Rechercher des restaurants en Côte d'Ivoire\n• Effectuer des réservations de tables en ligne\n• Consulter les menus via QR code\n• Passer des commandes depuis leur table\n• Gérer leurs réservations et leur historique\n\nLe service est accessible via le site web tabliereci.net. TablièreCI agit en qualité d'intermédiaire entre les clients et les restaurateurs partenaires.`
           },
           {
             title: "3. Inscription et compte utilisateur",
@@ -74,7 +74,7 @@ export default function CGU() {
           },
           {
             title: "12. Droit applicable et litiges",
-            content: `Les présentes CGU sont régies par le droit ivoirien. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, le litige sera soumis à la juridiction compétente d'Abidjan, Côte d'Ivoire.\n\nPour tout litige ou réclamation : contact@tabliereci.com ou +225 07 00 00 00 00.`
+            content: `Les présentes CGU sont régies par le droit ivoirien. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, le litige sera soumis à la juridiction compétente d'Abidjan, Côte d'Ivoire.\n\nPour tout litige ou réclamation : contact@tabliereci.net ou +225 07 00 00 00 00.`
           },
         ].map((s, i) => (
           <section key={i} style={{ marginBottom: 32 }}>

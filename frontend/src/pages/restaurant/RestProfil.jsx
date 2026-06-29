@@ -369,7 +369,7 @@ export default function RestProfil() {
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>URL publique</div>
               <div style={{ fontSize: 12, fontFamily: "monospace", color: DARK,
                 background: BG, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all" }}>
-                tabliereci.com/restaurants/{resto.slug}
+                tabliereci.net/restaurants/{resto.slug}
               </div>
             </Card>
           </motion.div>

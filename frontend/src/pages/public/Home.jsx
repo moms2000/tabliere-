@@ -424,7 +424,7 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
               Contact
             </div>
             {[
-              "contact@tabliereci.com",
+              "contact@tabliereci.net",
               "+225 07 00 00 00 00",
               "Abidjan, Côte d'Ivoire",
             ].map((l, i) => (

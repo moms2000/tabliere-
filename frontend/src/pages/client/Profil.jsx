@@ -170,7 +170,7 @@ export default function Profil() {
 
   // Partage réservation via WhatsApp
   const shareReservation = (r) => {
-    const text = `🗓️ J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi ! 🍽️\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliereci.com`;
+    const text = `🗓️ J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi ! 🍽️\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliereci.net`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
     setShareToast("Lien WhatsApp ouvert !");
@@ -377,7 +377,7 @@ export default function Profil() {
                     color: G, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
                   <MessageCircle size={14} /> WhatsApp
                 </a>
-                <a href="mailto:support@tabliereci.com"
+                <a href="mailto:support@tabliereci.net"
                   style={{ display: "flex", alignItems: "center", gap: 6, background: "#f5f5f5",
                     color: "#555", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
                   <Mail size={14} /> Email

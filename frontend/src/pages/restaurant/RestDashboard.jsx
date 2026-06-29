@@ -286,7 +286,7 @@ export default function RestDashboard() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>Menu QR activé</div>
               <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
-                tabliereci.com/menu/{resto.slug}
+                tabliereci.net/menu/{resto.slug}
               </div>
             </div>
             <a href={`/menu/${resto.slug}`} target="_blank" rel="noreferrer"

@@ -24,7 +24,7 @@ const fmt = (n) => n ? Number(n).toLocaleString("fr-FR") + " F" : "—";
 function QrSvg({ url, size = 140, dark = DARK, light = "white" }) {
   return (
     <div style={{ background: "white", padding: 8, borderRadius: 8, display: "inline-block" }}>
-      <QRCode value={url || "https://tabliereci.com"} size={size} fgColor={dark} bgColor={light} />
+      <QRCode value={url || "https://tabliereci.net"} size={size} fgColor={dark} bgColor={light} />
     </div>
   );
 }

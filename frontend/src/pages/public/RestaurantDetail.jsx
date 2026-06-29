@@ -212,7 +212,8 @@ function BookingWidget({ onBook }) {
 /* Contenu des étapes partagé mobile/desktop */
 function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers, resto,
   special, setSpecial, user, error, booking, handleBook, closeModal, navigate,
-  resaRef, P, PL, DARK, BG, BORDER, MUTED, FONT }) {
+  resaRef, P, PL, DARK, BG, BORDER, MUTED, FONT,
+  guestName, setGuestName, guestPhone, setGuestPhone }) {
   return (
     <>
       <button onClick={closeModal}
@@ -274,9 +275,35 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
                 padding: "9px 12px", fontSize: 13, color: DARK, background: BG, outline: "none",
                 fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
           </div>
-          {!user && <div style={{ marginBottom: 12, padding: "8px 12px", background: PL, borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
-            Vous serez redirigé vers la connexion pour finaliser.
-          </div>}
+          {/* Formulaire invité si non connecté */}
+          {!user && (
+            <div style={{ background: "#FFF9F0", border: `0.5px solid ${P}44`,
+              borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 10 }}>
+                📋 Vos coordonnées (réservation invité)
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input value={guestName} onChange={e => setGuestName(e.target.value)}
+                  placeholder="Votre nom complet *" required
+                  style={{ border: `0.5px solid ${guestName ? P : BORDER}`, borderRadius: 8,
+                    padding: "9px 12px", fontSize: 13, background: BG, outline: "none",
+                    color: DARK, fontFamily: FONT, width: "100%", boxSizing: "border-box" }} />
+                <input value={guestPhone} onChange={e => setGuestPhone(e.target.value)}
+                  placeholder="Téléphone (optionnel)" type="tel"
+                  style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                    padding: "9px 12px", fontSize: 13, background: BG, outline: "none",
+                    color: DARK, fontFamily: FONT, width: "100%", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ marginTop: 10, padding: "8px 10px", background: PL,
+                borderRadius: 7, fontSize: 11, color: "#C47D1A" }}>
+                💡 <strong>Créez un compte</strong> pour suivre vos réservations et cumuler des points.{" "}
+                <span onClick={() => navigate("/inscription")}
+                  style={{ textDecoration: "underline", cursor: "pointer", fontWeight: 600 }}>
+                  S'inscrire (gratuit)
+                </span>
+              </div>
+            </div>
+          )}
           {error && <div style={{ marginBottom: 12, padding: "8px 12px", background: "#FAECE7", borderRadius: 8, fontSize: 12, color: "#993C1D" }}>{error}</div>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setStep(1)}
@@ -412,10 +439,16 @@ export default function RestaurantDetail() {
     return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   };
 
+  // Infos invité
+  const [guestName,  setGuestName]  = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+
   const handleBook = async () => {
     if (step === 1) { setStep(2); return; }
     if (step === 2) {
-      if (!user) { navigate("/connexion?redirect=" + encodeURIComponent(window.location.pathname)); return; }
+      // Invité sans compte : vérifier qu'un nom est fourni
+      if (!user && !guestName.trim()) { setError("Veuillez indiquer votre nom pour continuer en tant qu'invité."); return; }
       setBooking(true); setError("");
       try {
         const reserved_at = toDatetime(selDate, selSlot);
@@ -429,7 +462,17 @@ export default function RestaurantDetail() {
           special_request: special || undefined,
         };
         if (table) payload.table_id = table.id;
-        const resa = await reservationsService.create(payload);
+        // Réservation invité — walk_in fields
+        if (!user) {
+          payload.walk_in_name  = guestName.trim();
+          payload.walk_in_phone = guestPhone.trim() || undefined;
+        }
+        const headers = user ? {} : {}; // appel sans auth si invité
+        const resa = user
+          ? await reservationsService.create(payload)
+          : await import("../../services/api.js").then(({ default: api }) =>
+              api.post("/reservations/guest", payload).then(r => r.data.data)
+            );
         setResaRef(resa?.ref || resa?.reservation?.ref || null);
         setStep(3);
       } catch (e) {
@@ -772,6 +815,8 @@ export default function RestaurantDetail() {
                   error={error} booking={booking} handleBook={handleBook}
                   closeModal={closeModal} navigate={navigate}
                   resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
+                  guestName={guestName} setGuestName={setGuestName}
+                  guestPhone={guestPhone} setGuestPhone={setGuestPhone}
                 />
               </motion.div>
             )}

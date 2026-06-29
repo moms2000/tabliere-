@@ -154,9 +154,16 @@ export default function Inscription() {
       setStep(3);
     } catch (err) {
       const status = err.response?.status;
-      if (status === 409)      setError(t("err_email_taken"));
-      else if (status === 400) setError(err.response?.data?.message || t("err_bad_data"));
-      else                     setError(err.response?.data?.message || t("err_generic"));
+      if (!status) {
+        // Pas de réponse = problème réseau ou mauvaise URL API
+        setError("Impossible de contacter le serveur. Vérifiez votre connexion internet et réessayez.");
+      } else if (status === 409) {
+        setError("Un compte existe déjà avec cet e-mail. Connectez-vous ou utilisez un autre e-mail.");
+      } else if (status === 400) {
+        setError(err.response?.data?.message || "Données invalides. Vérifiez les champs.");
+      } else {
+        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez dans quelques instants.");
+      }
     } finally {
       setLoading(false);
     }

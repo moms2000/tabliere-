@@ -223,6 +223,9 @@ async function sendVerificationEmail({ email, name, verifyUrl }) {
   });
 }
 
+// Exposer send pour usage direct
+export { send };
+
 export const emailService = {
   sendReservationConfirmation,
   sendConfirmedByResto,

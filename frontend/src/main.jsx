@@ -37,7 +37,9 @@ import Connexion        from "./pages/public/Connexion";
 import Inscription      from "./pages/public/Inscription";
 import RestaurantDetail from "./pages/public/RestaurantDetail";
 const Confidentialite  = lazy(() => import("./pages/public/Confidentialite"));
-const VerifyEmail      = lazy(() => import("./pages/public/VerifyEmail"));
+const VerifyEmail       = lazy(() => import("./pages/public/VerifyEmail"));
+const MotDePasseOublie  = lazy(() => import("./pages/public/MotDePasseOublie"));
+const ResetPassword     = lazy(() => import("./pages/public/ResetPassword"));
 const CGU              = lazy(() => import("./pages/public/CGU"));
 const MentionsLegales  = lazy(() => import("./pages/public/MentionsLegales"));
 import NotFound         from "./pages/public/NotFound";
@@ -107,7 +109,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/connexion"         element={<Connexion />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
-                  <Route path="/verify-email"      element={<VerifyEmail />} />
+                  <Route path="/verify-email"         element={<VerifyEmail />} />
+                  <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+                  <Route path="/reset-password"       element={<ResetPassword />} />
                   <Route path="/confidentialite"   element={<Confidentialite />} />
                   <Route path="/cgu"               element={<CGU />} />
                   <Route path="/mentions-legales"  element={<MentionsLegales />} />

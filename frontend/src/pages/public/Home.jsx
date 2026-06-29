@@ -498,6 +498,13 @@ export default function Home() {
   const experiencesRef = useRef(null);
   const howRef         = useRef(null);
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
@@ -859,11 +866,12 @@ export default function Home() {
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}` }}>
         <div style={{ maxWidth: 1100, margin: "0 auto",
-          display: "grid", gridTemplateColumns: "1fr 420px",
-          alignItems: "center", gap: 0, minHeight: 340 }}>
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 420px",
+          alignItems: "center", gap: 0, minHeight: isMobile ? "auto" : 340 }}>
 
           {/* Texte gauche */}
-          <div style={{ padding: "52px 32px 52px 40px" }}>
+          <div style={{ padding: isMobile ? "28px 16px 24px" : "52px 32px 52px 40px" }}>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               style={{ display: "inline-flex", alignItems: "center", gap: 7,
                 background: "#FEF6EC", border: `0.5px solid #F0C98A`,
@@ -886,7 +894,29 @@ export default function Home() {
               {t("hero_sub")}
             </motion.p>
 
-            {/* ── Barre de recherche ── */}
+            {/* ── Barre de recherche — simplifiée sur mobile ── */}
+            {isMobile ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                style={{ display: "flex", background: WHITE, borderRadius: 12,
+                  border: `0.5px solid ${BORDER}`, overflow: "hidden",
+                  boxShadow: "0 2px 16px rgba(30,46,40,.08)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 14px", flex: 1 }}>
+                  <Search size={15} color={MUTED} />
+                  <input placeholder="Restaurant, cuisine, quartier…"
+                    value={search} onChange={e => setSearch(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && scrollTo(listRef)}
+                    style={{ border: "none", background: "transparent", fontSize: 14,
+                      color: DARK, outline: "none", width: "100%", padding: "14px 0", fontFamily: FONT }} />
+                </div>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => scrollTo(listRef)}
+                  style={{ background: P, color: "#1A1000", border: "none",
+                    padding: "0 20px", cursor: "pointer", fontSize: 14,
+                    fontWeight: 700, fontFamily: FONT, flexShrink: 0 }}>
+                  {t("search_btn")}
+                </motion.button>
+              </motion.div>
+            ) : (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               style={{ display: "flex", background: WHITE, borderRadius: 14,
@@ -974,6 +1004,7 @@ export default function Home() {
                 {t("search_btn")}
               </motion.button>
             </motion.div>
+            )}
 
             {/* Géolocalisation */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
@@ -990,13 +1021,13 @@ export default function Home() {
             </motion.div>
           </div>
 
-          {/* Décor droite */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+          {/* Décor droite — caché sur mobile */}
+          {!isMobile && <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3, duration: 0.5 }}
             style={{ padding: "24px 24px 24px 0", alignSelf: "stretch",
               display: "flex", alignItems: "center" }}>
             <HeroDecor />
-          </motion.div>
+          </motion.div>}
         </div>
       </div>
 

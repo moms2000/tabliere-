@@ -310,7 +310,9 @@ function StepForm({ type, onBack }) {
               </div>
               <div style={{ textAlign: "right", marginTop: 6 }}>
                 <span style={{ fontSize: 11, color: accentColor, cursor: "pointer" }}>
-                  Mot de passe oublié ?
+                  <a href="/mot-de-passe-oublie" style={{ color: accentColor, textDecoration: "none" }}>
+                    Mot de passe oublié ?
+                  </a>
                 </span>
               </div>
             </div>

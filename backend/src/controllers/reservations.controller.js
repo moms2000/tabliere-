@@ -419,6 +419,70 @@ export const update = asyncHandler(async (req, res) => {
   return ok(res, { reservation: updated }, "Réservation mise à jour");
 });
 
+// ── POST /reservations/guest — réservation sans compte ───────────────────────
+export const createGuest = asyncHandler(async (req, res) => {
+  await ensureResaColumns();
+  const { restaurant_id, table_id, reserved_at, party_size,
+          special_request, walk_in_name, walk_in_phone, walk_in_email } = req.body;
+
+  const { rows: [resto] } = await query(
+    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status = 'actif'",
+    [restaurant_id]
+  );
+  if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
+  if (party_size > resto.capacity)
+    throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
+
+  // Utiliser un compte "invité" générique ou le premier admin comme placeholder
+  const { rows: [guestUser] } = await query(
+    "SELECT id FROM users WHERE email = 'guest@tabliereci.net' LIMIT 1"
+  );
+
+  let clientId = guestUser?.id;
+  if (!clientId) {
+    // Créer un utilisateur invité système si inexistant
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.default.hash("guest_system_" + Date.now(), 8);
+    const { rows: [gu] } = await query(
+      `INSERT INTO users (full_name, email, phone, password_hash, role, status)
+       VALUES ('Invité TablièreCI', 'guest@tabliereci.net', NULL, $1, 'client', 'actif')
+       ON CONFLICT (email) DO UPDATE SET full_name = 'Invité TablièreCI'
+       RETURNING id`,
+      [hash]
+    );
+    clientId = gu.id;
+  }
+
+  const { rows: [{ nextref }] } = await query(
+    "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
+  );
+
+  const { rows: [resa] } = await query(
+    `INSERT INTO reservations
+       (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
+        special_request, status, walk_in_name, walk_in_phone)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'en_attente',$8,$9) RETURNING *`,
+    [nextref, restaurant_id, clientId, table_id || null, reserved_at, party_size,
+     special_request || null, walk_in_name, walk_in_phone || null]
+  );
+
+  // SSE → restaurateur
+  try {
+    const { rows: [owner] } = await query(
+      "SELECT owner_id FROM restaurants WHERE id = $1", [restaurant_id]
+    );
+    if (owner?.owner_id) {
+      emitToUser(owner.owner_id, "new_reservation", {
+        ref: resa.ref, party_size: resa.party_size,
+        reserved_at: resa.reserved_at, client_name: walk_in_name,
+      });
+    }
+  } catch (_) {}
+
+  logger.info("Réservation invité créée", { ref: resa.ref, walk_in_name });
+  return created(res, { reservation: resa }, "Réservation créée avec succès");
+});
+
 // ── Helper ─────────────────────────────────────────────────────────────────────
 function _assertAccess(req, resa) {
   if (req.user.role === "admin") return;

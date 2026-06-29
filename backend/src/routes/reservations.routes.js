@@ -25,6 +25,20 @@ router.post(
   ctrl.create
 );
 
+// Réservation invité (sans compte)
+router.post("/guest", reservationLimiter, validate(
+  Joi.object({
+    restaurant_id:   Joi.string().uuid().required(),
+    table_id:        Joi.string().uuid().optional(),
+    reserved_at:     Joi.date().iso().required(),
+    party_size:      Joi.number().integer().min(1).max(50).required(),
+    special_request: Joi.string().max(500).allow("", null).optional(),
+    walk_in_name:    Joi.string().max(255).required(),
+    walk_in_phone:   Joi.string().max(30).allow("", null).optional(),
+    walk_in_email:   Joi.string().email().allow("", null).optional(),
+  })
+), ctrl.createGuest);
+
 router.get("/",        authenticate,                          ctrl.list);
 router.get("/:id",     authenticate,                          ctrl.getOne);
 router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"), ctrl.confirm);

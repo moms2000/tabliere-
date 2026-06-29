@@ -462,7 +462,6 @@ export default function RestaurantDetail() {
   const [guestName,  setGuestName]  = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
 
   const handleBook = async () => {
     if (step === 1) { setStep(2); return; }

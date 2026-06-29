@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MapPin, Star, UtensilsCrossed, Heart, Bell,
   ChevronDown, ChevronRight, User, Calendar, Clock, Users, Navigation,
+  Mail, Phone, X,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -76,13 +77,18 @@ export default function HomeMobile() {
   const [showTimePicker, setShowTimePicker]  = useState(false);
   const [showGuestPicker,setShowGuestPicker] = useState(false);
 
+  // Availability search
+  const [searchActive,   setSearchActive]   = useState(false);
+  const [searchLoading,  setSearchLoading]  = useState(false);
+  const [availableSlugs, setAvailableSlugs] = useState(null); // null = pas de recherche, Set = slugs dispo
+
   const days = buildDays();
   const selDayObj = days.find(d => d.iso === selDate) || days[0];
 
   const listRef = useRef(null);
 
   useEffect(() => {
-    restaurantsService.list({ limit: 20, sort: "rating" })
+    restaurantsService.list({ limit: 50, sort: "rating" })
       .then(res => setRestaurants(res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -104,13 +110,63 @@ export default function HomeMobile() {
     localStorage.setItem("tci_favorites", JSON.stringify(next));
   };
 
-  const filtered = restaurants.filter(r =>
-    !search || r.name.toLowerCase().includes(search.toLowerCase())
-      || (r.quartier || "").toLowerCase().includes(search.toLowerCase())
-  );
+  // Réinitialiser la recherche quand critères changent
+  const resetSearch = () => { setSearchActive(false); setAvailableSlugs(null); };
 
-  const handleSearch = () => {
+  const filtered = (() => {
+    let list = restaurants;
+
+    // Filtre texte (nom + quartier + ville + type de cuisine)
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(r =>
+        r.name.toLowerCase().includes(q) ||
+        (r.quartier || "").toLowerCase().includes(q) ||
+        (r.ville    || "").toLowerCase().includes(q) ||
+        (r.cuisine_type || "").toLowerCase().includes(q)
+      );
+    }
+
+    // Filtre disponibilité — uniquement après "Trouver une table"
+    if (searchActive && availableSlugs) {
+      list = list.filter(r => availableSlugs.has(r.slug));
+    }
+
+    return list;
+  })();
+
+  const handleSearch = async () => {
+    // Fermer les pickers ouverts
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setShowGuestPicker(false);
+
+    setSearchActive(true);
+    setSearchLoading(true);
     listRef.current?.scrollIntoView({ behavior: "smooth" });
+
+    try {
+      // Vérification de disponibilité en parallèle pour chaque restaurant
+      const checks = await Promise.allSettled(
+        restaurants.map(r =>
+          restaurantsService.getAvailability(r.slug, selDate, selGuest)
+            .then(data => ({ slug: r.slug, ok: (data?.available_tables?.length || 0) > 0 }))
+            .catch(() => ({ slug: r.slug, ok: false }))
+        )
+      );
+
+      const slugSet = new Set(
+        checks
+          .filter(c => c.status === "fulfilled" && c.value.ok)
+          .map(c => c.value.slug)
+      );
+
+      setAvailableSlugs(slugSet);
+    } catch (_) {
+      setAvailableSlugs(new Set()); // aucune dispo en cas d'erreur réseau
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
   return (
@@ -242,7 +298,7 @@ export default function HomeMobile() {
                   {days.map(d => {
                     const sel = d.iso === selDate;
                     return (
-                      <button key={d.iso} onClick={() => { setSelDate(d.iso); setShowDatePicker(false); }}
+                      <button key={d.iso} onClick={() => { setSelDate(d.iso); setShowDatePicker(false); resetSearch(); }}
                         style={{ flexShrink: 0, width: 52, padding: "8px 0", borderRadius: 10,
                           border: `1.5px solid ${sel ? P : BORDER}`,
                           background: sel ? P : WHITE, cursor: "pointer", textAlign: "center" }}>
@@ -271,7 +327,7 @@ export default function HomeMobile() {
                         {slots.map(t => {
                           const sel = t === selTime;
                           return (
-                            <button key={t} onClick={() => { setSelTime(t); setShowTimePicker(false); }}
+                            <button key={t} onClick={() => { setSelTime(t); setShowTimePicker(false); resetSearch(); }}
                               style={{ padding: "7px 12px", borderRadius: 8,
                                 border: `1px solid ${sel ? P : BORDER}`,
                                 background: sel ? P : WHITE, color: sel ? WHITE : DARK,
@@ -297,7 +353,7 @@ export default function HomeMobile() {
                   {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => {
                     const sel = n === selGuest;
                     return (
-                      <button key={n} onClick={() => { setSelGuest(n); setShowGuestPicker(false); }}
+                      <button key={n} onClick={() => { setSelGuest(n); setShowGuestPicker(false); resetSearch(); }}
                         style={{ width: 40, height: 40, borderRadius: 8,
                           border: `1px solid ${sel ? P : BORDER}`,
                           background: sel ? P : WHITE, color: sel ? WHITE : DARK,
@@ -314,10 +370,19 @@ export default function HomeMobile() {
           {/* Bouton Trouver */}
           <div style={{ padding: "10px 12px 12px" }}>
             <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearch}
+              disabled={searchLoading}
               style={{ width: "100%", padding: "14px 0", borderRadius: 10, border: "none",
-                background: P, color: "#1A1000", fontSize: 15, fontWeight: 800,
-                cursor: "pointer", fontFamily: FONT, letterSpacing: "0.3px" }}>
-              Trouver une table
+                background: searchLoading ? "#C47D1A" : P, color: "#1A1000", fontSize: 15, fontWeight: 800,
+                cursor: searchLoading ? "not-allowed" : "pointer", fontFamily: FONT, letterSpacing: "0.3px",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              {searchLoading ? (
+                <>
+                  <div style={{ width: 16, height: 16, border: "2px solid rgba(30,46,40,.3)",
+                    borderTopColor: DARK, borderRadius: "50%",
+                    animation: "spin 0.7s linear infinite" }} />
+                  Recherche en cours…
+                </>
+              ) : "Trouver une table"}
             </motion.button>
           </div>
         </div>
@@ -345,22 +410,33 @@ export default function HomeMobile() {
       <div ref={listRef} id="tci-restaurant-list" style={{ padding: "8px 0" }}>
 
         {/* Titre section */}
-        <div style={{ padding: "12px 16px 8px", display: "flex",
-          alignItems: "center", justifyContent: "space-between" }}>
-          <div>
+        <div style={{ padding: "12px 16px 8px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: MUTED,
               textTransform: "uppercase", letterSpacing: "1.5px" }}>
-              RÉSULTATS — ABIDJAN
+              {searchActive ? `DISPONIBLES · ${selGuest} pers.` : "RÉSULTATS — ABIDJAN"}
             </div>
-            <div style={{ fontSize: 13, color: DARK, marginTop: 2 }}>
-              {loading ? "Chargement…" : `${filtered.length} restaurant${filtered.length !== 1 ? "s" : ""} disponible${filtered.length !== 1 ? "s" : ""}`}
-            </div>
+            {searchActive && (
+              <button onClick={resetSearch}
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "#FEF2F0",
+                  border: `0.5px solid #FECACA`, borderRadius: 7, padding: "4px 8px",
+                  fontSize: 11, color: "#C05B3A", cursor: "pointer", fontFamily: FONT }}>
+                <X size={11} /> Effacer
+              </button>
+            )}
           </div>
-          <button style={{ display: "flex", alignItems: "center", gap: 4, background: BG,
-            border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px",
-            fontSize: 12, color: DARK, cursor: "pointer", fontFamily: FONT }}>
-            Meilleure note <ChevronDown size={12} />
-          </button>
+          <div style={{ fontSize: 13, color: DARK }}>
+            {loading || searchLoading
+              ? "Recherche en cours…"
+              : searchActive && availableSlugs
+                ? `${filtered.length} restaurant${filtered.length !== 1 ? "s" : ""} avec tables disponibles`
+                : `${filtered.length} restaurant${filtered.length !== 1 ? "s" : ""} disponible${filtered.length !== 1 ? "s" : ""}`}
+          </div>
+          {searchActive && !searchLoading && availableSlugs && (
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
+              {selDayObj.day} {selDayObj.num} {selDayObj.mon} · {selTime} · {selGuest} personne{selGuest > 1 ? "s" : ""}
+            </div>
+          )}
         </div>
 
         {/* Cards restaurants */}
@@ -487,14 +563,14 @@ export default function HomeMobile() {
             </span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {[
-              { icon: "✉", text: "contact@tabliereci.net" },
-              { icon: "📞", text: "+225 07 00 00 00 00" },
-              { icon: "📍", text: "Abidjan, Côte d'Ivoire" },
+              { icon: Mail,   text: "contact@tabliereci.net" },
+              { icon: Phone,  text: "+225 07 00 00 00 00"    },
+              { icon: MapPin, text: "Abidjan, Côte d'Ivoire" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12 }}>{item.icon}</span>
+                <item.icon size={13} color="rgba(255,255,255,0.35)" style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{item.text}</span>
               </div>
             ))}
@@ -544,6 +620,9 @@ export default function HomeMobile() {
         @keyframes skeleton-shimmer {
           0%   { background-position: 200% 0; }
           100% { background-position: -200% 0; }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

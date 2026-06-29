@@ -14,8 +14,8 @@ import { reservationsService } from "../../services/reservations.service.js";
 import { notificationsService, chatService } from "../../services/chat.service.js";
 import Chat from "../../components/Chat.jsx";
 
-const G = "#1D9E75";
-const DARK = "#0F6E56";
+const G = "#E8A045";
+const DARK = "#1E2E28";
 
 const LANG_LABELS = { fr: "Français", en: "English", ar: "العربية" };
 const LANG_SHORT  = { fr: "FR", en: "EN", ar: "AR" };
@@ -737,7 +737,7 @@ function Loading() {
 }
 
 function EmptyState({ icon: Icon, title, sub, children }) {
-  const G = "#1D9E75";
+  const G = "#E8A045";
   return (
     <div style={{ background: "white", borderRadius: 14, border: "0.5px solid #eee",
       padding: "36px 20px", textAlign: "center" }}>

@@ -38,7 +38,8 @@ export const list = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT r.id, r.name, r.slug, r.cuisine_type, r.address, r.ville, r.quartier,
             r.price_range, r.rating, r.review_count, r.capacity,
-            r.opening_hours, r.phone, r.theme_color, r.qr_active
+            r.opening_hours, r.phone, r.theme_color, r.qr_active,
+            r.logo_url, r.photos
      FROM restaurants r
      ${where}
      ORDER BY ${orderBy}

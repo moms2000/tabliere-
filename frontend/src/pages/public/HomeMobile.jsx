@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MapPin, Star, UtensilsCrossed, Heart, Bell,
-  ChevronDown, ChevronRight, User, Calendar, Clock, Users,
+  ChevronDown, ChevronRight, User, Calendar, Clock, Users, Navigation,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -138,11 +138,11 @@ export default function HomeMobile() {
         {/* Icônes droite */}
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {user ? (
-            <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {notifCount > 0 && (
                 <button onClick={() => navigate("/profil?tab=notifications")}
                   style={{ position: "relative", background: "none", border: "none", cursor: "pointer" }}>
-                  <Bell size={22} color={MUTED} />
+                  <Bell size={20} color={MUTED} />
                   <span style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14,
                     borderRadius: "50%", background: "#DC2626", color: "white",
                     fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
@@ -151,13 +151,22 @@ export default function HomeMobile() {
                   </span>
                 </button>
               )}
+              {/* Avatar utilisateur */}
               <button onClick={() => navigate("/profil")}
-                style={{ width: 34, height: 34, borderRadius: "50%", background: P + "22",
-                  border: `1.5px solid ${P}44`, cursor: "pointer", display: "flex",
-                  alignItems: "center", justifyContent: "center" }}>
-                <User size={17} color={P} />
+                style={{ width: 36, height: 36, borderRadius: "50%",
+                  border: `2px solid ${P}`, cursor: "pointer", overflow: "hidden",
+                  background: P + "22", display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0 }}>
+                {localStorage.getItem("tci_avatar") ? (
+                  <img src={localStorage.getItem("tci_avatar")} alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <span style={{ fontSize: 14, fontWeight: 700, color: P }}>
+                    {(user?.full_name || "U").charAt(0).toUpperCase()}
+                  </span>
+                )}
               </button>
-            </>
+            </div>
           ) : (
             <button onClick={() => navigate("/connexion")}
               style={{ background: P, color: "#1A1000", border: "none", borderRadius: 20,
@@ -319,7 +328,7 @@ export default function HomeMobile() {
         <button onClick={() => {
           if (!navigator.geolocation) return;
           navigator.geolocation.getCurrentPosition(pos => {
-            const { latitude, longitude } = pos.coords;
+            const { latitude } = pos.coords;
             const city = latitude >= 4.8 && latitude <= 6.2 ? "Abidjan" : "Abidjan";
             setSearch(city);
             handleSearch();
@@ -327,8 +336,8 @@ export default function HomeMobile() {
         }}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
             border: "none", cursor: "pointer", fontSize: 13, color: S, fontFamily: FONT }}>
-          <MapPin size={14} color={S} />
-          📍 Utiliser ma position
+          <Navigation size={14} color={S} />
+          Utiliser ma position
         </button>
       </div>
 
@@ -378,12 +387,16 @@ export default function HomeMobile() {
               border: `0.5px solid ${BORDER}`, overflow: "hidden",
               cursor: "pointer", display: "flex", gap: 0 }}>
 
-            {/* Photo / placeholder */}
-            <div style={{ width: 100, minHeight: 110, background: BG, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              position: "relative" }}>
-              {r.logo_url ? (
-                <img src={r.logo_url} alt={r.name}
+            {/* Photo restaurant — première de photos[] ou logo_url */}
+            {(() => {
+              const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+              const imgSrc = photos ? photos[0] : r.logo_url;
+              return (
+              <div style={{ width: 100, minHeight: 110, background: BG, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative", overflow: "hidden" }}>
+              {imgSrc ? (
+                <img src={imgSrc} alt={r.name}
                   style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
                   onError={e => { e.target.style.display = "none"; }} />
               ) : (
@@ -399,6 +412,8 @@ export default function HomeMobile() {
                   color={favorites.some(f => f.slug === r.slug) ? "#DC2626" : MUTED} />
               </button>
             </div>
+              );
+            })()}
 
             {/* Infos */}
             <div style={{ flex: 1, padding: "12px 12px 10px" }}>

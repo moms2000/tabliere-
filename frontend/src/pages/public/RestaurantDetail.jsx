@@ -400,8 +400,19 @@ export default function RestaurantDetail() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMsg,        setReviewMsg]        = useState("");
 
-  // Galerie photos
+  // Galerie photos avec swipe
   const [photoIdx, setPhotoIdx] = useState(0);
+  const touchStartX = useRef(null);
+  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e, photos) => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) setPhotoIdx(i => Math.min(photos.length - 1, i + 1));
+      else          setPhotoIdx(i => Math.max(0, i - 1));
+    }
+    touchStartX.current = null;
+  };
 
   // Responsive
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
@@ -538,7 +549,9 @@ export default function RestaurantDetail() {
           return (
             <div style={{ position: "relative", height: 280, overflow: "hidden", background: "#1E2E28" }}>
               <img src={photos[photoIdx]} alt={`${resto.name} photo ${photoIdx + 1}`}
-                style={{ width: "100%", height: "100%", objectFit: "cover", transition: "opacity .3s" }} />
+                style={{ width: "100%", height: "100%", objectFit: "cover", transition: "opacity .3s" }}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={e => handleTouchEnd(e, photos)} />
               {photos.length > 1 && (
                 <>
                   <div style={{ position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)",

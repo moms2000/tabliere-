@@ -97,6 +97,28 @@ async function activateTestRestaurants() {
   } catch (_) {}
 }
 
+async function runCodesMigration() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS restaurateur_codes (
+        id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        code        VARCHAR(20) UNIQUE NOT NULL,
+        is_used     BOOLEAN NOT NULL DEFAULT FALSE,
+        used_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+        used_at     TIMESTAMPTZ,
+        created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+        expires_at  TIMESTAMPTZ,
+        notes       TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // Dépôt sur restaurants
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_min_guests INTEGER DEFAULT 0`);
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_amount INTEGER DEFAULT 0`);
+    logger.info("Table restaurateur_codes + dépôt prêts");
+  } catch (_) {}
+}
+
 async function runProspectsMigration() {
   try {
     await query(`
@@ -141,6 +163,7 @@ async function start() {
     await runStartupMigrations();
     await runBusinessMigrations();
     await runProspectsMigration();
+    await runCodesMigration();
     await activateTestRestaurants();
 
     // BullMQ workers

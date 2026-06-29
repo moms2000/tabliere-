@@ -34,5 +34,8 @@ router.get   ("/payments",                 ctrl.listPayments);
 router.get   ("/reservations",             ctrl.listReservations);
 router.patch ("/reservations/:id",         ctrl.updateReservation);
 router.get   ("/prospects",                ctrl.listProspects);
+router.post  ("/codes/generate",           ctrl.generateCodes);
+router.get   ("/codes",                    ctrl.listCodes);
+router.delete("/codes/:id",                ctrl.deleteCode);
 
 export default router;

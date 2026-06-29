@@ -3,7 +3,7 @@
  * Visible uniquement sur mobile (< 768px)
  */
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, Search, CalendarCheck, User } from "lucide-react";
+import { Home, Heart, CalendarCheck, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P    = "#E8A045";
@@ -13,7 +13,7 @@ const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const NAV = [
   { icon: Home,          label: "Accueil",      path: "/"            },
-  { icon: Search,        label: "Explorer",     path: "/?explore=1"  },
+  { icon: Heart,         label: "Favoris",      path: "/profil?tab=saved" },
   { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations" },
   { icon: User,          label: "Mon compte",   path: "/profil"      },
 ];

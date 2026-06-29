@@ -1168,11 +1168,23 @@ export default function Home() {
                       cursor: "pointer", position: "relative", transition: "box-shadow .2s" }}>
 
                     <div style={{ position: "relative", background: BG,
-                      display: "flex", alignItems: "center", justifyContent: "center", minHeight: 110 }}>
+                      display: "flex", alignItems: "center", justifyContent: "center", minHeight: 110,
+                      overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4,
-                        background: CARD_ACCENT[idx % CARD_ACCENT.length] }} />
-                      <UtensilsCrossed size={30} color={CARD_ACCENT[idx % CARD_ACCENT.length]}
-                        style={{ opacity: 0.3 }} />
+                        background: CARD_ACCENT[idx % CARD_ACCENT.length], zIndex: 2 }} />
+                      {(() => {
+                        const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+                        const imgSrc = photos ? photos[0] : r.logo_url;
+                        return imgSrc ? (
+                          <img src={imgSrc} alt={r.name}
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
+                              objectFit: "cover" }}
+                            onError={e => { e.target.style.display = "none"; }} />
+                        ) : (
+                          <UtensilsCrossed size={30} color={CARD_ACCENT[idx % CARD_ACCENT.length]}
+                            style={{ opacity: 0.3 }} />
+                        );
+                      })()}
                     </div>
 
                     <button onClick={e => toggleFavorite(e, r)}

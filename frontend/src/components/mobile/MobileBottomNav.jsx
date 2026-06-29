@@ -3,7 +3,7 @@
  * Visible uniquement sur mobile (< 768px)
  */
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, Heart, CalendarCheck, User } from "lucide-react";
+import { Home, CalendarCheck, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P    = "#E8A045";
@@ -13,7 +13,6 @@ const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const NAV = [
   { icon: Home,          label: "Accueil",      path: "/"            },
-  { icon: Heart,         label: "Favoris",      path: "/profil?tab=saved" },
   { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations" },
   { icon: User,          label: "Mon compte",   path: "/profil"      },
 ];
@@ -25,7 +24,6 @@ export default function MobileBottomNav() {
 
   const isActive = (path) => {
     if (path === "/") return location.pathname === "/" && !location.search.includes("explore");
-    if (path.includes("explore")) return location.search.includes("explore");
     if (path.includes("profil")) return location.pathname.includes("profil");
     return location.pathname === path;
   };
@@ -33,13 +31,6 @@ export default function MobileBottomNav() {
   const handleClick = (item) => {
     if ((item.path.includes("profil") || item.path.includes("reservations")) && !user) {
       navigate("/connexion");
-      return;
-    }
-    if (item.path.includes("explore")) {
-      navigate("/");
-      setTimeout(() => {
-        document.getElementById("tci-restaurant-list")?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
       return;
     }
     navigate(item.path);

@@ -158,7 +158,8 @@ export default function Inscription() {
         // Pas de réponse = problème réseau ou mauvaise URL API
         setError("Impossible de contacter le serveur. Vérifiez votre connexion internet et réessayez.");
       } else if (status === 409) {
-        setError("Un compte existe déjà avec cet e-mail. Connectez-vous ou utilisez un autre e-mail.");
+        // Le message précis vient du backend (email OU téléphone)
+        setError(err.response?.data?.message || "Un compte existe déjà avec ces informations. Vérifiez votre e-mail et numéro de téléphone.");
       } else if (status === 400) {
         setError(err.response?.data?.message || "Données invalides. Vérifiez les champs.");
       } else {

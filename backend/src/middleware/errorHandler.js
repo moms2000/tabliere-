@@ -25,10 +25,14 @@ export const errorHandler = (err, req, res, next) => {
 
   // Erreurs PostgreSQL connues
   if (err.code === "23505") {
-    return res.status(409).json({
-      success: false,
-      message: "Cette valeur existe déjà (doublon)",
-    });
+    // Détecter quelle colonne cause le doublon
+    const detail = err.detail || "";
+    let msg = "Cette valeur existe déjà.";
+    if (detail.includes("email"))  msg = "Cette adresse e-mail est déjà associée à un compte.";
+    if (detail.includes("phone"))  msg = "Ce numéro de téléphone est déjà associé à un compte. Utilisez un autre numéro ou laissez ce champ vide.";
+    if (detail.includes("slug"))   msg = "Ce nom de restaurant est déjà pris.";
+    if (detail.includes("label"))  msg = "Ce label existe déjà pour ce restaurant.";
+    return res.status(409).json({ success: false, message: msg });
   }
   if (err.code === "23503") {
     return res.status(400).json({

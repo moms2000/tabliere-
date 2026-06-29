@@ -47,7 +47,15 @@ export const register = asyncHandler(async (req, res) => {
   const { rows: [existing] } = await query(
     "SELECT id FROM users WHERE email = $1", [email]
   );
-  if (existing) return conflict(res, "Un compte existe déjà avec cet email");
+  if (existing) return conflict(res, "Cette adresse e-mail est déjà utilisée. Connectez-vous ou utilisez une autre adresse.");
+
+  // Vérifier doublon téléphone (si fourni)
+  if (phone) {
+    const { rows: [existingPhone] } = await query(
+      "SELECT id FROM users WHERE phone = $1", [phone]
+    );
+    if (existingPhone) return conflict(res, "Ce numéro de téléphone est déjà associé à un compte. Utilisez un autre numéro ou laissez le champ vide.");
+  }
 
   const password_hash = await bcrypt.hash(password, 12);
 

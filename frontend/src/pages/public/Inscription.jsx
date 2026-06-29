@@ -85,12 +85,14 @@ const STRENGTH_COLORS = ["", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#16A34
 
 export default function Inscription() {
   const navigate          = useNavigate();
+  const [searchParams]    = useState(() => new URLSearchParams(window.location.search));
   const { register, login } = useAuth();
   const { t, lang }       = useLang();
   const isRTL             = lang === "ar";
 
-  const [step,        setStep]        = useState(1);
-  const [type,        setType]        = useState("client");
+  const initialType = searchParams.get("type") === "restaurateur" ? "restaurateur" : "client";
+  const [step,        setStep]        = useState(initialType === "restaurateur" ? 2 : 1);
+  const [type,        setType]        = useState(initialType);
   const [showPw,      setShowPw]      = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
@@ -102,6 +104,7 @@ export default function Inscription() {
     prenom: "", nom: "", email: "",
     date_naissance: "", localPhone: "",
     password: "", resto: "", terms: false,
+    code_restaurateur: "", // code obligatoire pour restaurateurs
   });
 
   const set        = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -132,6 +135,10 @@ export default function Inscription() {
       return t("err_password_weak");
     }
     if (!form.terms) return t("err_terms");
+    // Code restaurateur obligatoire
+    if (type === "restaurateur" && !form.code_restaurateur.trim()) {
+      return "Le code restaurateur est obligatoire. Contactez l'équipe TablièreCI pour obtenir votre code d'accès.";
+    }
     return null;
   };
 
@@ -142,13 +149,29 @@ export default function Inscription() {
     if (validErr) { setError(validErr); return; }
     setLoading(true);
     try {
+      // Vérifier le code restaurateur avant l'inscription
+      if (type === "restaurateur") {
+        const codeRes = await fetch(
+          (import.meta.env.VITE_API_URL || "/api/v1") + "/auth/verify-code",
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: form.code_restaurateur.trim().toUpperCase() }) }
+        );
+        const codeData = await codeRes.json();
+        if (!codeData.success || !codeData.data?.valid) {
+          setError(codeData.message || "Code restaurateur invalide ou déjà utilisé.");
+          setLoading(false);
+          return;
+        }
+      }
+
       await register({
-        full_name:       fullName,
-        email:           form.email,
-        phone:           fullPhone || undefined,
-        password:        form.password,
-        role:            type,
-        restaurant_name: type === "restaurateur" ? form.resto : undefined,
+        full_name:          fullName,
+        email:              form.email,
+        phone:              fullPhone || undefined,
+        password:           form.password,
+        role:               type,
+        restaurant_name:    type === "restaurateur" ? form.resto : undefined,
+        code_restaurateur:  type === "restaurateur" ? form.code_restaurateur.trim().toUpperCase() : undefined,
       });
       try { await login(form.email, form.password); } catch (_) {}
       setStep(3);
@@ -500,11 +523,33 @@ export default function Inscription() {
               </div>
             </div>
 
-            {/* Nom du restaurant */}
+            {/* Nom du restaurant + Code accès */}
             {type === "restaurateur" && (
-              <FField icon={UtensilsCrossed} label={t("reg_resto_name")} type="text"
-                value={form.resto} onChange={v => set("resto", v)}
-                placeholder="Le Maquis du Plateau" required />
+              <>
+                <FField icon={UtensilsCrossed} label={t("reg_resto_name")} type="text"
+                  value={form.resto} onChange={v => set("resto", v)}
+                  placeholder="Le Maquis du Plateau" required />
+
+                {/* Code restaurateur obligatoire */}
+                <div>
+                  <label style={lbl}>Code d'accès restaurateur *</label>
+                  <div style={{ ...wrap, border: form.code_restaurateur ? `0.5px solid ${P}` : wrap.border }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <input value={form.code_restaurateur}
+                      onChange={e => set("code_restaurateur", e.target.value.toUpperCase())}
+                      placeholder="REST-XXXX-XXXX" required
+                      style={{ border: "none", background: "transparent", fontSize: 13,
+                        outline: "none", flex: 1, color: DARK, fontFamily: "inherit",
+                        letterSpacing: "1px", fontWeight: 600 }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>
+                    Contactez TablièreCI pour obtenir votre code d'accès.
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Mot de passe */}

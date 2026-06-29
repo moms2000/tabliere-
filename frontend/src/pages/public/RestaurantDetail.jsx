@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -829,12 +829,14 @@ export default function RestaurantDetail() {
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                 transition={{ type: "spring", stiffness: 340, damping: 32 }}
                 style={{ position: "fixed",
-                  bottom: "calc(70px + env(safe-area-inset-bottom, 0px))",
+                  bottom: "calc(62px + env(safe-area-inset-bottom, 0px))",
                   left: 0, right: 0, zIndex: 95,
                   background: "white", borderRadius: "18px 18px 0 0", fontFamily: FONT,
-                  padding: "8px 20px 20px", maxHeight: "85vh", overflowY: "auto",
+                  display: "flex", flexDirection: "column",
+                  maxHeight: "calc(92vh - 62px - env(safe-area-inset-bottom, 0px))",
                   boxShadow: "0 -8px 40px rgba(0,0,0,.18)" }}>
-                <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER, margin: "12px auto 16px" }} />
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER, margin: "12px auto 8px", flexShrink: 0 }} />
+                <div style={{ overflowY: "auto", flex: 1, padding: "0 20px 20px" }}>
                 <ModalSteps
                   step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
                   selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
@@ -846,6 +848,7 @@ export default function RestaurantDetail() {
                   guestPhone={guestPhone} setGuestPhone={setGuestPhone}
                   guestEmail={guestEmail} setGuestEmail={setGuestEmail}
                 />
+                </div>
               </motion.div>
             )}
 

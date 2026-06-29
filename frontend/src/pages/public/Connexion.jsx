@@ -167,27 +167,36 @@ function StepForm({ type, onBack }) {
       const user = await login(email, password, remember);
 
       // Vérification du rôle selon l'espace choisi
-      if (type === "client" && user.role === "restaurateur") {
+      // Vérifier la cohérence rôle/espace choisi
+      if (type === "client" && (user.role === "restaurateur" || user.role === "admin")) {
         await logout();
-        setError("Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur.");
+        setError(user.role === "admin"
+          ? "Ce compte est un compte administrateur. Accédez à l'espace Admin."
+          : "Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur.");
         setLoading(false);
         return;
       }
-      if (type === "restaurateur" && user.role === "client") {
+      if (type === "restaurateur" && user.role !== "restaurateur") {
         await logout();
-        setError("Ce compte est un compte client. Utilisez l'espace Client.");
+        setError(user.role === "admin"
+          ? "Les administrateurs n'ont pas accès à l'espace restaurateur."
+          : "Ce compte est un compte client. Utilisez l'espace Client.");
         setLoading(false);
         return;
       }
 
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (user.role === "admin") {
+      // Redirection stricte par rôle — pas de cross-role navigation
+      if (user.role === "admin") {
         navigate("/admin", { replace: true });
       } else if (user.role === "restaurateur") {
         navigate("/restaurant", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        // Client — rediriger vers la destination d'origine ou l'accueil
+        if (from && !from.startsWith("/admin") && !from.startsWith("/restaurant")) {
+          navigate(from, { replace: true });
+        } else {
+          navigate("/", { replace: true });
+        }
       }
     } catch (err) {
       const status = err.response?.status;
@@ -346,7 +355,8 @@ function StepForm({ type, onBack }) {
 
           <p style={{ textAlign: "center", fontSize: 12, color: MUTED, marginTop: 20 }}>
             Pas encore de compte ?{" "}
-            <Link to="/inscription" style={{ color: accentColor, fontWeight: 500, textDecoration: "none" }}>
+            <Link to={`/inscription?type=${isResto ? "restaurateur" : "client"}`}
+              style={{ color: accentColor, fontWeight: 500, textDecoration: "none" }}>
               S'inscrire
             </Link>
           </p>

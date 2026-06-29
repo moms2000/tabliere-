@@ -135,7 +135,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/cgu"               element={<CGU />} />
                   <Route path="/mentions-legales"  element={<MentionsLegales />} />
 
-                  {/* ── Client — profil personnel (clients uniquement) ── */}
+                  {/* ── Client — profil personnel (clients uniquement, pas admin ni restaurateur) ── */}
                   <Route path="/profil" element={
                     <ProtectedRoute roles={["client"]}>
                       <Profil />

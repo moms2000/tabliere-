@@ -28,6 +28,7 @@ router.post("/refresh",             authLimiter,                            ctrl
 router.get ("/me",                  authenticate,                           ctrl.me);
 router.get ("/verify-email",                                                ctrl.verifyEmail);
 router.post("/resend-verification", authLimiter,                            ctrl.resendVerification);
+router.post("/verify-code",          authLimiter,                            ctrl.verifyRestaurateurCode);
 router.post("/forgot-password",     authLimiter,                            ctrl.forgotPassword);
 router.post("/reset-password",      authLimiter,                            ctrl.resetPassword);
 

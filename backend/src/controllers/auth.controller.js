@@ -41,7 +41,21 @@ function slugify(str) {
 
 // ── POST /auth/register ────────────────────────────────────────────────────────
 export const register = asyncHandler(async (req, res) => {
-  const { full_name, email, phone, password, role, restaurant_name } = req.body;
+  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur } = req.body;
+
+  // Valider le code restaurateur si rôle = restaurateur
+  if (role === "restaurateur") {
+    if (!code_restaurateur) throw new AppError("Le code d'accès restaurateur est obligatoire", 400);
+    const { rows: [codeRow] } = await query(
+      "SELECT id, is_used, expires_at FROM restaurateur_codes WHERE code = $1",
+      [code_restaurateur.trim().toUpperCase()]
+    );
+    if (!codeRow) throw new AppError("Code restaurateur invalide", 400);
+    if (codeRow.is_used) throw new AppError("Ce code a déjà été utilisé", 400);
+    if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+      throw new AppError("Ce code d'accès a expiré. Contactez TablièreCI.", 400);
+    }
+  }
 
   // Vérifier doublon email
   const { rows: [existing] } = await query(
@@ -93,6 +107,15 @@ export const register = asyncHandler(async (req, res) => {
 
     return newUser;
   });
+
+  // Marquer le code restaurateur comme utilisé
+  if (role === "restaurateur" && code_restaurateur) {
+    await query(
+      `UPDATE restaurateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
+       WHERE code = $2`,
+      [user.id, code_restaurateur.trim().toUpperCase()]
+    ).catch(() => {});
+  }
 
   // Générer et envoyer un token de vérification d'email
   const emailToken = crypto.randomBytes(32).toString("hex");
@@ -272,6 +295,26 @@ export const resetPassword = asyncHandler(async (req, res) => {
   await cache.del(`user:${user.id}`).catch(() => {});
   logger.info("Mot de passe réinitialisé", { userId: user.id });
   return ok(res, null, "Mot de passe mis à jour avec succès");
+});
+
+// ── POST /auth/verify-code — vérifier un code restaurateur ───────────────────
+export const verifyRestaurateurCode = asyncHandler(async (req, res) => {
+  const { code } = req.body;
+  if (!code) throw new AppError("Code requis", 400);
+
+  const { rows: [codeRow] } = await query(
+    `SELECT id, is_used, expires_at FROM restaurateur_codes
+     WHERE code = $1`,
+    [code.trim().toUpperCase()]
+  );
+
+  if (!codeRow) return ok(res, { valid: false }, "Code invalide");
+  if (codeRow.is_used) return ok(res, { valid: false }, "Ce code a déjà été utilisé");
+  if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+    return ok(res, { valid: false }, "Ce code a expiré");
+  }
+
+  return ok(res, { valid: true }, "Code valide");
 });
 
 // ── GET /auth/verify-email?token=xxx ──────────────────────────────────────────

@@ -27,7 +27,8 @@ function Logo({ size = 28 }) {
 
 /* ── Étape 1 : Choix du type de compte ───────────────────────────────────────── */
 function StepChoix({ onChoose }) {
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+  const navigate  = useNavigate();
+  const isMobile  = typeof window !== "undefined" && window.innerWidth < 640;
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: isMobile ? "16px" : "24px 16px", fontFamily: FONT }}>
@@ -78,11 +79,11 @@ function StepChoix({ onChoose }) {
         {/* Panneau droit — choix */}
         <div style={{ background: "#FAFAF6", padding: "44px 36px",
           display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <button onClick={() => window.history.back()}
+          <button onClick={() => navigate("/")}
             style={{ alignSelf: "flex-start", background: "transparent", border: "none",
               cursor: "pointer", fontSize: 12, color: MUTED, marginBottom: 28,
               display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: FONT }}>
-            ← Retour
+            ← Retour à l'accueil
           </button>
 
           <div style={{ fontSize: 20, fontWeight: 500, color: DARK, marginBottom: 6 }}>Connexion</div>

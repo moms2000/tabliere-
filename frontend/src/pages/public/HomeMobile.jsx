@@ -469,6 +469,77 @@ export default function HomeMobile() {
         ))}
       </div>
 
+      {/* ── Footer mobile ── */}
+      <footer style={{ background: DARK, marginTop: 28, padding: "28px 20px 100px", fontFamily: FONT }}>
+
+        {/* Ligne contact + paiements */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <svg width="22" height="22" viewBox="0 0 40 40" fill="none">
+              <rect width="40" height="40" rx="9" fill={P} />
+              <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+              <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+              <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
+                stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" fill="none" />
+            </svg>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "white" }}>
+              Tablière<span style={{ color: P }}>CI</span>
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            {[
+              { icon: "✉", text: "contact@tabliereci.net" },
+              { icon: "📞", text: "+225 07 00 00 00 00" },
+              { icon: "📍", text: "Abidjan, Côte d'Ivoire" },
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12 }}>{item.icon}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Paiements */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)",
+              textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
+              Paiements acceptés
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["Orange Money", "MTN MoMo", "Wave", "Carte"].map((p, i) => (
+                <span key={i} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 5,
+                  background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.5)",
+                  border: "0.5px solid rgba(255,255,255,0.1)" }}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Séparateur */}
+        <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.08)", paddingTop: 16,
+          display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {[
+              { label: "Confidentialité", href: "/confidentialite" },
+              { label: "CGU",             href: "/cgu" },
+              { label: "Mentions légales",href: "/mentions-legales" },
+            ].map(({ label, href }, i) => (
+              <a key={i} href={href}
+                style={{ fontSize: 11, color: "rgba(255,255,255,0.35)",
+                  textDecoration: "none" }}>
+                {label}
+              </a>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
+            © 2026 TablièreCI. Tous droits réservés.
+          </div>
+        </div>
+      </footer>
+
       <style>{`
         @keyframes skeleton-shimmer {
           0%   { background-position: 200% 0; }

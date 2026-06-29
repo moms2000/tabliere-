@@ -486,6 +486,21 @@ export const toggleRestaurantQR = asyncHandler(async (req, res) => {
 // ---------------------------------------------------------------------------
 export const generateCodes = asyncHandler(async (req, res) => {
   const { count = 1, notes, expires_days } = req.body;
+
+  // S'assurer que la table existe
+  await query(`
+    CREATE TABLE IF NOT EXISTS restaurateur_codes (
+      id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      code        VARCHAR(20) UNIQUE NOT NULL,
+      is_used     BOOLEAN NOT NULL DEFAULT FALSE,
+      used_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+      used_at     TIMESTAMPTZ,
+      created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+      expires_at  TIMESTAMPTZ,
+      notes       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `).catch(() => {});
   if (count < 1 || count > 50) throw new AppError("count doit être entre 1 et 50", 400);
 
   const generateCode = () => {

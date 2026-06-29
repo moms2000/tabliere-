@@ -90,17 +90,34 @@ class ErrorBoundary extends React.Component {
 }
 
 // ── MobileBottomNav wrapper ───────────────────────────────────────────────────
+// Uniquement visible sur mobile ET hors des espaces admin/restaurant
+import { useLocation } from "react-router-dom";
+
 function AppWithNav({ children }) {
   const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768);
+  const location = useLocation();
+
   React.useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
+
+  // Ne pas afficher la bottom nav sur admin, restaurant, menu QR, connexion
+  const hideBottomNav =
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/restaurant") ||
+    location.pathname.startsWith("/menu/") ||
+    location.pathname.startsWith("/connexion") ||
+    location.pathname.startsWith("/inscription") ||
+    location.pathname.startsWith("/verify-email") ||
+    location.pathname.startsWith("/mot-de-passe") ||
+    location.pathname.startsWith("/reset-password");
+
   return (
     <>
       {children}
-      {isMobile && <MobileBottomNav />}
+      {isMobile && !hideBottomNav && <MobileBottomNav />}
     </>
   );
 }

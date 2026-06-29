@@ -166,15 +166,16 @@ export default function RestaurantLayout() {
       <AnimatePresence>
         {isMobile && mobileOpen && (
           <>
+            {/* Backdrop — ferme le drawer au clic */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100 }} />
+              onPointerDown={() => setMobileOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 200 }} />
             <motion.aside
               initial={{ x: -220 }} animate={{ x: 0 }} exit={{ x: -220 }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
               style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 210,
                 background: DARK, display: "flex", flexDirection: "column",
-                zIndex: 101 }}>
+                zIndex: 201 }}>
               <SidebarContent navigate={navigate} user={user} logout={logout}
                 onClose={() => setMobileOpen(false)} />
             </motion.aside>

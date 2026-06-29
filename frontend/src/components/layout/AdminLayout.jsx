@@ -226,14 +226,14 @@ export default function AdminLayout() {
         {isMobile && mobileOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 100 }} />
+              onPointerDown={() => setMobileOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 200 }} />
             <motion.aside
               initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
               style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 220,
                 background: DARK, display: "flex", flexDirection: "column",
-                zIndex: 101, overflow: "hidden" }}>
+                zIndex: 201, overflow: "hidden" }}>
               <SidebarContent collapsed={false} navigate={navigate} user={user} logout={logout}
                 onClose={() => setMobileOpen(false)} />
             </motion.aside>

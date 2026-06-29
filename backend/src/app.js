@@ -27,8 +27,23 @@ const app = express();
 // ── Compression gzip (réduit les réponses de 60-80%) ────────────────────────
 app.use(compression({ level: 6, threshold: 1024 }));
 
-// ── Sécurité ────────────────────────────────────────────────────────────────
-app.use(helmet());
+// ── Forcer HTTPS en production ───────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (env.isProd && req.headers["x-forwarded-proto"] === "http") {
+    return res.redirect(301, "https://" + req.headers.host + req.url);
+  }
+  next();
+});
+
+// ── Sécurité (Helmet avec HSTS) ──────────────────────────────────────────────
+app.use(helmet({
+  hsts: {
+    maxAge: 63072000,        // 2 ans
+    includeSubDomains: true,
+    preload: true,
+  },
+  contentSecurityPolicy: false, // géré côté Vercel pour le frontend
+}));
 const allowedOrigins = env.isProd
   ? [
       env.FRONTEND_URL,

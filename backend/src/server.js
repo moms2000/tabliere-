@@ -77,6 +77,26 @@ async function runBusinessMigrations() {
   logger.info("Migrations métier exécutées");
 }
 
+async function activateTestRestaurants() {
+  // Activer les restaurants de test créés pour la démonstration
+  const testEmails = [
+    'contact@cara-abidjan.ci',
+    'contact@west-abidjan.ci',
+    'contact@calla-abidjan.ci',
+    'contact@must-abidjan.ci',
+    'contact@lecomptoir-abidjan.ci',
+  ];
+  try {
+    await query(
+      `UPDATE restaurants SET status = 'actif', updated_at = NOW()
+       WHERE owner_id IN (SELECT id FROM users WHERE email = ANY($1))
+         AND status = 'en_attente'`,
+      [testEmails]
+    );
+    logger.info("Restaurants de test activés");
+  } catch (_) {}
+}
+
 async function runProspectsMigration() {
   try {
     await query(`
@@ -121,6 +141,7 @@ async function start() {
     await runStartupMigrations();
     await runBusinessMigrations();
     await runProspectsMigration();
+    await activateTestRestaurants();
 
     // BullMQ workers
     try {

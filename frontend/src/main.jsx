@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
 
 import { AuthProvider }     from "./context/AuthContext.jsx";
+import MobileBottomNav     from "./components/mobile/MobileBottomNav.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ToastProvider }    from "./components/ui/Toast.jsx";
 import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
@@ -86,6 +87,22 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── MobileBottomNav wrapper ───────────────────────────────────────────────────
+function AppWithNav({ children }) {
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768);
+  React.useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return (
+    <>
+      {children}
+      {isMobile && <MobileBottomNav />}
+    </>
+  );
+}
+
 // ── PWA Service Worker ────────────────────────────────────────────────────────
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
@@ -103,6 +120,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <ToastProvider>
             <AuthProvider>
               <Suspense fallback={<PageLoader />}>
+              <AppWithNav>
                 <Routes>
                   {/* ── Pages publiques ─────────────────────────────────── */}
                   <Route path="/"                  element={<Home />} />
@@ -155,6 +173,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+              </AppWithNav>
               </Suspense>
             </AuthProvider>
           </ToastProvider>

@@ -8,6 +8,7 @@ import {
   Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus, Bell,
   TrendingUp, Shield, Smartphone,
 } from "lucide-react";
+import HomeMobile from "./HomeMobile.jsx";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import api from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -641,6 +642,9 @@ export default function Home() {
     : "Date";
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // ── Version mobile dédiée (style OpenTable) ────────────────────────────────
+  if (isMobile) return <HomeMobile />;
 
   return (
     <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh",

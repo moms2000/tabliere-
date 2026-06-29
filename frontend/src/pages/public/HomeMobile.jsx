@@ -1,0 +1,465 @@
+/**
+ * HomeMobile — Expérience mobile style OpenTable
+ * Layout dédié mobile, desktop inchangé
+ */
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search, MapPin, Star, UtensilsCrossed, Heart, Bell,
+  ChevronDown, ChevronRight, User, Calendar, Clock, Users,
+} from "lucide-react";
+import { restaurantsService } from "../../services/restaurants.service.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { useLang } from "../../context/LanguageContext.jsx";
+import api from "../../services/api.js";
+
+const P     = "#E8A045";
+const S     = "#3D6B55";
+const DARK  = "#1E2E28";
+const BG    = "#F8F5EF";
+const WHITE = "#FFFFFF";
+const MUTED = "#9BA89F";
+const BORDER= "#E4DFD8";
+const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
+
+const fmt = (n) => n ? Number(n).toLocaleString("fr-FR") : "—";
+
+/* ── Stars ── */
+function Stars({ rating, size = 12 }) {
+  return (
+    <div style={{ display: "flex", gap: 2 }}>
+      {[1,2,3,4,5].map(i => (
+        <svg key={i} width={size} height={size} viewBox="0 0 24 24"
+          fill={i <= Math.round(rating || 0) ? P : "none"} stroke={P} strokeWidth="1.5">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+const LUNCH_SLOTS  = ["12h00","12h30","13h00","13h30","14h00","14h30"];
+const DINNER_SLOTS = ["19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
+const ALL_TIMES    = [...LUNCH_SLOTS, ...DINNER_SLOTS];
+
+function buildDays() {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    return {
+      iso:  d.toISOString().split("T")[0],
+      day:  ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()],
+      num:  d.getDate(),
+      mon:  MONTHS_FR[d.getMonth()],
+    };
+  });
+}
+
+export default function HomeMobile() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const [restaurants, setRestaurants] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [search,      setSearch]      = useState("");
+  const [favorites,   setFavorites]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
+  });
+  const [notifCount, setNotifCount]   = useState(0);
+
+  // Search card state
+  const [selDate,  setSelDate]  = useState(buildDays()[0].iso);
+  const [selTime,  setSelTime]  = useState("19h00");
+  const [selGuest, setSelGuest] = useState(2);
+  const [showDatePicker, setShowDatePicker]  = useState(false);
+  const [showTimePicker, setShowTimePicker]  = useState(false);
+  const [showGuestPicker,setShowGuestPicker] = useState(false);
+
+  const days = buildDays();
+  const selDayObj = days.find(d => d.iso === selDate) || days[0];
+
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    restaurantsService.list({ limit: 20, sort: "rating" })
+      .then(res => setRestaurants(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    if (user) {
+      api.get("/notifications").then(r => {
+        const notifs = r.data?.data?.notifications || r.data?.data || [];
+        setNotifCount(notifs.filter(n => !n.is_read).length);
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  const toggleFav = (e, r) => {
+    e.stopPropagation();
+    const arr = JSON.parse(localStorage.getItem("tci_favorites") || "[]");
+    const exists = arr.some(f => f.slug === r.slug);
+    const next = exists ? arr.filter(f => f.slug !== r.slug)
+      : [...arr, { slug: r.slug, name: r.name, ville: r.ville, cuisine_type: r.cuisine_type }];
+    setFavorites(next);
+    localStorage.setItem("tci_favorites", JSON.stringify(next));
+  };
+
+  const filtered = restaurants.filter(r =>
+    !search || r.name.toLowerCase().includes(search.toLowerCase())
+      || (r.quartier || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSearch = () => {
+    listRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  return (
+    <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh", paddingBottom: 80 }}>
+
+      {/* ── Header sticky mobile ── */}
+      <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,
+        borderBottom: `0.5px solid ${BORDER}`, padding: "12px 16px",
+        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="9" fill={P} />
+            <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
+            <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
+            <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
+              stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" fill="none" />
+          </svg>
+          <span style={{ fontSize: 18, fontWeight: 700, color: DARK, letterSpacing: "-0.5px" }}>
+            Tablière<span style={{ color: P }}>CI</span>
+          </span>
+        </div>
+
+        {/* Icônes droite */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {user ? (
+            <>
+              {notifCount > 0 && (
+                <button onClick={() => navigate("/profil?tab=notifications")}
+                  style={{ position: "relative", background: "none", border: "none", cursor: "pointer" }}>
+                  <Bell size={22} color={MUTED} />
+                  <span style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14,
+                    borderRadius: "50%", background: "#DC2626", color: "white",
+                    fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+                    border: "2px solid white" }}>
+                    {notifCount > 9 ? "9+" : notifCount}
+                  </span>
+                </button>
+              )}
+              <button onClick={() => navigate("/profil")}
+                style={{ width: 34, height: 34, borderRadius: "50%", background: P + "22",
+                  border: `1.5px solid ${P}44`, cursor: "pointer", display: "flex",
+                  alignItems: "center", justifyContent: "center" }}>
+                <User size={17} color={P} />
+              </button>
+            </>
+          ) : (
+            <button onClick={() => navigate("/connexion")}
+              style={{ background: P, color: "#1A1000", border: "none", borderRadius: 20,
+                padding: "7px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+              Connexion
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Search Card style OpenTable ── */}
+      <div style={{ padding: "16px 16px 0" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: DARK, marginBottom: 4, letterSpacing: "-0.5px" }}>
+          La table parfaite,
+        </h2>
+        <p style={{ fontSize: 16, fontStyle: "italic", color: P, marginBottom: 16, fontWeight: 400 }}>
+          à portée de main.
+        </p>
+
+        {/* Card de recherche */}
+        <div style={{ background: WHITE, borderRadius: 16, border: `0.5px solid ${BORDER}`,
+          boxShadow: "0 4px 20px rgba(30,46,40,.08)", overflow: "hidden" }}>
+
+          {/* Champ texte */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 10px",
+            borderBottom: `0.5px solid ${BG}` }}>
+            <Search size={17} color={MUTED} style={{ flexShrink: 0 }} />
+            <input placeholder="Restaurant, cuisine, quartier…"
+              value={search} onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+              style={{ border: "none", background: "transparent", fontSize: 15,
+                color: DARK, outline: "none", width: "100%", fontFamily: FONT }} />
+          </div>
+
+          {/* Date / Heure / Personnes */}
+          <div style={{ display: "flex" }}>
+            {/* Date */}
+            <button onClick={() => { setShowDatePicker(p => !p); setShowTimePicker(false); setShowGuestPicker(false); }}
+              style={{ flex: 1, padding: "10px 12px", background: "none", border: "none",
+                borderRight: `0.5px solid ${BG}`, cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                letterSpacing: "0.8px", marginBottom: 2 }}>Date</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>
+                {selDayObj.day} {selDayObj.num} {selDayObj.mon}
+              </div>
+            </button>
+
+            {/* Heure */}
+            <button onClick={() => { setShowTimePicker(p => !p); setShowDatePicker(false); setShowGuestPicker(false); }}
+              style={{ flex: 1, padding: "10px 12px", background: "none", border: "none",
+                borderRight: `0.5px solid ${BG}`, cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                letterSpacing: "0.8px", marginBottom: 2 }}>Heure</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{selTime}</div>
+            </button>
+
+            {/* Personnes */}
+            <button onClick={() => { setShowGuestPicker(p => !p); setShowDatePicker(false); setShowTimePicker(false); }}
+              style={{ flex: 1, padding: "10px 12px", background: "none", border: "none",
+                cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                letterSpacing: "0.8px", marginBottom: 2 }}>Pers.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{selGuest}</div>
+            </button>
+          </div>
+
+          {/* Date picker dropdown */}
+          <AnimatePresence>
+            {showDatePicker && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                style={{ overflow: "hidden", borderTop: `0.5px solid ${BG}` }}>
+                <div style={{ padding: "12px", display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
+                  {days.map(d => {
+                    const sel = d.iso === selDate;
+                    return (
+                      <button key={d.iso} onClick={() => { setSelDate(d.iso); setShowDatePicker(false); }}
+                        style={{ flexShrink: 0, width: 52, padding: "8px 0", borderRadius: 10,
+                          border: `1.5px solid ${sel ? P : BORDER}`,
+                          background: sel ? P : WHITE, cursor: "pointer", textAlign: "center" }}>
+                        <div style={{ fontSize: 9, color: sel ? WHITE : MUTED, fontWeight: 600 }}>{d.day}</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: sel ? WHITE : DARK, lineHeight: 1.2 }}>{d.num}</div>
+                        <div style={{ fontSize: 9, color: sel ? "rgba(255,255,255,.7)" : MUTED }}>{d.mon}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Time picker */}
+          <AnimatePresence>
+            {showTimePicker && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                style={{ overflow: "hidden", borderTop: `0.5px solid ${BG}` }}>
+                <div style={{ padding: "12px" }}>
+                  {[{ label: "Déjeuner", slots: LUNCH_SLOTS }, { label: "Dîner", slots: DINNER_SLOTS }].map(({ label, slots }) => (
+                    <div key={label} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, color: MUTED, fontWeight: 700, textTransform: "uppercase",
+                        letterSpacing: "1px", marginBottom: 6 }}>{label}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {slots.map(t => {
+                          const sel = t === selTime;
+                          return (
+                            <button key={t} onClick={() => { setSelTime(t); setShowTimePicker(false); }}
+                              style={{ padding: "7px 12px", borderRadius: 8,
+                                border: `1px solid ${sel ? P : BORDER}`,
+                                background: sel ? P : WHITE, color: sel ? WHITE : DARK,
+                                fontSize: 13, fontWeight: sel ? 600 : 400, cursor: "pointer", fontFamily: FONT }}>
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Guest picker */}
+          <AnimatePresence>
+            {showGuestPicker && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                style={{ overflow: "hidden", borderTop: `0.5px solid ${BG}` }}>
+                <div style={{ padding: "12px", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => {
+                    const sel = n === selGuest;
+                    return (
+                      <button key={n} onClick={() => { setSelGuest(n); setShowGuestPicker(false); }}
+                        style={{ width: 40, height: 40, borderRadius: 8,
+                          border: `1px solid ${sel ? P : BORDER}`,
+                          background: sel ? P : WHITE, color: sel ? WHITE : DARK,
+                          fontSize: 13, fontWeight: sel ? 700 : 400, cursor: "pointer", fontFamily: FONT }}>
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Bouton Trouver */}
+          <div style={{ padding: "10px 12px 12px" }}>
+            <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearch}
+              style={{ width: "100%", padding: "14px 0", borderRadius: 10, border: "none",
+                background: P, color: "#1A1000", fontSize: 15, fontWeight: 800,
+                cursor: "pointer", fontFamily: FONT, letterSpacing: "0.3px" }}>
+              Trouver une table
+            </motion.button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Géolocalisation ── */}
+      <div style={{ padding: "8px 16px" }}>
+        <button onClick={() => {
+          if (!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(pos => {
+            const { latitude, longitude } = pos.coords;
+            const city = latitude >= 4.8 && latitude <= 6.2 ? "Abidjan" : "Abidjan";
+            setSearch(city);
+            handleSearch();
+          }, () => {});
+        }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
+            border: "none", cursor: "pointer", fontSize: 13, color: S, fontFamily: FONT }}>
+          <MapPin size={14} color={S} />
+          📍 Utiliser ma position
+        </button>
+      </div>
+
+      {/* ── Restaurant list style OpenTable ── */}
+      <div ref={listRef} id="tci-restaurant-list" style={{ padding: "8px 0" }}>
+
+        {/* Titre section */}
+        <div style={{ padding: "12px 16px 8px", display: "flex",
+          alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: MUTED,
+              textTransform: "uppercase", letterSpacing: "1.5px" }}>
+              RÉSULTATS — ABIDJAN
+            </div>
+            <div style={{ fontSize: 13, color: DARK, marginTop: 2 }}>
+              {loading ? "Chargement…" : `${filtered.length} restaurant${filtered.length !== 1 ? "s" : ""} disponible${filtered.length !== 1 ? "s" : ""}`}
+            </div>
+          </div>
+          <button style={{ display: "flex", alignItems: "center", gap: 4, background: BG,
+            border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px",
+            fontSize: 12, color: DARK, cursor: "pointer", fontFamily: FONT }}>
+            Meilleure note <ChevronDown size={12} />
+          </button>
+        </div>
+
+        {/* Cards restaurants */}
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{ margin: "0 16px 12px", background: WHITE,
+              borderRadius: 12, border: `0.5px solid ${BORDER}`, overflow: "hidden",
+              animation: "skeleton-shimmer 1.4s infinite",
+              background: "linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)",
+              backgroundSize: "200% 100%", height: 110 }} />
+          ))
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: MUTED }}>
+            <UtensilsCrossed size={40} style={{ opacity: 0.2, marginBottom: 12 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, color: DARK }}>Aucun restaurant trouvé</div>
+            <div style={{ fontSize: 13, marginTop: 6 }}>Essayez une autre recherche</div>
+          </div>
+        ) : filtered.map((r, idx) => (
+          <motion.div key={r.id || idx}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.04 }}
+            onClick={() => navigate(`/restaurants/${r.slug}`)}
+            style={{ margin: "0 16px 10px", background: WHITE, borderRadius: 14,
+              border: `0.5px solid ${BORDER}`, overflow: "hidden",
+              cursor: "pointer", display: "flex", gap: 0 }}>
+
+            {/* Photo / placeholder */}
+            <div style={{ width: 100, minHeight: 110, background: BG, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              position: "relative" }}>
+              {r.logo_url ? (
+                <img src={r.logo_url} alt={r.name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
+                  onError={e => { e.target.style.display = "none"; }} />
+              ) : (
+                <UtensilsCrossed size={28} color={P} style={{ opacity: 0.4 }} />
+              )}
+              {/* Favori */}
+              <button onClick={e => toggleFav(e, r)}
+                style={{ position: "absolute", top: 6, left: 6, background: "rgba(255,255,255,.85)",
+                  border: "none", borderRadius: "50%", width: 26, height: 26, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
+                <Heart size={12}
+                  fill={favorites.some(f => f.slug === r.slug) ? "#DC2626" : "none"}
+                  color={favorites.some(f => f.slug === r.slug) ? "#DC2626" : MUTED} />
+              </button>
+            </div>
+
+            {/* Infos */}
+            <div style={{ flex: 1, padding: "12px 12px 10px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 3 }}>
+                {r.name}
+              </div>
+
+              {/* Rating */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                {r.rating > 0 ? (
+                  <>
+                    <Stars rating={r.rating} />
+                    <span style={{ fontSize: 11, color: MUTED }}>
+                      {Number(r.rating).toFixed(1)} ({r.review_count || 0})
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: MUTED }}>Nouveau restaurant</span>
+                )}
+              </div>
+
+              {/* Métadonnées */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {r.cuisine_type && (
+                  <span style={{ fontSize: 11, color: MUTED }}>{r.cuisine_type}</span>
+                )}
+                {r.quartier && (
+                  <>
+                    <span style={{ fontSize: 11, color: BORDER }}>·</span>
+                    <span style={{ fontSize: 11, color: MUTED }}>{r.quartier}</span>
+                  </>
+                )}
+                {r.price_range && (
+                  <>
+                    <span style={{ fontSize: 11, color: BORDER }}>·</span>
+                    <span style={{ fontSize: 11, color: MUTED }}>{r.price_range}</span>
+                  </>
+                )}
+              </div>
+
+              {/* CTA */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <motion.button whileTap={{ scale: 0.96 }}
+                  onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
+                  style={{ background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
+                    borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: FONT }}>
+                  Voir les créneaux →
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes skeleton-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </div>
+  );
+}

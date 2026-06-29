@@ -35,6 +35,7 @@ const Profil            = lazy(() => import("./pages/client/Profil"));
 
 // Pages publiques — préchargées car critiques au premier chargement
 import Home             from "./pages/public/Home";
+const ConnexionAdmin   = lazy(() => import("./pages/public/ConnexionAdmin"));
 import Connexion        from "./pages/public/Connexion";
 import Inscription      from "./pages/public/Inscription";
 import RestaurantDetail from "./pages/public/RestaurantDetail";
@@ -126,6 +127,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   {/* ── Pages publiques ─────────────────────────────────── */}
                   <Route path="/"                  element={<Home />} />
                   <Route path="/connexion"         element={<Connexion />} />
+                  <Route path="/connexion/admin"   element={<ConnexionAdmin />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
                   <Route path="/verify-email"         element={<VerifyEmail />} />

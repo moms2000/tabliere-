@@ -27,19 +27,20 @@ function Logo({ size = 28 }) {
 
 /* ── Étape 1 : Choix du type de compte ───────────────────────────────────────── */
 function StepChoix({ onChoose }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: FONT }}>
+      alignItems: "center", justifyContent: "center", padding: isMobile ? "16px" : "24px 16px", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        style={{ width: "100%", maxWidth: 860, display: "grid",
-          gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
+        style={{ width: "100%", maxWidth: isMobile ? 440 : 860, display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", borderRadius: 16, overflow: "hidden",
           border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
 
-        {/* Panneau gauche */}
+        {/* Panneau gauche — caché sur mobile */}
         <div style={{ background: DARK, padding: "44px 36px",
-          display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          display: isMobile ? "none" : "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 52 }}>
               <Logo size={30} />
@@ -202,19 +203,20 @@ function StepForm({ type, onBack }) {
     }
   };
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: FONT }}>
+      alignItems: "center", justifyContent: "center", padding: isMobile ? "16px" : "24px 16px", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        style={{ width: "100%", maxWidth: 860, display: "grid",
-          gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
+        style={{ width: "100%", maxWidth: isMobile ? 440 : 860, display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", borderRadius: 16, overflow: "hidden",
           border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
 
-        {/* Panneau gauche */}
+        {/* Panneau gauche — caché sur mobile */}
         <div style={{ background: DARK, padding: "44px 36px",
-          display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          display: isMobile ? "none" : "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 52 }}>
               <Logo size={30} />
@@ -250,8 +252,19 @@ function StepForm({ type, onBack }) {
         </div>
 
         {/* Panneau droit */}
-        <div style={{ background: "#FAFAF6", padding: "44px 36px",
+        <div style={{ background: "#FAFAF6", padding: isMobile ? "28px 20px" : "44px 36px",
           display: "flex", flexDirection: "column", justifyContent: "center" }}>
+
+          {/* Logo compact mobile */}
+          {isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+              <Logo size={28} />
+              <span style={{ fontSize: 16, fontWeight: 600, color: DARK }}>
+                Tablière<span style={{ color: P }}>CI</span>
+              </span>
+            </div>
+          )}
+
           <button onClick={() => navigate("/")}
             style={{ alignSelf: "flex-start", background: "transparent", border: "none",
               cursor: "pointer", fontSize: 12, color: MUTED, marginBottom: 28,

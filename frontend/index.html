@@ -2,11 +2,41 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TablièreCI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>TablièreCI — Réservez votre table</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1E2E28" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TablièreCI" />
+
+    <!-- SEO -->
+    <meta name="description" content="Réservez votre table dans les meilleurs restaurants de Côte d'Ivoire. Confirmation immédiate, annulation gratuite." />
+    <meta name="keywords" content="restaurant, réservation, Abidjan, Côte d'Ivoire, table, menu" />
+    <meta property="og:title" content="TablièreCI — Réservez votre table" />
+    <meta property="og:description" content="La plateforme de réservation de restaurants en Côte d'Ivoire" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tabliereci.net" />
+
+    <!-- Apple icons -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <style>
+      /* Empêche le zoom iOS sur les inputs */
+      input, select, textarea { font-size: 16px !important; }
+      /* Smooth scrolling */
+      html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+      /* Empêche le bounce scroll iOS */
+      body { overscroll-behavior: none; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

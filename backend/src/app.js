@@ -48,6 +48,8 @@ const allowedOrigins = env.isProd
   ? [
       env.FRONTEND_URL,
       env.APP_URL,
+      "https://tabliereci.net",
+      "https://www.tabliereci.net",
       /\.vercel\.app$/,          // tous les previews Vercel
     ].filter(Boolean)
   : "*";

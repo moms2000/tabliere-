@@ -231,19 +231,20 @@ export default function Inscription() {
   );
 
   // ── Étape 1 — choix du type ───────────────────────────────────────────────
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   if (step === 1) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "24px 16px",
+      alignItems: "center", justifyContent: "center", padding: isMobile ? "16px" : "24px 16px",
       direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
-        style={{ width: "100%", maxWidth: 860, display: "grid",
-          gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
+        style={{ width: "100%", maxWidth: isMobile ? 440 : 860, display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", borderRadius: 16, overflow: "hidden",
           border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
 
-        {/* Panneau gauche */}
+        {/* Panneau gauche — caché sur mobile */}
         <div style={{ background: DARK, padding: "44px 36px",
-          display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          display: isMobile ? "none" : "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 52 }}>
               <Logo size={30} />
@@ -328,17 +329,17 @@ export default function Inscription() {
   // ── Étape 2 — formulaire ──────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "24px 16px",
+      alignItems: "center", justifyContent: "center", padding: isMobile ? "16px" : "24px 16px",
       direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
 
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
-        style={{ width: "100%", maxWidth: 860, display: "grid",
-          gridTemplateColumns: "1fr 1fr", borderRadius: 16, overflow: "hidden",
+        style={{ width: "100%", maxWidth: isMobile ? 440 : 860, display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", borderRadius: 16, overflow: "hidden",
           border: `0.5px solid ${BORDER}`, boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
 
-        {/* Panneau gauche */}
+        {/* Panneau gauche — caché sur mobile */}
         <div style={{ background: DARK, padding: "44px 36px",
-          display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          display: isMobile ? "none" : "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 52 }}>
               <Logo size={30} />
@@ -378,7 +379,18 @@ export default function Inscription() {
         </div>
 
         {/* Formulaire droite */}
-        <div style={{ background: "#FAFAF6", padding: "32px 28px", overflowY: "auto" }}>
+        <div style={{ background: "#FAFAF6", padding: isMobile ? "24px 20px" : "32px 28px", overflowY: "auto" }}>
+
+          {/* Logo compact mobile */}
+          {isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+              <Logo size={26} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#1E2E28" }}>
+                Tablière<span style={{ color: "#E8A045" }}>CI</span>
+              </span>
+            </div>
+          )}
+
           <button onClick={() => setStep(1)}
             style={{ background: "transparent", border: "none", cursor: "pointer",
               fontSize: 12, color: MUTED, marginBottom: 24, display: "flex",

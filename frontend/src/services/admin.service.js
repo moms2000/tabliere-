@@ -74,6 +74,11 @@ export const adminService = {
     return res.data.data;
   },
 
+  async updateUser(id, data) {
+    const res = await api.patch(`/admin/users/${id}`, data);
+    return res.data.data;
+  },
+
   async deleteUser(id) {
     const res = await api.delete(`/admin/users/${id}`);
     return res.data;

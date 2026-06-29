@@ -199,6 +199,49 @@ export const setUserStatus = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /admin/users/:id — modifier email/nom/rôle/mot de passe
+// ---------------------------------------------------------------------------
+export const updateUser = asyncHandler(async (req, res) => {
+  const { full_name, email, role, new_password } = req.body;
+  const ALLOWED_ROLES = ["client", "restaurateur", "admin"];
+  if (role && !ALLOWED_ROLES.includes(role)) throw new AppError("Rôle invalide", 400);
+
+  const updates = [];
+  const values  = [];
+
+  if (full_name) { values.push(full_name); updates.push(`full_name = $${values.length}`); }
+  if (email) {
+    // Vérifier l'unicité du nouvel email
+    const { rows: [conflict] } = await query(
+      "SELECT id FROM users WHERE email = $1 AND id != $2",
+      [email.toLowerCase(), req.params.id]
+    );
+    if (conflict) throw new AppError("Cet email est déjà utilisé par un autre compte", 409);
+    values.push(email.toLowerCase()); updates.push(`email = $${values.length}`);
+  }
+  if (role) { values.push(role); updates.push(`role = $${values.length}`); }
+  if (new_password) {
+    if (new_password.length < 8) throw new AppError("Mot de passe minimum 8 caractères", 400);
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.default.hash(new_password, 12);
+    values.push(hash); updates.push(`password_hash = $${values.length}`);
+  }
+  if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);
+
+  values.push(req.params.id);
+  const { rows: [user] } = await query(
+    `UPDATE users SET ${updates.join(", ")}, updated_at = NOW()
+     WHERE id = $${values.length} RETURNING id, full_name, email, role, status`,
+    values
+  );
+  if (!user) return notFound(res, "Utilisateur introuvable");
+
+  await cache.del(`user:${req.params.id}`);
+  logger.info("Utilisateur mis à jour par admin", { userId: user.id });
+  return ok(res, { user }, "Utilisateur mis à jour");
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /admin/users/:id
 // ---------------------------------------------------------------------------
 export const deleteUser = asyncHandler(async (req, res) => {

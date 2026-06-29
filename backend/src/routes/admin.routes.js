@@ -25,6 +25,7 @@ router.patch ("/restaurants/:id/qr",       ctrl.toggleRestaurantQR);
 // Utilisateurs
 router.get   ("/users",                    ctrl.listUsers);
 router.patch ("/users/batch",              ctrl.batchUserStatus);
+router.patch ("/users/:id",                ctrl.updateUser);
 router.patch ("/users/:id/status",         ctrl.setUserStatus);
 router.delete("/users/:id",               ctrl.deleteUser);
 

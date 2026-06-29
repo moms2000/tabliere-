@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Search, ShieldOff, ShieldCheck, Download,
   CheckSquare, Square, X, Trash2, ChevronLeft, ChevronRight,
-  ArrowUpAZ, ArrowDownAZ, Clock,
+  ArrowUpAZ, ArrowDownAZ, Clock, Pencil, Save,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
@@ -14,6 +14,7 @@ const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, trans
 // "suspendu" en DB = "bloqué" côté UI
 const displayStatus = (s) => (s === "suspendu" ? "bloqué" : s);
 const STATUS_BADGE = { actif: "green", bloque: "red", bloqué: "red", suspendu: "red" };
+const ROLE_BADGE   = { client: "gray", restaurateur: "blue", admin: "green" };
 
 const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR") : "—";
 
@@ -30,23 +31,28 @@ export default function Utilisateurs() {
   const [search,    setSearch]    = useState("");
   const [sort,      setSort]      = useState("name");
   const [page,      setPage]      = useState(1);
-  const [selected,  setSelected]  = useState(new Set());
-  const [exporting, setExporting] = useState(false);
-  const [batching,  setBatching]  = useState(false);
-  const [deleting,  setDeleting]  = useState(null);
+  const [selected,   setSelected]   = useState(new Set());
+  const [exporting,  setExporting]  = useState(false);
+  const [batching,   setBatching]   = useState(false);
+  const [deleting,   setDeleting]   = useState(null);
+  const [editUser,   setEditUser]   = useState(null);  // user en cours d'édition
+  const [editForm,   setEditForm]   = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg,    setEditMsg]    = useState("");
+  const [roleFilter, setRoleFilter] = useState(""); // "" | "client" | "restaurateur" | "admin"
 
   const LIMIT = 30;
   const totalPages = Math.ceil(total / LIMIT);
 
   const load = useCallback(() => {
     setLoading(true);
-    adminService.listUsers({ search: search || undefined, role: "client", limit: LIMIT, page, sort })
+    adminService.listUsers({ search: search || undefined, role: roleFilter || undefined, limit: LIMIT, page, sort })
       .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [search, sort, page]);
 
-  useEffect(() => { setSelected(new Set()); setPage(1); }, [search, sort]);
+  useEffect(() => { setSelected(new Set()); setPage(1); }, [search, sort, roleFilter]);
   useEffect(() => { load(); }, [load]);
 
   const toggleBlock = async (user) => {
@@ -126,10 +132,18 @@ export default function Utilisateurs() {
       <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status] || STATUS_BADGE[displayStatus(u.status)] || "gray"} />
     )},
     { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize: 11, color: "#bbb" }}>{fmtDate(u.created_at)}</span> },
+    { key: "role", label: "Rôle", render: u => (
+      <Badge label={u.role || "client"} variant={ROLE_BADGE[u.role] || "gray"} />
+    )},
     { key: "actions", label: "", align: "right", render: u => {
       const isBlocked = ["suspendu","bloque","bloqué"].includes(u.status);
       return (
         <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => { setEditUser(u); setEditForm({ full_name: u.full_name, email: u.email, role: u.role, new_password: "" }); setEditMsg(""); }}
+            style={{ padding: "4px 8px", borderRadius: 6, border: "0.5px solid #e4dfd8",
+              background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
+            <Pencil size={12} color="#888" />
+          </button>
           <Btn onClick={() => toggleBlock(u)}
             variant={isBlocked ? "default" : "danger"}
             icon={isBlocked ? ShieldCheck : ShieldOff}
@@ -173,6 +187,19 @@ export default function Utilisateurs() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
             <SectionHeader title="Liste des utilisateurs" icon={Users} />
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {/* Filtre par rôle */}
+              <div style={{ display: "flex", gap: 4 }}>
+                {["", "client", "restaurateur", "admin"].map(r => (
+                  <button key={r} onClick={() => setRoleFilter(r)}
+                    style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+                      border: `0.5px solid ${roleFilter === r ? "#E8A045" : "#eee"}`,
+                      background: roleFilter === r ? "#fef6ec" : "white",
+                      color: roleFilter === r ? "#c47d1a" : "#888",
+                      fontWeight: roleFilter === r ? 600 : 400 }}>
+                    {r === "" ? "Tous" : r.charAt(0).toUpperCase() + r.slice(1)}
+                  </button>
+                ))}
+              </div>
               {/* Tri */}
               <div style={{ display: "flex", gap: 4 }}>
                 {SORT_OPTIONS.map(({ value, label, icon: Icon }) => (
@@ -260,6 +287,122 @@ export default function Utilisateurs() {
           )}
         </Card>
       </motion.div>
+
+      {/* ── Modal édition utilisateur ── */}
+      <AnimatePresence>
+        {editUser && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setEditUser(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
+            <div style={{ position: "fixed", inset: 0, zIndex: 60,
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "none" }}>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                style={{ background: "white", borderRadius: 16, padding: 24,
+                  width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,.2)",
+                  pointerEvents: "auto" }}>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1e2e28" }}>Modifier l'utilisateur</div>
+                    <div style={{ fontSize: 12, color: "#9ba89f", marginTop: 2 }}>{editUser.email}</div>
+                  </div>
+                  <button onClick={() => setEditUser(null)}
+                    style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+                    <X size={18} color="#9ba89f" />
+                  </button>
+                </div>
+
+                {editMsg && (
+                  <div style={{ padding: "8px 12px", borderRadius: 8, marginBottom: 12, fontSize: 12,
+                    background: editMsg.includes("succès") ? "#e1f5ee" : "#faece7",
+                    color: editMsg.includes("succès") ? "#1D9E75" : "#993C1D" }}>
+                    {editMsg}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {[
+                    { label: "Nom complet", key: "full_name", type: "text" },
+                    { label: "Adresse e-mail", key: "email", type: "email" },
+                  ].map(({ label, key, type }) => (
+                    <div key={key}>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#9ba89f",
+                        textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>{label}</label>
+                      <input value={editForm[key] || ""} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
+                        type={type}
+                        style={{ width: "100%", border: "0.5px solid #e4dfd8", borderRadius: 8,
+                          padding: "10px 12px", fontSize: 13, outline: "none", boxSizing: "border-box",
+                          background: "#f8f5ef" }} />
+                    </div>
+                  ))}
+
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#9ba89f",
+                      textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Rôle</label>
+                    <select value={editForm.role || ""} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
+                      style={{ width: "100%", border: "0.5px solid #e4dfd8", borderRadius: 8,
+                        padding: "10px 12px", fontSize: 13, outline: "none", background: "#f8f5ef",
+                        cursor: "pointer" }}>
+                      <option value="client">Client</option>
+                      <option value="restaurateur">Restaurateur</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#9ba89f",
+                      textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>
+                      Nouveau mot de passe (laisser vide pour ne pas changer)
+                    </label>
+                    <input value={editForm.new_password || ""} onChange={e => setEditForm(p => ({ ...p, new_password: e.target.value }))}
+                      type="password" placeholder="••••••••"
+                      style={{ width: "100%", border: "0.5px solid #e4dfd8", borderRadius: 8,
+                        padding: "10px 12px", fontSize: 13, outline: "none", boxSizing: "border-box",
+                        background: "#f8f5ef" }} />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                  <button onClick={() => setEditUser(null)}
+                    style={{ flex: 1, border: "0.5px solid #eee", borderRadius: 9, padding: "11px 0",
+                      background: "white", cursor: "pointer", fontSize: 13, color: "#888" }}>
+                    Annuler
+                  </button>
+                  <button onClick={async () => {
+                      setEditSaving(true); setEditMsg("");
+                      try {
+                        await adminService.updateUser(editUser.id, {
+                          full_name:    editForm.full_name,
+                          email:        editForm.email,
+                          role:         editForm.role,
+                          new_password: editForm.new_password || undefined,
+                        });
+                        setData(prev => prev.map(u => u.id === editUser.id
+                          ? { ...u, full_name: editForm.full_name, email: editForm.email, role: editForm.role }
+                          : u
+                        ));
+                        setEditMsg("Modifications enregistrées avec succès !");
+                        setTimeout(() => setEditUser(null), 1500);
+                      } catch (e) {
+                        setEditMsg(e.response?.data?.message || "Erreur lors de la mise à jour");
+                      }
+                      setEditSaving(false);
+                    }}
+                    disabled={editSaving}
+                    style={{ flex: 2, border: "none", borderRadius: 9, padding: "11px 0",
+                      background: "#e8a045", color: "#1A1000", fontSize: 13, fontWeight: 700,
+                      cursor: editSaving ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <Save size={14} /> {editSaving ? "Sauvegarde…" : "Enregistrer"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

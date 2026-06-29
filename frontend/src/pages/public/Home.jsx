@@ -640,14 +640,16 @@ export default function Home() {
       })()
     : "Date";
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh",
       direction: isRTL ? "rtl" : "ltr" }}>
 
       {/* ── Nav ───────────────────────────────────────────────────────────── */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 32px", background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
-        position: "sticky", top: 0, zIndex: 30, gap: 16 }}>
+        padding: isMobile ? "12px 16px" : "14px 32px", background: WHITE,
+        borderBottom: `0.5px solid ${BORDER}`, position: "sticky", top: 0, zIndex: 30, gap: 12 }}>
 
         <div onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer", flexShrink: 0 }}>
@@ -657,22 +659,42 @@ export default function Home() {
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: 28, fontSize: 13, color: MUTED }}>
-          {[
-            { key: "nav_restaurants", action: () => scrollTo(listRef) },
-            { key: "nav_experiences", action: () => scrollTo(experiencesRef) },
-            { key: "nav_how",         action: () => scrollTo(howRef) },
-          ].map(({ key, action }) => (
-            <span key={key} onClick={action}
-              style={{ cursor: "pointer", whiteSpace: "nowrap",
-                transition: "color .15s", fontWeight: 500 }}
-              onMouseEnter={e => e.target.style.color = DARK}
-              onMouseLeave={e => e.target.style.color = MUTED}>
-              {t(key)}
-            </span>
-          ))}
-        </div>
+        {/* Liens nav — cachés sur mobile */}
+        {!isMobile && (
+          <div style={{ display: "flex", gap: 28, fontSize: 13, color: MUTED }}>
+            {[
+              { key: "nav_restaurants", action: () => scrollTo(listRef) },
+              { key: "nav_experiences", action: () => scrollTo(experiencesRef) },
+              { key: "nav_how",         action: () => scrollTo(howRef) },
+            ].map(({ key, action }) => (
+              <span key={key} onClick={action}
+                style={{ cursor: "pointer", whiteSpace: "nowrap",
+                  transition: "color .15s", fontWeight: 500 }}
+                onMouseEnter={e => e.target.style.color = DARK}
+                onMouseLeave={e => e.target.style.color = MUTED}>
+                {t(key)}
+              </span>
+            ))}
+          </div>
+        )}
 
+        {/* Mobile — boutons directs */}
+        {isMobile ? (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => navigate("/connexion")}
+              style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px",
+                fontSize: 13, background: "transparent", cursor: "pointer",
+                color: DARK, fontWeight: 500, fontFamily: FONT }}>
+              Connexion
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => navigate("/inscription")}
+              style={{ border: "none", borderRadius: 8, padding: "8px 14px",
+                fontSize: 13, background: P, color: "#1A1000",
+                cursor: "pointer", fontWeight: 700, fontFamily: FONT }}>
+              + S'inscrire
+            </motion.button>
+          </div>
+        ) : (
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Langue */}
           <div style={{ position: "relative" }} onMouseDown={e => e.stopPropagation()}>
@@ -861,6 +883,7 @@ export default function Home() {
             </>
           )}
         </div>
+        )}
       </nav>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}

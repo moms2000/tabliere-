@@ -85,7 +85,10 @@ function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
       <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
-            onClick={() => onClose?.()}>
+            onClick={(e) => {
+              // Fermer immédiatement sur mobile
+              if (onClose) { onClose(); }
+            }}>
             {({ isActive }) => (
               <motion.div whileHover={{ background: "rgba(232,160,69,.10)" }}
                 style={{ display: "flex", alignItems: "center", gap: 10,

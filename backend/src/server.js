@@ -77,6 +77,27 @@ async function runBusinessMigrations() {
   logger.info("Migrations métier exécutées");
 }
 
+async function runProspectsMigration() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS prospects (
+        id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        full_name     VARCHAR(255) NOT NULL,
+        phone         VARCHAR(30)  NOT NULL,
+        email         VARCHAR(255),
+        restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL,
+        reservation_ref VARCHAR(20),
+        source        VARCHAR(50) NOT NULL DEFAULT 'guest_reservation',
+        notes         TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_prospects_phone ON prospects(phone)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_prospects_restaurant ON prospects(restaurant_id)`);
+    logger.info("Table prospects prête");
+  } catch (_) {}
+}
+
 let server;
 
 async function start() {
@@ -99,6 +120,7 @@ async function start() {
     // Migrations démarrage (idempotentes)
     await runStartupMigrations();
     await runBusinessMigrations();
+    await runProspectsMigration();
 
     // BullMQ workers
     try {

@@ -423,7 +423,10 @@ export const update = asyncHandler(async (req, res) => {
 export const createGuest = asyncHandler(async (req, res) => {
   await ensureResaColumns();
   const { restaurant_id, table_id, reserved_at, party_size,
-          special_request, walk_in_name, walk_in_phone, walk_in_email } = req.body;
+          special_request, walk_in_name, walk_in_phone, walk_in_email, notes } = req.body;
+
+  // Téléphone obligatoire pour les réservations invité
+  if (!walk_in_phone?.trim()) throw new AppError("Le numéro de téléphone est requis pour une réservation sans compte", 400);
 
   const { rows: [resto] } = await query(
     "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status = 'actif'",
@@ -479,7 +482,15 @@ export const createGuest = asyncHandler(async (req, res) => {
     }
   } catch (_) {}
 
-  logger.info("Réservation invité créée", { ref: resa.ref, walk_in_name });
+  // Stocker comme prospect pour le marketing
+  query(
+    `INSERT INTO prospects (full_name, phone, email, restaurant_id, reservation_ref, source, notes)
+     VALUES ($1, $2, $3, $4, $5, 'guest_reservation', $6)
+     ON CONFLICT DO NOTHING`,
+    [walk_in_name, walk_in_phone, walk_in_email || null, restaurant_id, resa.ref, notes || null]
+  ).catch(() => {}); // asynchrone, ne pas bloquer
+
+  logger.info("Réservation invité créée + prospect enregistré", { ref: resa.ref, walk_in_name, walk_in_phone });
   return created(res, { reservation: resa }, "Réservation créée avec succès");
 });
 

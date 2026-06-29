@@ -131,6 +131,17 @@ a { text-decoration: none; color: inherit; }
   .ios-bottom-safe { padding-bottom: env(safe-area-inset-bottom) !important; }
 }
 
+/* ── Bottom nav mobile : décaler les éléments fixes ─────────────────────────── */
+@media (max-width: 768px) {
+  /* Toutes les pages publiques scrollables */
+  .page-has-bottom-nav { padding-bottom: 80px !important; }
+
+  /* Boutons fixes en bas (modal, panier) — au-dessus de la bottom nav */
+  .fixed-bottom-btn {
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 /* ── Input mobile — empêcher zoom iOS (font >= 16px sur focus) ─────────────── */
 @media (max-width: 640px) {
   input, select, textarea { font-size: 16px !important; }

@@ -47,12 +47,13 @@ export default function MobileBottomNav() {
 
   return (
     <nav style={{
-      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 90,
       background: "white",
       borderTop: "0.5px solid #E4DFD8",
       display: "flex",
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
       fontFamily: FONT,
+      backdropFilter: "blur(10px)",
     }}>
       {NAV.map((item) => {
         const active = isActive(item.path);

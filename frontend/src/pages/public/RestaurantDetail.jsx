@@ -213,7 +213,7 @@ function BookingWidget({ onBook }) {
 function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers, resto,
   special, setSpecial, user, error, booking, handleBook, closeModal, navigate,
   resaRef, P, PL, DARK, BG, BORDER, MUTED, FONT,
-  guestName, setGuestName, guestPhone, setGuestPhone }) {
+  guestName, setGuestName, guestPhone, setGuestPhone, guestEmail, setGuestEmail }) {
   return (
     <>
       <button onClick={closeModal}
@@ -279,27 +279,35 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
           {!user && (
             <div style={{ background: "#FFF9F0", border: `0.5px solid ${P}44`,
               borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 10 }}>
-                📋 Vos coordonnées (réservation invité)
+              <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 3 }}>
+                📋 Vos coordonnées
+              </div>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
+                Ces infos restent confidentielles. Aucun compte créé.
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <input value={guestName} onChange={e => setGuestName(e.target.value)}
-                  placeholder="Votre nom complet *" required
+                  placeholder="Nom complet *" required
                   style={{ border: `0.5px solid ${guestName ? P : BORDER}`, borderRadius: 8,
-                    padding: "9px 12px", fontSize: 13, background: BG, outline: "none",
+                    padding: "11px 12px", fontSize: 14, background: BG, outline: "none",
                     color: DARK, fontFamily: FONT, width: "100%", boxSizing: "border-box" }} />
                 <input value={guestPhone} onChange={e => setGuestPhone(e.target.value)}
-                  placeholder="Téléphone (optionnel)" type="tel"
+                  placeholder="Téléphone *" type="tel" required
+                  style={{ border: `0.5px solid ${guestPhone ? P : BORDER}`, borderRadius: 8,
+                    padding: "11px 12px", fontSize: 14, background: BG, outline: "none",
+                    color: DARK, fontFamily: FONT, width: "100%", boxSizing: "border-box" }} />
+                <input value={guestEmail || ""} onChange={e => setGuestEmail && setGuestEmail(e.target.value)}
+                  placeholder="E-mail (optionnel)" type="email"
                   style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8,
-                    padding: "9px 12px", fontSize: 13, background: BG, outline: "none",
+                    padding: "11px 12px", fontSize: 14, background: BG, outline: "none",
                     color: DARK, fontFamily: FONT, width: "100%", boxSizing: "border-box" }} />
               </div>
               <div style={{ marginTop: 10, padding: "8px 10px", background: PL,
                 borderRadius: 7, fontSize: 11, color: "#C47D1A" }}>
-                💡 <strong>Créez un compte</strong> pour suivre vos réservations et cumuler des points.{" "}
+                💡 <strong>Créez un compte gratuitement</strong> pour suivre vos réservations, les annuler facilement et cumuler des points.{" "}
                 <span onClick={() => navigate("/inscription")}
                   style={{ textDecoration: "underline", cursor: "pointer", fontWeight: 600 }}>
-                  S'inscrire (gratuit)
+                  S'inscrire →
                 </span>
               </div>
             </div>
@@ -443,12 +451,14 @@ export default function RestaurantDetail() {
   const [guestName,  setGuestName]  = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
 
   const handleBook = async () => {
     if (step === 1) { setStep(2); return; }
     if (step === 2) {
-      // Invité sans compte : vérifier qu'un nom est fourni
-      if (!user && !guestName.trim()) { setError("Veuillez indiquer votre nom pour continuer en tant qu'invité."); return; }
+      // Invité sans compte : nom + téléphone obligatoires
+      if (!user && !guestName.trim()) { setError("Veuillez indiquer votre nom complet."); return; }
+      if (!user && !guestPhone.trim()) { setError("Veuillez indiquer votre numéro de téléphone."); return; }
       setBooking(true); setError("");
       try {
         const reserved_at = toDatetime(selDate, selSlot);
@@ -471,7 +481,10 @@ export default function RestaurantDetail() {
         const resa = user
           ? await reservationsService.create(payload)
           : await import("../../services/api.js").then(({ default: api }) =>
-              api.post("/reservations/guest", payload).then(r => r.data.data)
+              api.post("/reservations/guest", {
+                ...payload,
+                walk_in_email: guestEmail.trim() || undefined,
+              }).then(r => r.data.data)
             );
         setResaRef(resa?.ref || resa?.reservation?.ref || null);
         setStep(3);
@@ -803,9 +816,11 @@ export default function RestaurantDetail() {
               <motion.div key="sheet"
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                 transition={{ type: "spring", stiffness: 340, damping: 32 }}
-                style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 51,
+                style={{ position: "fixed",
+                  bottom: "calc(70px + env(safe-area-inset-bottom, 0px))",
+                  left: 0, right: 0, zIndex: 95,
                   background: "white", borderRadius: "18px 18px 0 0", fontFamily: FONT,
-                  padding: "8px 20px 36px", maxHeight: "92vh", overflowY: "auto",
+                  padding: "8px 20px 20px", maxHeight: "85vh", overflowY: "auto",
                   boxShadow: "0 -8px 40px rgba(0,0,0,.18)" }}>
                 <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER, margin: "12px auto 16px" }} />
                 <ModalSteps
@@ -817,6 +832,7 @@ export default function RestaurantDetail() {
                   resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
                   guestName={guestName} setGuestName={setGuestName}
                   guestPhone={guestPhone} setGuestPhone={setGuestPhone}
+                  guestEmail={guestEmail} setGuestEmail={setGuestEmail}
                 />
               </motion.div>
             )}

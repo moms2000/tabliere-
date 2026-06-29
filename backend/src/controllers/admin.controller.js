@@ -482,6 +482,31 @@ export const toggleRestaurantQR = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/prospects — liste des prospects (invités sans compte)
+// ---------------------------------------------------------------------------
+export const listProspects = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 30, restaurant_id } = req.query;
+  const offset = (page - 1) * limit;
+  const params = [];
+  const conditions = [];
+
+  if (restaurant_id) { params.push(restaurant_id); conditions.push(`p.restaurant_id = $${params.length}`); }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const { rows } = await query(
+    `SELECT p.*, r.name AS resto_name
+     FROM prospects p
+     LEFT JOIN restaurants r ON r.id = p.restaurant_id
+     ${where}
+     ORDER BY p.created_at DESC
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  const { rows: [{ count }] } = await query(`SELECT COUNT(*) FROM prospects p ${where}`, params);
+  return paginated(res, rows, +count, +page, +limit);
+});
+
+// ---------------------------------------------------------------------------
 // GET  /admin/settings — paramètres de la plateforme
 // PATCH /admin/settings — mettre à jour les paramètres
 // ---------------------------------------------------------------------------

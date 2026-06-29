@@ -34,8 +34,9 @@ router.post("/guest", reservationLimiter, validate(
     party_size:      Joi.number().integer().min(1).max(50).required(),
     special_request: Joi.string().max(500).allow("", null).optional(),
     walk_in_name:    Joi.string().max(255).required(),
-    walk_in_phone:   Joi.string().max(30).allow("", null).optional(),
+    walk_in_phone:   Joi.string().min(8).max(30).required(), // obligatoire
     walk_in_email:   Joi.string().email().allow("", null).optional(),
+    notes:           Joi.string().max(500).allow("", null).optional(),
   })
 ), ctrl.createGuest);
 

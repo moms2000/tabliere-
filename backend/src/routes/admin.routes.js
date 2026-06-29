@@ -33,5 +33,6 @@ router.delete("/users/:id",               ctrl.deleteUser);
 router.get   ("/payments",                 ctrl.listPayments);
 router.get   ("/reservations",             ctrl.listReservations);
 router.patch ("/reservations/:id",         ctrl.updateReservation);
+router.get   ("/prospects",                ctrl.listProspects);
 
 export default router;

@@ -78,7 +78,7 @@ function SidebarContent({ navigate, user, logout, onClose }) {
       <nav style={{ flex: 1, padding: "10px 8px" }}>
         {NAV.map(({ to, label, icon: Icon, end, highlight }) => (
           <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
-            onClick={() => onClose?.()}>
+            onClick={() => { if (onClose) onClose(); }}>
             {({ isActive }) => (
               <motion.div whileHover={{ background: highlight && !isActive ? "rgba(232,160,69,.2)" : "rgba(232,160,69,.10)" }}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",

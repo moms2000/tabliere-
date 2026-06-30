@@ -69,6 +69,18 @@ export default function HomeMobile() {
   });
   const [notifCount, setNotifCount]   = useState(0);
 
+  // Onglets catégorie
+  const [activeTab, setActiveTab] = useState(0);
+
+  const TABS = [
+    { label: "Tous",               filter: () => true },
+    { label: "Gastronomique",      filter: r => (r.cuisine_type || "").toLowerCase().includes("gastro") },
+    { label: "Cuisine ivoirienne", filter: r => (r.cuisine_type || "").toLowerCase().includes("ivoi") },
+    { label: "Brunch",             filter: r => (r.cuisine_type || "").toLowerCase().includes("brunch") || (r.name || "").toLowerCase().includes("brunch") },
+    { label: "Terrasse",           filter: r => Array.isArray(r.options) && r.options.some(o => typeof o === "string" && o.toLowerCase().includes("terrasse")) },
+    { label: "Live musique",       filter: r => Array.isArray(r.options) && r.options.some(o => typeof o === "string" && o.toLowerCase().includes("live")) },
+  ];
+
   // Search card state
   const [selDate,  setSelDate]  = useState(buildDays()[0].iso);
   const [selTime,  setSelTime]  = useState("19h00");
@@ -115,6 +127,11 @@ export default function HomeMobile() {
 
   const filtered = (() => {
     let list = restaurants;
+
+    // Filtre onglet catégorie
+    if (activeTab > 0) {
+      list = list.filter(TABS[activeTab].filter);
+    }
 
     // Filtre texte (nom + quartier + ville + type de cuisine)
     if (search) {
@@ -404,6 +421,26 @@ export default function HomeMobile() {
           <Navigation size={14} color={S} />
           Utiliser ma position
         </button>
+      </div>
+
+      {/* ── Onglets catégories (scrollable horizontal) ── */}
+      <div style={{ background: WHITE, borderBottom: `0.5px solid ${BORDER}`,
+        overflowX: "auto", display: "flex", scrollbarWidth: "none",
+        WebkitOverflowScrolling: "touch" }}>
+        <style>{`.tci-tabs::-webkit-scrollbar { display: none; }`}</style>
+        <div className="tci-tabs" style={{ display: "flex", padding: "0 12px", minWidth: "max-content" }}>
+          {TABS.map((tab, i) => (
+            <button key={i} onClick={() => { setActiveTab(i); resetSearch(); }}
+              style={{ padding: "11px 14px", fontSize: 13, cursor: "pointer",
+                background: "transparent", border: "none", whiteSpace: "nowrap",
+                color: activeTab === i ? P : MUTED,
+                borderBottom: `2.5px solid ${activeTab === i ? P : "transparent"}`,
+                fontWeight: activeTab === i ? 700 : 400, fontFamily: FONT,
+                transition: "all .15s", flexShrink: 0 }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Restaurant list style OpenTable ── */}

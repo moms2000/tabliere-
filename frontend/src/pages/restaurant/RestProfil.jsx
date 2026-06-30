@@ -191,7 +191,10 @@ export default function RestProfil() {
                   <Input value={form.website} onChange={set("website")} placeholder="https://monresto.ci" />
                 </FormField>
                 <FormField label="Horaires d'ouverture">
-                  <Input value={form.opening_hours} onChange={set("opening_hours")} placeholder="Mar–Dim · 12h–23h" />
+                  <Input value={form.opening_hours} onChange={set("opening_hours")} placeholder="Mar–Dim · 12h–14h30 · 19h–23h" />
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>
+                    Ex : Lun–Sam 12h–15h · 18h30–23h · Fermé dimanche
+                  </div>
                 </FormField>
               </div>
             </Card>
@@ -208,6 +211,57 @@ export default function RestProfil() {
                 <FormField label="Prix moyen / personne">
                   <Input value={form.price_range} onChange={set("price_range")} placeholder="5 000 – 15 000 F" />
                 </FormField>
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* Disponibilités par taille de groupe */}
+          <motion.div variants={fadeUp}>
+            <Card>
+              <SectionHeader title="Créneaux & Disponibilités" icon={DollarSign} />
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 12, lineHeight: 1.6 }}>
+                Indiquez les horaires de service et le nombre de tables disponibles par taille de groupe.
+                Ces informations aident les clients à trouver le bon créneau.
+              </div>
+
+              {/* Créneaux déjeuner / dîner */}
+              <FormField label="Service déjeuner">
+                <Input value={form.lunch_hours || ""}
+                  onChange={e => setForm(p => ({ ...p, lunch_hours: e.target.value }))}
+                  placeholder="12h00 – 14h30" />
+              </FormField>
+              <FormField label="Service dîner">
+                <Input value={form.dinner_hours || ""}
+                  onChange={e => setForm(p => ({ ...p, dinner_hours: e.target.value }))}
+                  placeholder="19h00 – 23h00" />
+              </FormField>
+
+              {/* Tables par taille */}
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9BA89F",
+                  textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 10 }}>
+                  Nombre de tables disponibles
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {[
+                    { label: "Pour 1–2 personnes",  key: "tables_2" },
+                    { label: "Pour 3–4 personnes",  key: "tables_4" },
+                    { label: "Pour 5–6 personnes",  key: "tables_6" },
+                    { label: "Pour 7+ personnes",   key: "tables_8" },
+                  ].map(({ label, key }) => (
+                    <div key={key}>
+                      <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{label}</div>
+                      <input
+                        type="number" min={0} max={50}
+                        value={form[key] || ""}
+                        onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+                        placeholder="0"
+                        style={{ width: "100%", border: "0.5px solid #E4DFD8", borderRadius: 8,
+                          padding: "8px 10px", fontSize: 13, outline: "none",
+                          background: "#F8F5EF", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                </div>
               </div>
             </Card>
           </motion.div>

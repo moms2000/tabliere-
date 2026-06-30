@@ -45,14 +45,21 @@ const LUNCH_SLOTS  = ["12h00","12h30","13h00","13h30","14h00","14h30"];
 const DINNER_SLOTS = ["19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
 const ALL_TIMES    = [...LUNCH_SLOTS, ...DINNER_SLOTS];
 
+const padZ = n => String(n).padStart(2, "0");
+
 function buildDays() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() + i);
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    // Utilise les méthodes locales pour éviter le décalage UTC (bug July 3 → July 2)
+    const iso = `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`;
     return {
-      iso:  d.toISOString().split("T")[0],
-      day:  ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()],
-      num:  d.getDate(),
-      mon:  MONTHS_FR[d.getMonth()],
+      iso,
+      day: ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()],
+      num: d.getDate(),
+      mon: MONTHS_FR[d.getMonth()],
     };
   });
 }
@@ -70,7 +77,13 @@ export default function HomeMobile() {
   const [notifCount, setNotifCount]   = useState(0);
 
   // Onglets catégorie
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab,    setActiveTab]    = useState(0);
+  const [activeCommune,setActiveCommune]= useState(""); // "" = toutes
+
+  const COMMUNES = [
+    "Cocody","Plateau","Marcory","Yopougon","Adjamé",
+    "Abobo","Treichville","Koumassi","Port-Bouët","Attécoubé","Songon",
+  ];
 
   const TABS = [
     { label: "Tous",               filter: () => true },
@@ -131,6 +144,14 @@ export default function HomeMobile() {
     // Filtre onglet catégorie
     if (activeTab > 0) {
       list = list.filter(TABS[activeTab].filter);
+    }
+
+    // Filtre commune
+    if (activeCommune) {
+      list = list.filter(r =>
+        (r.quartier || "").toLowerCase().includes(activeCommune.toLowerCase()) ||
+        (r.ville    || "").toLowerCase().includes(activeCommune.toLowerCase())
+      );
     }
 
     // Filtre texte (nom + quartier + ville + type de cuisine)
@@ -441,6 +462,27 @@ export default function HomeMobile() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ── Filtre communes ── */}
+      <div style={{ overflowX: "auto", display: "flex", padding: "8px 12px",
+        gap: 6, scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
+        borderBottom: `0.5px solid ${BORDER}`, background: WHITE }}>
+        {["Toutes", ...COMMUNES].map((c, i) => {
+          const val   = i === 0 ? "" : c;
+          const active = activeCommune === val;
+          return (
+            <button key={c} onClick={() => { setActiveCommune(val); resetSearch(); }}
+              style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 20,
+                fontSize: 12, fontWeight: active ? 700 : 400, cursor: "pointer",
+                border: `0.5px solid ${active ? S : BORDER}`,
+                background: active ? S : WHITE,
+                color: active ? WHITE : MUTED, fontFamily: FONT,
+                transition: "all .15s" }}>
+              {c}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Restaurant list style OpenTable ── */}

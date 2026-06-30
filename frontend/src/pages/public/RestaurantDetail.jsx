@@ -29,7 +29,14 @@ const PARTY_OPTIONS = [1,2,3,4,5,6,7,8,9,10,12];
 const DAYS_FR = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const MONTHS_FR = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
 
-/** Génère les 14 prochains jours */
+const pad = n => String(n).padStart(2, "0");
+
+/** Formate une date locale en YYYY-MM-DD sans conversion UTC */
+function localIso(d) {
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+/** Génère les 14 prochains jours — dates locales (évite décalage UTC) */
 function buildDays() {
   const days = [];
   const today = new Date();
@@ -38,7 +45,7 @@ function buildDays() {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     days.push({
-      iso: d.toISOString().slice(0, 10),
+      iso: localIso(d),          // ← local, pas UTC (évite bug July 3 → July 2)
       dayName: DAYS_FR[d.getDay()],
       dayNum: d.getDate(),
       month: MONTHS_FR[d.getMonth()],
@@ -48,12 +55,23 @@ function buildDays() {
   return days;
 }
 
+/** Convertit date locale + heure en ISO sans perdre le jour local */
 function toDatetime(isoDate, timeStr) {
   const match = timeStr.match(/^(\d+)h(\d*)$/);
   if (!match) return new Date().toISOString();
-  const dt = new Date(isoDate + "T00:00:00");
-  dt.setHours(parseInt(match[1]), parseInt(match[2] || "0"), 0, 0);
+  // Construction locale pour éviter le décalage UTC
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const dt = new Date(y, m - 1, d, parseInt(match[1]), parseInt(match[2] || "0"), 0, 0);
   return dt.toISOString();
+}
+
+/** Créneau déjà passé ? */
+function isPastSlot(isoDate, timeStr) {
+  const match = timeStr.match(/^(\d+)h(\d*)$/);
+  if (!match) return false;
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const slotTime = new Date(y, m - 1, d, parseInt(match[1]), parseInt(match[2] || "0"), 0, 0);
+  return slotTime <= new Date();
 }
 
 function Stars({ rating }) {
@@ -161,14 +179,19 @@ function BookingWidget({ onBook }) {
           letterSpacing: "0.6px", marginBottom: 5 }}>Déjeuner</div>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
           {LUNCH_SLOTS.map(s => {
-            const sel = selSlot === s;
+            const sel  = selSlot === s;
+            const past = isPastSlot(selDate, s);
             return (
-              <button key={s} onClick={() => setSelSlot(s)}
+              <button key={s} onClick={() => !past && setSelSlot(s)}
+                disabled={past}
+                title={past ? "Créneau passé" : ""}
                 style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8,
-                  cursor: "pointer", fontFamily: FONT,
-                  border: `0.5px solid ${sel ? P : BORDER}`,
-                  background: sel ? PL : "white",
-                  color: sel ? P : DARK, transition: "all .15s" }}>
+                  cursor: past ? "not-allowed" : "pointer", fontFamily: FONT,
+                  border: `0.5px solid ${sel ? P : past ? "#eee" : BORDER}`,
+                  background: sel ? PL : past ? "#f8f8f8" : "white",
+                  color: sel ? P : past ? "#ccc" : DARK,
+                  textDecoration: past ? "line-through" : "none",
+                  transition: "all .15s" }}>
                 {s}
               </button>
             );
@@ -179,14 +202,19 @@ function BookingWidget({ onBook }) {
           letterSpacing: "0.6px", marginBottom: 5 }}>Dîner</div>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
           {DINNER_SLOTS.map(s => {
-            const sel = selSlot === s;
+            const sel  = selSlot === s;
+            const past = isPastSlot(selDate, s);
             return (
-              <button key={s} onClick={() => setSelSlot(s)}
+              <button key={s} onClick={() => !past && setSelSlot(s)}
+                disabled={past}
+                title={past ? "Créneau passé" : ""}
                 style={{ fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 8,
-                  cursor: "pointer", fontFamily: FONT,
-                  border: `0.5px solid ${sel ? P : BORDER}`,
-                  background: sel ? PL : "white",
-                  color: sel ? P : DARK, transition: "all .15s" }}>
+                  cursor: past ? "not-allowed" : "pointer", fontFamily: FONT,
+                  border: `0.5px solid ${sel ? P : past ? "#eee" : BORDER}`,
+                  background: sel ? PL : past ? "#f8f8f8" : "white",
+                  color: sel ? P : past ? "#ccc" : DARK,
+                  textDecoration: past ? "line-through" : "none",
+                  transition: "all .15s" }}>
                 {s}
               </button>
             );
@@ -475,6 +503,20 @@ export default function RestaurantDetail() {
         const dateOnly    = selDate;
         const avail       = await restaurantsService.getAvailability(slug, dateOnly, pers).catch(() => null);
         const table       = avail?.available_tables?.[0];
+
+        // Aucune table dispo → chercher des créneaux alternatifs sur la même date
+        if (!table) {
+          const altSlots = ALL_SLOTS.filter(s => s !== selSlot && !isPastSlot(dateOnly, s));
+          setError(
+            `Complet pour ${selSlot} le ${fmtDate(dateOnly)} (${pers} pers.).\n` +
+            (altSlots.length > 0
+              ? `Autres créneaux disponibles : ${altSlots.slice(0, 5).join(", ")}`
+              : "Aucun autre créneau disponible ce jour. Essayez une autre date.")
+          );
+          setBooking(false);
+          return;
+        }
+
         const payload     = {
           restaurant_id:   resto.id,
           reserved_at,

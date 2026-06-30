@@ -22,10 +22,19 @@ export default function CodesRestaurateurs() {
 
   const load = () => {
     setLoading(true);
-    const params = filter === "used" ? "?used=true" : filter === "unused" ? "?used=false" : "";
-    api.get(`/admin/codes${params}&limit=100`)
-      .then(r => { setCodes(r.data?.data || []); setTotal(r.data?.pagination?.total || 0); })
-      .catch(() => {})
+    const params = {
+      limit: 100,
+      ...(filter === "used"   ? { used: true  } : {}),
+      ...(filter === "unused" ? { used: false } : {}),
+    };
+    api.get("/admin/codes", { params })
+      .then(r => {
+        setCodes(r.data?.data || []);
+        setTotal(r.data?.pagination?.total ?? r.data?.data?.length ?? 0);
+      })
+      .catch(err => {
+        console.error("Erreur chargement codes", err?.response?.data || err.message);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -37,12 +46,15 @@ export default function CodesRestaurateurs() {
       const r = await api.post("/admin/codes/generate", {
         count: genCount,
         notes: genNotes || undefined,
-        expires_days: genExpiry || undefined,
+        expires_days: genExpiry > 0 ? genExpiry : undefined,
       });
-      setCodes(prev => [...(r.data?.data?.codes || []), ...prev]);
-      setTotal(t => t + genCount);
+      const newCodes = r.data?.data?.codes || [];
+      setCodes(prev => [...newCodes, ...prev]);
+      setTotal(t => t + newCodes.length);
       setGenNotes("");
-    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    } catch (e) {
+      alert(e.response?.data?.message || "Erreur lors de la génération");
+    }
     setGenerating(false);
   };
 

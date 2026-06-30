@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import api from "../../services/api.js";
 import {
   Mail, Lock, User, Phone, Eye, EyeOff,
   CheckCircle, AlertCircle, Calendar, ChevronDown, UtensilsCrossed, X,
@@ -160,14 +161,20 @@ export default function Inscription() {
     try {
       // Vérifier le code restaurateur avant l'inscription
       if (type === "restaurateur") {
-        const codeRes = await fetch(
-          (import.meta.env.VITE_API_URL || "/api/v1") + "/auth/verify-code",
-          { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: form.code_restaurateur.trim().toUpperCase() }) }
-        );
-        const codeData = await codeRes.json();
-        if (!codeData.success || !codeData.data?.valid) {
-          setError(codeData.message || "Code restaurateur invalide ou déjà utilisé.");
+        try {
+          const { data: codeData } = await api.post("/auth/verify-code", {
+            code: form.code_restaurateur.trim().toUpperCase(),
+          });
+          if (!codeData?.data?.valid) {
+            setError(codeData?.message || "Code restaurateur invalide ou déjà utilisé.");
+            setLoading(false);
+            return;
+          }
+        } catch (codeErr) {
+          setError(
+            codeErr.response?.data?.message ||
+            "Impossible de vérifier le code. Vérifiez votre connexion et réessayez."
+          );
           setLoading(false);
           return;
         }
@@ -450,7 +457,7 @@ export default function Inscription() {
             )}
 
             {/* Prénom + Nom */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, minWidth: 0 }}>
               <FField icon={User} label={t("reg_firstname")} type="text"
                 value={form.prenom} onChange={v => set("prenom", v)} placeholder="Fatou" required />
               <FField icon={User} label={t("reg_lastname")} type="text"
@@ -718,6 +725,7 @@ function FField({ icon: Icon, label, type, value, onChange, placeholder, require
 
 const lbl = {
   fontSize: 11, fontWeight: 500, color: "#6A7A72", display: "block", marginBottom: 6,
+  letterSpacing: "0.3px", lineHeight: 1.4,
 };
 const wrap = {
   display: "flex", alignItems: "center", gap: 10,

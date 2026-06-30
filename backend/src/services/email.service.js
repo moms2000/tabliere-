@@ -16,17 +16,39 @@ async function send({ to, subject, html, text }) {
     return { messageId: `mock-${Date.now()}` };
   }
 
+  // Utiliser tabliereci.net comme domaine d'envoi (DKIM configuré sur ce domaine)
+  const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
+    .replace("tabliereci.ci", "tabliereci.net"); // correction domaine .ci → .net
+
   try {
     await axios.post(
       SENDGRID_URL,
       {
         personalizations: [{ to: [{ email: to }] }],
-        from: { email: env.EMAIL_FROM, name: "TablièreCI" },
+        from: { email: fromEmail, name: "TablièreCI" },
+        reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
         subject,
         content: [
           { type: "text/plain", value: text || subject },
           { type: "text/html",  value: html },
         ],
+        // Headers anti-spam obligatoires Gmail/Yahoo 2024
+        headers: {
+          "List-Unsubscribe": "<mailto:unsubscribe@tabliereci.net>",
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          "X-Entity-Ref-ID": `tabliereci-${Date.now()}`,
+        },
+        // Catégorie SendGrid pour les stats
+        categories: ["transactionnel"],
+        // Suivi des clics et ouvertures
+        tracking_settings: {
+          click_tracking:     { enable: true },
+          open_tracking:      { enable: true },
+          subscription_tracking: { enable: false },
+        },
+        mail_settings: {
+          bypass_spam_management: { enable: false },
+        },
       },
       {
         headers: {
@@ -35,7 +57,7 @@ async function send({ to, subject, html, text }) {
         },
       }
     );
-    logger.info("[Email] Envoyé", { to, subject });
+    logger.info("[Email] Envoyé", { to, subject, from: fromEmail });
     return { success: true };
   } catch (err) {
     logger.error("[Email] Erreur envoi", {
@@ -69,9 +91,14 @@ function baseLayout(content) {
       ${content}
     </div>
     <!-- Footer -->
-    <p style="text-align:center;color:#c0bab4;font-size:11px;margin-top:18px;line-height:1.6;">
+    <p style="text-align:center;color:#c0bab4;font-size:11px;margin-top:18px;line-height:1.8;">
       TablièreCI — La réservation facile en Côte d'Ivoire<br>
       <a href="https://tabliereci.net" style="color:#e8a045;text-decoration:none;">tabliereci.net</a>
+      &nbsp;·&nbsp;
+      <a href="mailto:contact@tabliereci.net" style="color:#c0bab4;text-decoration:none;">contact@tabliereci.net</a><br>
+      <a href="mailto:unsubscribe@tabliereci.net?subject=unsubscribe" style="color:#c0bab4;font-size:10px;text-decoration:underline;">
+        Se désabonner des e-mails
+      </a>
     </p>
   </div>
 </body>

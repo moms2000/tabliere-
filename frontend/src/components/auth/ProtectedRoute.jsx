@@ -19,7 +19,11 @@ export default function ProtectedRoute({ children, roles }) {
   }
 
   if (!user) {
-    return <Navigate to="/connexion" state={{ from: location }} replace />;
+    // Rediriger les routes admin vers la page d'auth admin (chemin secret)
+    const dest = location.pathname.startsWith("/admin")
+      ? "/connexion/admin"
+      : "/connexion";
+    return <Navigate to={dest} state={{ from: location }} replace />;
   }
 
   if (roles) {

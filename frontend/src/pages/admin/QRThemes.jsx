@@ -64,8 +64,9 @@ export default function QRThemes() {
     setSaving(resto.id);
     try {
       await adminService.toggleRestaurantQR(resto.id, newActive);
-      setRestos(prev => prev.map(r => r.id === resto.id ? { ...r, qr_active: newActive } : r));
-      if (selected?.id === resto.id) setSelected(r => ({ ...r, qr_active: newActive }));
+      const updated = { ...resto, qr_active: newActive };
+      setRestos(prev => prev.map(r => r.id === resto.id ? updated : r));
+      if (selected?.id === resto.id) setSelected(updated);
     } catch (e) {
       alert(e.response?.data?.message || "Erreur lors de la mise à jour du QR");
     }
@@ -101,9 +102,9 @@ export default function QRThemes() {
                   Aucun restaurant enregistré
                 </div>
               ) : restos.map((r, i) => {
-                const locked  = r.plan === "gratuit";
                 const active  = !!r.qr_active;
                 const isSel   = selected?.id === r.id;
+                const isFree  = !r.plan || r.plan === "gratuit";
                 return (
                   <div key={r.id}
                     onClick={() => setSelected(r)}
@@ -113,11 +114,12 @@ export default function QRThemes() {
                       border: isSel ? "0.5px solid #f0c98a" : "0.5px solid transparent",
                       transition: "background .12s" }}>
 
-                    {/* Indicateur QR */}
+                    {/* Indicateur statut QR */}
                     <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
                       background: active ? "#1D9E75" : "#ddd",
                       boxShadow: active ? "0 0 6px #1D9E7555" : "none" }} />
 
+                    {/* Infos restaurant */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: isSel ? 600 : 400, color: "#1e2e28",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -128,19 +130,28 @@ export default function QRThemes() {
                       </div>
                     </div>
 
+                    {/* Plan */}
                     <Badge label={r.plan || "gratuit"} variant={PLAN_BADGE[r.plan] || "gray"} />
 
-                    {locked ? (
-                      <span style={{ fontSize: 10, color: "#ddd", whiteSpace: "nowrap" }}>Plan requis</span>
-                    ) : (
-                      <div onClick={e => { e.stopPropagation(); toggleQR(r); }}>
-                        {saving === r.id ? (
-                          <span style={{ fontSize: 10, color: "#aaa" }}>…</span>
-                        ) : (
-                          <Toggle value={active} onChange={() => toggleQR(r)} />
-                        )}
-                      </div>
-                    )}
+                    {/* Toggle QR — admin contrôle total, tous plans */}
+                    <div
+                      onClick={e => { e.stopPropagation(); toggleQR(r); }}
+                      title={isFree && !active ? "Activer le QR pour ce restaurant (plan gratuit)" : ""}
+                      style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      {saving === r.id ? (
+                        <span style={{ fontSize: 10, color: "#aaa" }}>…</span>
+                      ) : (
+                        <>
+                          {isFree && (
+                            <span style={{ fontSize: 9, color: active ? "#E8A045" : "#ccc",
+                              fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {active ? "Manuel" : "Off"}
+                            </span>
+                          )}
+                          <Toggle value={active} onChange={() => {}} />
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -175,9 +186,36 @@ export default function QRThemes() {
             <motion.div variants={fadeUp}>
               <Card>
                 <SectionHeader title="Restaurant sélectionné" icon={Palette} />
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28", marginBottom: 4 }}>{selected.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28", marginBottom: 2 }}>{selected.name}</div>
                 <div style={{ fontSize: 11, color: "#aaa", marginBottom: 12 }}>
-                  {selected.plan} · QR {selected.qr_active ? "activé" : "désactivé"}
+                  Plan : <strong>{selected.plan || "gratuit"}</strong>
+                </div>
+
+                {/* Bouton activation QR rapide */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: selected.qr_active ? "#F0FBF6" : "#FFF5F5",
+                  border: `0.5px solid ${selected.qr_active ? "#1D9E7544" : "#FECACA"}`,
+                  borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600,
+                      color: selected.qr_active ? "#1D9E75" : "#DC2626" }}>
+                      QR Menu {selected.qr_active ? "activé" : "désactivé"}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#aaa", marginTop: 2 }}>
+                      {selected.qr_active
+                        ? "Les clients peuvent scanner et commander"
+                        : "Le menu QR est inaccessible pour ce restaurant"}
+                    </div>
+                  </div>
+                  <motion.button whileTap={{ scale: 0.95 }}
+                    onClick={() => toggleQR(selected)}
+                    disabled={saving === selected.id}
+                    style={{ background: selected.qr_active ? "#DC2626" : "#1D9E75",
+                      color: "white", border: "none", borderRadius: 8,
+                      padding: "6px 12px", fontSize: 11, fontWeight: 700,
+                      cursor: saving === selected.id ? "not-allowed" : "pointer" }}>
+                    {saving === selected.id ? "…" : selected.qr_active ? "Désactiver" : "Activer"}
+                  </motion.button>
                 </div>
                 <SectionHeader title="Thème du menu QR" />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>

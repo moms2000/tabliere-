@@ -1,6 +1,6 @@
 import { query }  from "../config/db.js";
 import { cache }   from "../config/redis.js";
-import { ok, paginated, notFound } from "../utils/response.js";
+import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger }  from "../utils/logger.js";
 

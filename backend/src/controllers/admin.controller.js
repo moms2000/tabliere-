@@ -162,9 +162,16 @@ export const listUsers = asyncHandler(async (req, res) => {
   const orderBy = ORDER_MAP[sort] || "full_name ASC";
 
   const { rows } = await query(
-    `SELECT id, full_name, email, phone, role, status, created_at,
-       (SELECT COUNT(*) FROM reservations WHERE client_id = users.id) AS resa_count
-     FROM users ${where}
+    `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.status, u.created_at,
+       (SELECT COUNT(*) FROM reservations WHERE client_id = u.id) AS resa_count,
+       re.name  AS resto_name,
+       re.slug  AS resto_slug,
+       re.status AS resto_status,
+       rc.code  AS access_code
+     FROM users u
+     LEFT JOIN restaurants re ON re.owner_id = u.id
+     LEFT JOIN restaurateur_codes rc ON rc.used_by = u.id
+     ${where}
      ORDER BY ${orderBy}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
@@ -609,10 +616,12 @@ export const listProspects = asyncHandler(async (req, res) => {
 // PATCH /admin/settings — mettre à jour les paramètres
 // ---------------------------------------------------------------------------
 const SETTINGS_DEFAULTS = {
+  // Notifications
   notif_reservations: "true",
   notif_abonnements:  "true",
   notif_paiements:    "false",
   notif_whatsapp:     "true",
+  // Système
   maintenance_mode:   "false",
   inscriptions_open:  "true",
   commission_pct:     "5",
@@ -620,6 +629,22 @@ const SETTINGS_DEFAULTS = {
   price_standard:     "25000",
   price_premium:      "60000",
   session_duration_h: "4",
+  // Informations de contact
+  site_name:          "TablièreCI",
+  contact_email:      "contact@tabliereci.net",
+  contact_phone:      "+225 07 00 00 00 00",
+  contact_address:    "Abidjan, Côte d'Ivoire",
+  contact_whatsapp:   "+225 07 00 00 00 00",
+  // Réseaux sociaux
+  facebook_url:       "",
+  instagram_url:      "",
+  // Textes légaux
+  cgu_text:           "",
+  privacy_text:       "",
+  // Branding
+  logo_url:           "",
+  banner_url:         "",
+  primary_color:      "#E8A045",
 };
 
 let settingsMigrated = false;

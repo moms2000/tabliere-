@@ -39,7 +39,8 @@ export default function Utilisateurs() {
   const [editForm,   setEditForm]   = useState({});
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg,    setEditMsg]    = useState("");
-  const [roleFilter, setRoleFilter] = useState(""); // "" | "client" | "restaurateur" | "admin"
+  const [mainTab,    setMainTab]    = useState("clients"); // "clients" | "restaurants"
+  const [roleFilter, setRoleFilter] = useState("client"); // "" | "client" | "restaurateur" | "admin"
 
   const LIMIT = 30;
   const totalPages = Math.ceil(total / LIMIT);
@@ -51,6 +52,14 @@ export default function Utilisateurs() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [search, sort, page]);
+
+  const switchTab = (tab) => {
+    setMainTab(tab);
+    setRoleFilter(tab === "clients" ? "client" : "restaurateur");
+    setSearch("");
+    setPage(1);
+    setSelected(new Set());
+  };
 
   useEffect(() => { setSelected(new Set()); setPage(1); }, [search, sort, roleFilter]);
   useEffect(() => { load(); }, [load]);
@@ -104,62 +113,59 @@ export default function Utilisateurs() {
 
   const allChecked = data.length > 0 && selected.size === data.length;
 
-  const cols = [
-    {
-      key: "check",
-      label: () => (
-        <button onClick={toggleAll} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
-          {allChecked ? <CheckSquare size={15} color="#e8a045" /> : <Square size={15} color="#ccc" />}
+  const actionCol = (u) => {
+    const isBlocked = ["suspendu","bloque","bloqué"].includes(u.status);
+    return (
+      <div style={{ display: "flex", gap: 4 }}>
+        <button onClick={() => { setEditUser(u); setEditForm({ full_name: u.full_name, email: u.email, role: u.role, new_password: "" }); setEditMsg(""); }}
+          style={{ padding: "4px 8px", borderRadius: 6, border: "0.5px solid #e4dfd8",
+            background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
+          <Pencil size={12} color="#888" />
         </button>
-      ),
-      render: u => (
-        <button onClick={() => toggleSelect(u.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
-          {selected.has(u.id) ? <CheckSquare size={15} color="#e8a045" /> : <Square size={15} color="#ddd" />}
+        <Btn onClick={() => toggleBlock(u)} variant={isBlocked ? "default" : "danger"}
+          icon={isBlocked ? ShieldCheck : ShieldOff} style={{ fontSize: 11, padding: "4px 10px" }}>
+          {isBlocked ? "Débloquer" : "Bloquer"}
+        </Btn>
+        <button onClick={() => handleDelete(u)} disabled={deleting === u.id}
+          style={{ padding: "4px 8px", borderRadius: 6, border: "0.5px solid #fecaca",
+            background: "#fef2f2", cursor: "pointer", display: "flex", alignItems: "center",
+            opacity: deleting === u.id ? 0.5 : 1 }}>
+          <Trash2 size={12} color="#dc2626" />
         </button>
-      ),
-    },
-    { key: "name",    label: "Utilisateur", render: u => (
-      <div>
-        <div style={{ fontWeight: 500, fontSize: 13 }}>{u.full_name}</div>
-        <div style={{ fontSize: 11, color: "#aaa" }}>{u.email}</div>
       </div>
-    )},
-    { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize: 12, color: "#888" }}>{u.phone || "—"}</span> },
-    { key: "reserv", label: "Réservations", align: "center", render: u => (
-      <span style={{ fontWeight: 500 }}>{u.resa_count || 0}</span>
-    )},
-    { key: "status", label: "Statut", render: u => (
-      <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status] || STATUS_BADGE[displayStatus(u.status)] || "gray"} />
-    )},
-    { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize: 11, color: "#bbb" }}>{fmtDate(u.created_at)}</span> },
-    { key: "role", label: "Rôle", render: u => (
-      <Badge label={u.role || "client"} variant={ROLE_BADGE[u.role] || "gray"} />
-    )},
-    { key: "actions", label: "", align: "right", render: u => {
-      const isBlocked = ["suspendu","bloque","bloqué"].includes(u.status);
-      return (
-        <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => { setEditUser(u); setEditForm({ full_name: u.full_name, email: u.email, role: u.role, new_password: "" }); setEditMsg(""); }}
-            style={{ padding: "4px 8px", borderRadius: 6, border: "0.5px solid #e4dfd8",
-              background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
-            <Pencil size={12} color="#888" />
-          </button>
-          <Btn onClick={() => toggleBlock(u)}
-            variant={isBlocked ? "default" : "danger"}
-            icon={isBlocked ? ShieldCheck : ShieldOff}
-            style={{ fontSize: 11, padding: "4px 10px" }}>
-            {isBlocked ? "Débloquer" : "Bloquer"}
-          </Btn>
-          <button onClick={() => handleDelete(u)} disabled={deleting === u.id}
-            style={{ padding: "4px 8px", borderRadius: 6, border: "0.5px solid #fecaca",
-              background: "#fef2f2", cursor: "pointer", display: "flex", alignItems: "center",
-              opacity: deleting === u.id ? 0.5 : 1 }}>
-            <Trash2 size={12} color="#dc2626" />
-          </button>
-        </div>
-      );
-    }},
+    );
+  };
+
+  // Colonnes onglet Clients
+  const colsClients = [
+    { key: "check", label: () => (<button onClick={toggleAll} style={{ background:"none",border:"none",cursor:"pointer",padding:0,display:"flex" }}>{allChecked?<CheckSquare size={15} color="#e8a045"/>:<Square size={15} color="#ccc"/>}</button>),
+      render: u => (<button onClick={() => toggleSelect(u.id)} style={{ background:"none",border:"none",cursor:"pointer",padding:0,display:"flex" }}>{selected.has(u.id)?<CheckSquare size={15} color="#e8a045"/>:<Square size={15} color="#ddd"/>}</button>) },
+    { key: "name",   label: "Client", render: u => (<div><div style={{ fontWeight:500, fontSize:13 }}>{u.full_name}</div><div style={{ fontSize:11, color:"#aaa" }}>{u.email}</div></div>) },
+    { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize:12, color:"#888" }}>{u.phone||"—"}</span> },
+    { key: "reserv", label: "Réservations", align: "center", render: u => <span style={{ fontWeight:500 }}>{u.resa_count||0}</span> },
+    { key: "status", label: "Statut", render: u => <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status]||"gray"} /> },
+    { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize:11, color:"#bbb" }}>{fmtDate(u.created_at)}</span> },
+    { key: "actions", label: "", align: "right", render: u => actionCol(u) },
   ];
+
+  // Colonnes onglet Restaurants
+  const colsRestaurants = [
+    { key: "check", label: () => (<button onClick={toggleAll} style={{ background:"none",border:"none",cursor:"pointer",padding:0,display:"flex" }}>{allChecked?<CheckSquare size={15} color="#e8a045"/>:<Square size={15} color="#ccc"/>}</button>),
+      render: u => (<button onClick={() => toggleSelect(u.id)} style={{ background:"none",border:"none",cursor:"pointer",padding:0,display:"flex" }}>{selected.has(u.id)?<CheckSquare size={15} color="#e8a045"/>:<Square size={15} color="#ddd"/>}</button>) },
+    { key: "code", label: "Code accès", render: u => (
+      <span style={{ fontFamily:"monospace", fontSize:12, fontWeight:700, color:"#E8A045",
+        background:"#FEF6EC", padding:"2px 8px", borderRadius:6, letterSpacing:"0.5px" }}>
+        {u.access_code || "—"}
+      </span>
+    )},
+    { key: "name",   label: "Restaurant", render: u => (<div><div style={{ fontWeight:600, fontSize:13, color:"#1e2e28" }}>{u.resto_name||"—"}</div><div style={{ fontSize:11, color:"#aaa" }}>{u.full_name} · {u.email}</div></div>) },
+    { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize:12, color:"#888" }}>{u.phone||"—"}</span> },
+    { key: "status", label: "Statut", render: u => <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status]||"gray"} /> },
+    { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize:11, color:"#bbb" }}>{fmtDate(u.created_at)}</span> },
+    { key: "actions", label: "", align: "right", render: u => actionCol(u) },
+  ];
+
+  const cols = mainTab === "restaurants" ? colsRestaurants : colsClients;
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -184,22 +190,42 @@ export default function Utilisateurs() {
 
       <motion.div variants={fadeUp}>
         <Card>
+          {/* Onglets principaux Clients / Restaurants */}
+          <div style={{ display: "flex", borderBottom: "0.5px solid #eee", marginBottom: 14 }}>
+            {[
+              { key: "clients",      label: "Clients",      icon: "👤" },
+              { key: "restaurants",  label: "Restaurants",  icon: "🍽" },
+            ].map(tab => (
+              <button key={tab.key} onClick={() => switchTab(tab.key)}
+                style={{ padding: "10px 20px", fontSize: 13, cursor: "pointer",
+                  background: "none", border: "none",
+                  borderBottom: `2.5px solid ${mainTab === tab.key ? "#E8A045" : "transparent"}`,
+                  color: mainTab === tab.key ? "#E8A045" : "#888",
+                  fontWeight: mainTab === tab.key ? 700 : 400,
+                  marginBottom: -1, transition: "all .15s" }}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
-            <SectionHeader title="Liste des utilisateurs" icon={Users} />
+            <SectionHeader title={mainTab === "restaurants" ? "Restaurants partenaires" : "Comptes clients"} icon={Users} />
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              {/* Filtre par rôle */}
+              {/* Sous-filtre admin uniquement sur onglet clients */}
+              {mainTab === "clients" && (
               <div style={{ display: "flex", gap: 4 }}>
-                {["", "client", "restaurateur", "admin"].map(r => (
+                {[["client","Clients"],["admin","Admins"]].map(([r, label]) => (
                   <button key={r} onClick={() => setRoleFilter(r)}
                     style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
                       border: `0.5px solid ${roleFilter === r ? "#E8A045" : "#eee"}`,
                       background: roleFilter === r ? "#fef6ec" : "white",
                       color: roleFilter === r ? "#c47d1a" : "#888",
                       fontWeight: roleFilter === r ? 600 : 400 }}>
-                    {r === "" ? "Tous" : r.charAt(0).toUpperCase() + r.slice(1)}
+                    {label}
                   </button>
                 ))}
               </div>
+              )}
               {/* Tri */}
               <div style={{ display: "flex", gap: 4 }}>
                 {SORT_OPTIONS.map(({ value, label, icon: Icon }) => (

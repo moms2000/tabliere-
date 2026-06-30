@@ -20,6 +20,7 @@ const Systeme           = lazy(() => import("./pages/admin/Systeme"));
 const Parametres        = lazy(() => import("./pages/admin/Parametres"));
 const QRThemes          = lazy(() => import("./pages/admin/QRThemes"));
 const CodesRestaurateurs = lazy(() => import("./pages/admin/CodesRestaurateurs"));
+const SiteParametres     = lazy(() => import("./pages/admin/SiteParametres"));
 
 const RestaurantLayout  = lazy(() => import("./components/layout/RestaurantLayout"));
 const RestDashboard     = lazy(() => import("./pages/restaurant/RestDashboard"));
@@ -174,6 +175,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="parametres"    element={<Parametres />} />
                     <Route path="qr-themes"     element={<QRThemes />} />
               <Route path="codes"         element={<CodesRestaurateurs />} />
+                    <Route path="site"          element={<SiteParametres />} />
                   </Route>
 
                   {/* ── Restaurateur ─────────────────────────────────────── */}

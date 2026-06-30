@@ -457,7 +457,7 @@ export default function Inscription() {
             )}
 
             {/* Prénom + Nom */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, minWidth: 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, minWidth: 0, overflow: "hidden" }}>
               <FField icon={User} label={t("reg_firstname")} type="text"
                 value={form.prenom} onChange={v => set("prenom", v)} placeholder="Fatou" required />
               <FField icon={User} label={t("reg_lastname")} type="text"
@@ -710,14 +710,14 @@ export default function Inscription() {
 
 function FField({ icon: Icon, label, type, value, onChange, placeholder, required }) {
   return (
-    <div>
+    <div style={{ minWidth: 0, overflow: "hidden" }}>
       <label style={lbl}>{label}</label>
-      <div style={wrap}>
-        <Icon size={14} color={MUTED} />
+      <div style={{ ...wrap, minWidth: 0 }}>
+        <Icon size={14} color={MUTED} style={{ flexShrink: 0 }} />
         <input value={value} onChange={e => onChange(e.target.value)}
           type={type} placeholder={placeholder} required={required}
           style={{ border: "none", background: "transparent", fontSize: 13,
-            outline: "none", flex: 1, color: "#1E2E28", fontFamily: "inherit" }} />
+            outline: "none", flex: 1, minWidth: 0, color: "#1E2E28", fontFamily: "inherit" }} />
       </div>
     </div>
   );

@@ -28,6 +28,8 @@ async function runStartupMigrations() {
     `ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS qr_url  TEXT`,
     // Menu items — options JSONB
     `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`,
+    // Restaurants — options/spécificités (Terrasse, Live music, Halal…)
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS options JSONB DEFAULT '[]'`,
     // Platform settings
     `CREATE TABLE IF NOT EXISTS platform_settings (
        key        VARCHAR(100) PRIMARY KEY,

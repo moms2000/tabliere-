@@ -74,10 +74,12 @@ function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
           )}
         </AnimatePresence>
         {onClose && (
-          <button onClick={onClose}
+          <button
+            onPointerDown={e => { e.stopPropagation(); onClose(); }}
             style={{ marginLeft: "auto", border: "none", background: "transparent",
-              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex" }}>
-            <X size={18} />
+              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex",
+              padding: 8, margin: -8, touchAction: "manipulation" }}>
+            <X size={20} />
           </button>
         )}
       </div>
@@ -231,6 +233,7 @@ export default function AdminLayout() {
             <motion.aside
               initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              onPointerDown={e => e.stopPropagation()}
               style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 220,
                 background: DARK, display: "flex", flexDirection: "column",
                 zIndex: 201, overflow: "hidden" }}>

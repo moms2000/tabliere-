@@ -66,10 +66,12 @@ function SidebarContent({ navigate, user, logout, onClose }) {
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose}
+          <button
+            onPointerDown={e => { e.stopPropagation(); onClose(); }}
             style={{ border: "none", background: "transparent",
-              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex" }}>
-            <X size={18} />
+              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex",
+              padding: 8, margin: -8, touchAction: "manipulation" }}>
+            <X size={20} />
           </button>
         )}
       </div>
@@ -173,6 +175,7 @@ export default function RestaurantLayout() {
             <motion.aside
               initial={{ x: -220 }} animate={{ x: 0 }} exit={{ x: -220 }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              onPointerDown={e => e.stopPropagation()}
               style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 210,
                 background: DARK, display: "flex", flexDirection: "column",
                 zIndex: 201 }}>

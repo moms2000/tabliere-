@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag, Zap } from "lucide-react";
@@ -156,40 +157,62 @@ export default function RestaurantLayout() {
         </aside>
       )}
 
-      {/* ── Drawer mobile ───────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {isMobile && mobileOpen && (
-          <>
-            {/* 1. Backdrop — zIndex 200 — ferme au clic en dehors */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onPointerDown={() => setMobileOpen(false)}
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 200 }} />
+      {/* ── Drawer mobile — Portal vers document.body ──────────────────────── */}
+      {isMobile && createPortal(
+        <>
+          <style>{`
+            .tci-drawer-backdrop {
+              position: fixed; inset: 0; background: rgba(0,0,0,.55);
+              z-index: 9998;
+              opacity: 0; transition: opacity .25s ease;
+              pointer-events: none;
+            }
+            .tci-drawer-backdrop.open {
+              opacity: 1; pointer-events: auto;
+            }
+            .tci-drawer-sidebar {
+              position: fixed; top: 0; left: 0; bottom: 0; width: 210px;
+              background: ${DARK}; display: flex; flex-direction: column;
+              z-index: 9999;
+              transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+            }
+            .tci-drawer-sidebar.open {
+              transform: translateX(0);
+            }
+            .tci-drawer-close {
+              position: fixed; top: 11px; left: 162px; z-index: 10000;
+              background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+              width: 36px; height: 36px; display: flex; align-items: center;
+              justify-content: center; cursor: pointer; touch-action: manipulation;
+              opacity: 0; pointer-events: none; transition: opacity .2s ease;
+            }
+            .tci-drawer-close.open {
+              opacity: 1; pointer-events: auto;
+            }
+          `}</style>
 
-            {/* 2. Sidebar — zIndex 201 */}
-            <motion.aside
-              initial={{ x: -220 }} animate={{ x: 0 }} exit={{ x: -220 }}
-              transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 210,
-                background: DARK, display: "flex", flexDirection: "column",
-                zIndex: 201 }}>
-              <SidebarContent navigate={navigate} user={user} logout={logout}
-                onClose={() => setMobileOpen(false)} />
-            </motion.aside>
+          {/* Backdrop */}
+          <div
+            className={`tci-drawer-backdrop${mobileOpen ? " open" : ""}`}
+            onPointerDown={() => setMobileOpen(false)}
+          />
 
-            {/* 3. Bouton X indépendant — zIndex 202 — hors de la sidebar */}
-            <button
-              onPointerDown={() => setMobileOpen(false)}
-              style={{
-                position: "fixed", top: 12, left: 162, zIndex: 202,
-                background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%",
-                width: 34, height: 34, display: "flex", alignItems: "center",
-                justifyContent: "center", cursor: "pointer", touchAction: "manipulation",
-              }}>
-              <X size={18} color="white" />
-            </button>
-          </>
-        )}
-      </AnimatePresence>
+          {/* Sidebar */}
+          <aside className={`tci-drawer-sidebar${mobileOpen ? " open" : ""}`}>
+            <SidebarContent navigate={navigate} user={user} logout={logout}
+              onClose={() => setMobileOpen(false)} />
+          </aside>
+
+          {/* Bouton X */}
+          <button
+            className={`tci-drawer-close${mobileOpen ? " open" : ""}`}
+            onPointerDown={() => setMobileOpen(false)}
+          >
+            <X size={20} color="white" />
+          </button>
+        </>,
+        document.body
+      )}
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>

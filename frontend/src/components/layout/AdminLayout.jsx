@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -215,40 +216,62 @@ export default function AdminLayout() {
         </motion.aside>
       )}
 
-      {/* ── Drawer mobile ───────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {isMobile && mobileOpen && (
-          <>
-            {/* 1. Backdrop — zIndex 200 */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onPointerDown={() => setMobileOpen(false)}
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 200 }} />
+      {/* ── Drawer mobile — Portal vers document.body ──────────────────────── */}
+      {isMobile && createPortal(
+        <>
+          <style>{`
+            .tci-admin-backdrop {
+              position: fixed; inset: 0; background: rgba(0,0,0,.55);
+              z-index: 9998;
+              opacity: 0; transition: opacity .25s ease;
+              pointer-events: none;
+            }
+            .tci-admin-backdrop.open {
+              opacity: 1; pointer-events: auto;
+            }
+            .tci-admin-sidebar {
+              position: fixed; top: 0; left: 0; bottom: 0; width: 220px;
+              background: ${DARK}; display: flex; flex-direction: column;
+              z-index: 9999; overflow: hidden;
+              transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+            }
+            .tci-admin-sidebar.open {
+              transform: translateX(0);
+            }
+            .tci-admin-close {
+              position: fixed; top: 11px; left: 172px; z-index: 10000;
+              background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+              width: 36px; height: 36px; display: flex; align-items: center;
+              justify-content: center; cursor: pointer; touch-action: manipulation;
+              opacity: 0; pointer-events: none; transition: opacity .2s ease;
+            }
+            .tci-admin-close.open {
+              opacity: 1; pointer-events: auto;
+            }
+          `}</style>
 
-            {/* 2. Sidebar — zIndex 201 */}
-            <motion.aside
-              initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
-              transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 220,
-                background: DARK, display: "flex", flexDirection: "column",
-                zIndex: 201, overflow: "hidden" }}>
-              <SidebarContent collapsed={false} navigate={navigate} user={user} logout={logout}
-                onClose={() => setMobileOpen(false)} />
-            </motion.aside>
+          {/* Backdrop */}
+          <div
+            className={`tci-admin-backdrop${mobileOpen ? " open" : ""}`}
+            onPointerDown={() => setMobileOpen(false)}
+          />
 
-            {/* 3. Bouton X indépendant — zIndex 202 — hors de la sidebar */}
-            <button
-              onPointerDown={() => setMobileOpen(false)}
-              style={{
-                position: "fixed", top: 12, left: 172, zIndex: 202,
-                background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%",
-                width: 34, height: 34, display: "flex", alignItems: "center",
-                justifyContent: "center", cursor: "pointer", touchAction: "manipulation",
-              }}>
-              <X size={18} color="white" />
-            </button>
-          </>
-        )}
-      </AnimatePresence>
+          {/* Sidebar */}
+          <aside className={`tci-admin-sidebar${mobileOpen ? " open" : ""}`}>
+            <SidebarContent collapsed={false} navigate={navigate} user={user} logout={logout}
+              onClose={() => setMobileOpen(false)} />
+          </aside>
+
+          {/* Bouton X */}
+          <button
+            className={`tci-admin-close${mobileOpen ? " open" : ""}`}
+            onPointerDown={() => setMobileOpen(false)}
+          >
+            <X size={20} color="white" />
+          </button>
+        </>,
+        document.body
+      )}
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>

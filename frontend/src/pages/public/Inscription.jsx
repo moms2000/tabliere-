@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Mail, Lock, User, Phone, Eye, EyeOff,
-  CheckCircle, AlertCircle, Calendar, ChevronDown, UtensilsCrossed,
+  CheckCircle, AlertCircle, Calendar, ChevronDown, UtensilsCrossed, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
@@ -97,6 +98,14 @@ export default function Inscription() {
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
   const [countryIdx,  setCountryIdx]  = useState(0);
+  const [legalModal,  setLegalModal]  = useState(null); // "cgu" | "confidentialite" | null
+
+  // Bloquer le scroll body quand la modal est ouverte
+  useEffect(() => {
+    if (legalModal) document.body.style.overflow = "hidden";
+    else            document.body.style.overflow = "";
+    return ()      => { document.body.style.overflow = ""; };
+  }, [legalModal]);
   const [showCountry, setShowCountry] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
 
@@ -592,16 +601,84 @@ export default function Inscription() {
                 style={{ accentColor: P, marginTop: 2, flexShrink: 0 }} />
               <span style={{ color: MUTED }}>
                 {t("reg_terms")}{" "}
-                <a href="/cgu" target="_blank" style={{ color: P, textDecoration: "none", fontWeight: 500 }}>
+                <button type="button"
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); setLegalModal("cgu"); }}
+                  style={{ background: "none", border: "none", padding: 0,
+                    color: P, fontWeight: 600, fontSize: 12, cursor: "pointer",
+                    fontFamily: "inherit", textDecoration: "underline" }}>
                   {t("reg_terms_link")}
-                </a>{" "}
+                </button>{" "}
                 {t("reg_terms_and")}{" "}
-                <a href="/confidentialite" target="_blank"
-                  style={{ color: P, textDecoration: "none", fontWeight: 500 }}>
+                <button type="button"
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); setLegalModal("confidentialite"); }}
+                  style={{ background: "none", border: "none", padding: 0,
+                    color: P, fontWeight: 600, fontSize: 12, cursor: "pointer",
+                    fontFamily: "inherit", textDecoration: "underline" }}>
                   {t("reg_terms_privacy")}
-                </a>
+                </button>
               </span>
             </label>
+
+            {/* ── Modal légale (Portal) ── */}
+            {legalModal && createPortal(
+              <div
+                onPointerDown={() => setLegalModal(null)}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
+                  zIndex: 9999, display: "flex", alignItems: "flex-end",
+                  justifyContent: "center", fontFamily: FONT }}>
+                <div
+                  onPointerDown={e => e.stopPropagation()}
+                  style={{ background: "white", borderRadius: "18px 18px 0 0",
+                    width: "100%", maxWidth: 600, maxHeight: "80vh",
+                    display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "18px 20px 14px", borderBottom: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: DARK }}>
+                      {legalModal === "cgu" ? "Conditions Générales d'Utilisation" : "Politique de Confidentialité"}
+                    </div>
+                    <button onPointerDown={() => setLegalModal(null)}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                        color: MUTED, display: "flex", padding: 4 }}>
+                      <X size={20} />
+                    </button>
+                  </div>
+                  {/* Contenu scrollable */}
+                  <div style={{ overflowY: "auto", padding: "20px", flex: 1,
+                    fontSize: 13, color: "#555", lineHeight: 1.8 }}>
+                    {legalModal === "cgu" ? (
+                      <>
+                        <p><strong>1. Objet</strong><br/>TablièreCI est une plateforme de réservation de tables de restaurant en Côte d'Ivoire. L'utilisation du service implique l'acceptation des présentes conditions.</p>
+                        <p><strong>2. Inscription</strong><br/>L'utilisateur s'engage à fournir des informations exactes lors de l'inscription. Tout compte avec de fausses informations peut être suspendu.</p>
+                        <p><strong>3. Réservations</strong><br/>TablièreCI facilite la mise en relation entre clients et restaurants. La réservation est confirmée par e-mail. L'annulation est gratuite jusqu'à 2h avant.</p>
+                        <p><strong>4. Responsabilité</strong><br/>TablièreCI ne peut être tenu responsable en cas d'indisponibilité du restaurant, de fermeture exceptionnelle ou de tout incident survenant au restaurant.</p>
+                        <p><strong>5. Données personnelles</strong><br/>Vos données sont traitées conformément à notre Politique de Confidentialité et à la loi ivoirienne sur la protection des données.</p>
+                        <p><strong>6. Contact</strong><br/>contact@tabliereci.net — tabliereci.net</p>
+                      </>
+                    ) : (
+                      <>
+                        <p><strong>1. Données collectées</strong><br/>Nous collectons votre nom, e-mail, téléphone et historique de réservations pour vous fournir le service.</p>
+                        <p><strong>2. Utilisation</strong><br/>Vos données servent uniquement à gérer vos réservations, vous envoyer des confirmations et améliorer le service.</p>
+                        <p><strong>3. Partage</strong><br/>Vos données de réservation (nom, taille du groupe, heure) sont partagées avec le restaurant concerné. Aucune vente de données à des tiers.</p>
+                        <p><strong>4. Sécurité</strong><br/>Les mots de passe sont chiffrés (bcrypt). Les connexions sont sécurisées (HTTPS). Les tokens JWT expirent après 30 jours.</p>
+                        <p><strong>5. Vos droits</strong><br/>Vous pouvez demander la suppression de votre compte et de vos données à tout moment via contact@tabliereci.net.</p>
+                        <p><strong>6. Contact DPO</strong><br/>contact@tabliereci.net — tabliereci.net</p>
+                      </>
+                    )}
+                  </div>
+                  {/* Bouton fermer */}
+                  <div style={{ padding: "14px 20px", borderTop: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
+                    <button onPointerDown={() => setLegalModal(null)}
+                      style={{ width: "100%", background: P, color: "#1A1000",
+                        border: "none", borderRadius: 10, padding: "13px 0",
+                        fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                      J'ai lu et j'accepte
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
 
             <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={loading}
               style={{ background: loading ? "#F0C98A" : P, color: "#1A1000",

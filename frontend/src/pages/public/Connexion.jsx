@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User } from "lucide-react";
@@ -370,6 +370,16 @@ function StepForm({ type, onBack }) {
 /* ── Composant principal ─────────────────────────────────────────────────────── */
 export default function Connexion() {
   const [step, setStep] = useState("choix"); // "choix" | "client" | "restaurateur"
+  const { user } = useAuth();
+  const nav = useNavigate();
+
+  // Si déjà connecté → rediriger vers le bon espace immédiatement
+  React.useEffect(() => {
+    if (!user) return;
+    if (user.role === "admin")        nav("/admin",      { replace: true });
+    else if (user.role === "restaurateur") nav("/restaurant", { replace: true });
+    else                              nav("/",           { replace: true });
+  }, [user, nav]);
 
   return (
     <AnimatePresence mode="wait">

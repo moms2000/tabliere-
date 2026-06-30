@@ -89,9 +89,46 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── RoleRedirect — redirige chaque rôle vers son espace dès la connexion ────
+import { useLocation, useNavigate, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext.jsx";
+
+/**
+ * Garde globale : si l'utilisateur est connecté et tente d'accéder
+ * à une page publique (/ /restaurants/:slug /connexion /inscription…),
+ * on le redirige immédiatement vers son espace dédié.
+ *
+ * Règle stricte :
+ *   admin        → /admin
+ *   restaurateur → /restaurant
+ *   client       → reste sur les pages publiques
+ */
+function RoleRedirect({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return null; // attendre que l'auth soit chargée
+
+  const path = location.pathname;
+
+  // Pages déjà protégées — ne pas intercepter
+  const isProtectedSpace =
+    path.startsWith("/admin") ||
+    path.startsWith("/restaurant") ||
+    path.startsWith("/menu/") ||
+    path.startsWith("/profil");
+
+  if (!isProtectedSpace && user) {
+    if (user.role === "admin")        return <Navigate to="/admin"      replace />;
+    if (user.role === "restaurateur") return <Navigate to="/restaurant" replace />;
+    // client → laisse passer
+  }
+
+  return children;
+}
+
 // ── MobileBottomNav wrapper ───────────────────────────────────────────────────
 // Uniquement visible sur mobile ET hors des espaces admin/restaurant
-import { useLocation } from "react-router-dom";
 
 function AppWithNav({ children }) {
   const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768);
@@ -139,6 +176,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <ToastProvider>
             <AuthProvider>
               <Suspense fallback={<PageLoader />}>
+              <RoleRedirect>
               <AppWithNav>
                 <Routes>
                   {/* ── Pages publiques ─────────────────────────────────── */}
@@ -195,6 +233,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </AppWithNav>
+              </RoleRedirect>
               </Suspense>
             </AuthProvider>
           </ToastProvider>

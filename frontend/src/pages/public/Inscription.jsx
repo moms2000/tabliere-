@@ -158,38 +158,24 @@ export default function Inscription() {
     const validErr = validate();
     if (validErr) { setError(validErr); return; }
     setLoading(true);
-    try {
-      // Vérifier le code restaurateur avant l'inscription
-      if (type === "restaurateur") {
-        try {
-          const { data: codeData } = await api.post("/auth/verify-code", {
-            code: form.code_restaurateur.trim().toUpperCase(),
-          });
-          if (!codeData?.data?.valid) {
-            setError(codeData?.message || "Code restaurateur invalide ou déjà utilisé.");
-            setLoading(false);
-            return;
-          }
-        } catch (codeErr) {
-          setError(
-            codeErr.response?.data?.message ||
-            "Impossible de vérifier le code. Vérifiez votre connexion et réessayez."
-          );
-          setLoading(false);
-          return;
-        }
-      }
 
-      await register({
-        full_name:          fullName,
-        email:              form.email,
-        phone:              fullPhone || undefined,
-        password:           form.password,
-        role:               type,
-        restaurant_name:    type === "restaurateur" ? form.resto : undefined,
-        code_restaurateur:  type === "restaurateur" ? form.code_restaurateur.trim().toUpperCase() : undefined,
-      });
-      try { await login(form.email, form.password); } catch (_) {}
+    // Figer les valeurs du formulaire AVANT tout appel async
+    // (évite toute race condition si React re-render entre les appels)
+    const isResto = type === "restaurateur";
+    const code    = isResto ? form.code_restaurateur.trim().toUpperCase() : undefined;
+    const payload = {
+      full_name:         fullName,
+      email:             form.email.trim(),
+      phone:             fullPhone || undefined,
+      password:          form.password,
+      role:              type,
+      restaurant_name:   isResto ? form.resto.trim() : undefined,
+      code_restaurateur: code,
+    };
+
+    try {
+      await register(payload);
+      try { await login(payload.email, payload.password); } catch (_) {}
       setStep(3);
     } catch (err) {
       const status = err.response?.status;
@@ -557,6 +543,10 @@ export default function Inscription() {
                     <input value={form.code_restaurateur}
                       onChange={e => set("code_restaurateur", e.target.value.toUpperCase())}
                       placeholder="REST-XXXX-XXXX" required
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
                       style={{ border: "none", background: "transparent", fontSize: 13,
                         outline: "none", flex: 1, color: DARK, fontFamily: "inherit",
                         letterSpacing: "1px", fontWeight: 600 }} />

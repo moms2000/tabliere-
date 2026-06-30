@@ -45,15 +45,24 @@ export const register = asyncHandler(async (req, res) => {
 
   // Valider le code restaurateur si rôle = restaurateur
   if (role === "restaurateur") {
-    if (!code_restaurateur) throw new AppError("Le code d'accès restaurateur est obligatoire", 400);
+    // Log pour debug
+    logger.info("[Register restaurateur] code reçu", {
+      code_restaurateur: code_restaurateur ?? "UNDEFINED/NULL",
+      trimmed: code_restaurateur?.trim() ?? "N/A",
+      body_keys: Object.keys(req.body),
+    });
+
+    const codeVal = (code_restaurateur || "").trim().toUpperCase();
+    if (!codeVal) throw new AppError("Le code d'accès restaurateur est obligatoire", 400);
+
     const { rows: [codeRow] } = await query(
       "SELECT id, is_used, expires_at FROM restaurateur_codes WHERE code = $1",
-      [code_restaurateur.trim().toUpperCase()]
+      [codeVal]
     );
-    if (!codeRow) throw new AppError("Code restaurateur invalide", 400);
-    if (codeRow.is_used) throw new AppError("Ce code a déjà été utilisé", 400);
+    if (!codeRow) throw new AppError("Code restaurateur invalide. Vérifiez le code et réessayez.", 400);
+    if (codeRow.is_used) throw new AppError("Ce code a déjà été utilisé par un autre compte.", 400);
     if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
-      throw new AppError("Ce code d'accès a expiré. Contactez TablièreCI.", 400);
+      throw new AppError("Ce code d'accès a expiré. Contactez TablièreCI pour en obtenir un nouveau.", 400);
     }
   }
 

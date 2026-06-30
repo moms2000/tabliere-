@@ -65,15 +65,7 @@ function SidebarContent({ navigate, user, logout, onClose }) {
             </div>
           </div>
         </div>
-        {onClose && (
-          <button
-            onPointerDown={e => { e.stopPropagation(); onClose(); }}
-            style={{ border: "none", background: "transparent",
-              cursor: "pointer", color: "rgba(255,255,255,.4)", display: "flex",
-              padding: 8, margin: -8, touchAction: "manipulation" }}>
-            <X size={20} />
-          </button>
-        )}
+        {/* X button déplacé hors de la sidebar — voir Drawer mobile */}
       </div>
 
       {/* Nav */}
@@ -168,20 +160,33 @@ export default function RestaurantLayout() {
       <AnimatePresence>
         {isMobile && mobileOpen && (
           <>
-            {/* Backdrop — ferme le drawer au clic */}
+            {/* 1. Backdrop — zIndex 200 — ferme au clic en dehors */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onPointerDown={() => setMobileOpen(false)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 200 }} />
+
+            {/* 2. Sidebar — zIndex 201 */}
             <motion.aside
               initial={{ x: -220 }} animate={{ x: 0 }} exit={{ x: -220 }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              onPointerDown={e => e.stopPropagation()}
               style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 210,
                 background: DARK, display: "flex", flexDirection: "column",
                 zIndex: 201 }}>
               <SidebarContent navigate={navigate} user={user} logout={logout}
                 onClose={() => setMobileOpen(false)} />
             </motion.aside>
+
+            {/* 3. Bouton X indépendant — zIndex 202 — hors de la sidebar */}
+            <button
+              onPointerDown={() => setMobileOpen(false)}
+              style={{
+                position: "fixed", top: 12, left: 162, zIndex: 202,
+                background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%",
+                width: 34, height: 34, display: "flex", alignItems: "center",
+                justifyContent: "center", cursor: "pointer", touchAction: "manipulation",
+              }}>
+              <X size={18} color="white" />
+            </button>
           </>
         )}
       </AnimatePresence>

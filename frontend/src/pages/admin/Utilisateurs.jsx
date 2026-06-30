@@ -51,7 +51,7 @@ export default function Utilisateurs() {
       .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, sort, page]);
+  }, [search, sort, page, roleFilter]); // ← roleFilter ajouté
 
   const switchTab = (tab) => {
     setMainTab(tab);

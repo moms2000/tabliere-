@@ -61,19 +61,24 @@ export default function Systeme() {
     ? `${Math.floor(health.uptime_s / 3600)}h ${Math.floor((health.uptime_s % 3600) / 60)}m`
     : "—";
 
+  const redisStatus   = health?.redis?.connected ? "opérationnel" : health ? "non configuré" : "—";
+  const redisLatency  = health?.redis?.latency_ms != null ? `${health.redis.latency_ms}ms` : "—";
+
   const SERVICES = [
-    { name: "API principale",      status: apiStatus, latency: apiLatency, uptime: health ? "99.9%" : "—",  icon: Server },
-    { name: "Base de données",     status: dbStatus,  latency: dbLatency,  uptime: health ? "99.99%" : "—", icon: HardDrive },
-    { name: "Service WhatsApp",    status: "opérationnel", latency: "—", uptime: "99.8%", icon: Wifi },
-    { name: "Passerelle paiement", status: "opérationnel", latency: "—", uptime: "98.5%", icon: Activity },
+    { name: "API principale",      status: apiStatus,   latency: apiLatency,  uptime: health ? "99.9%"  : "—", icon: Server },
+    { name: "Base de données",     status: dbStatus,    latency: dbLatency,   uptime: health ? "99.99%" : "—", icon: HardDrive },
+    { name: "Cache Redis",         status: redisStatus, latency: redisLatency,uptime: health?.redis?.connected ? "99.9%" : "—", icon: Cpu },
+    { name: "Service WhatsApp",    status: "opérationnel", latency: "—", uptime: "99.8%",  icon: Wifi },
+    { name: "Passerelle paiement", status: "opérationnel", latency: "—", uptime: "98.5%",  icon: Activity },
     { name: "Génération QR Code",  status: "opérationnel", latency: "—", uptime: "99.95%", icon: CheckCircle },
   ];
 
   const METRICS = [
-    { label: "Mémoire serveur",  val: health ? `${memMb} MB` : "—",       bar: memPct,  color: "#185FA5", icon: Server },
-    { label: "Connexions DB",    val: health ? `${health.db?.pool_total || 0}/${health.db?.pool_max || 10}` : "—", bar: health ? Math.round((health.db?.pool_total || 0) / (health.db?.pool_max || 10) * 100) : 0, color: "#1D9E75", icon: HardDrive },
-    { label: "File d'attente DB",val: health ? `${health.db?.pool_waiting || 0}` : "—",  bar: Math.min((health?.db?.pool_waiting || 0) * 10, 100), color: "#854F0B", icon: Cpu },
-    { label: "Uptime serveur",   val: uptime, bar: 100, color: "#1D9E75",  icon: Wifi },
+    { label: "Mémoire serveur",   val: health ? `${memMb} MB` : "—",      bar: memPct,  color: "#185FA5", icon: Server },
+    { label: "Connexions DB",     val: health ? `${health.db?.pool_total || 0}/${health.db?.pool_max || 10}` : "—", bar: health ? Math.round((health.db?.pool_total || 0) / (health.db?.pool_max || 10) * 100) : 0, color: "#1D9E75", icon: HardDrive },
+    { label: "File d'attente DB", val: health ? `${health.db?.pool_waiting || 0}` : "—", bar: Math.min((health?.db?.pool_waiting || 0) * 10, 100), color: "#854F0B", icon: Cpu },
+    { label: "Latence Redis",     val: redisLatency, bar: health?.redis?.connected ? Math.max(0, 100 - (health.redis.latency_ms || 0)) : 0, color: health?.redis?.connected ? "#1D9E75" : "#aaa", icon: Wifi },
+    { label: "Uptime serveur",    val: uptime, bar: 100, color: "#1D9E75", icon: Activity },
   ];
 
   const LOGS = [
@@ -82,7 +87,9 @@ export default function Systeme() {
       msg: `API ${apiStatus} — latence ${apiLatency}`,                           time: lastRefresh.toLocaleTimeString("fr-FR") },
     { level: dbStatus === "opérationnel" ? "INFO" : "WARN",
       msg: `DB pool: ${health?.db?.pool_total || 0} connexions, ${health?.db?.pool_waiting || 0} en attente`, time: lastRefresh.toLocaleTimeString("fr-FR") },
-    { level: "INFO",  msg: `Uptime : ${uptime}`,                               time: lastRefresh.toLocaleTimeString("fr-FR") },
+    { level: health?.redis?.connected ? "INFO" : "WARN",
+      msg: health?.redis?.connected ? `Redis connecté — latence ${redisLatency}` : "Redis non connecté — cache mémoire actif", time: lastRefresh.toLocaleTimeString("fr-FR") },
+    { level: "INFO",  msg: `Uptime : ${uptime}`,                                time: lastRefresh.toLocaleTimeString("fr-FR") },
   ];
 
   return (
@@ -248,7 +255,7 @@ export default function Systeme() {
             { ok: (health?.db?.pool_waiting || 0) === 0, msg: "Pool DB : 0 connexion en attente",                          tip: "Augmenter DB_POOL_MAX dans Render env vars si > 0 régulièrement" },
             { ok: (health?.memory_mb || 0) < 400,         msg: `Mémoire < 400 MB (actuel : ${health?.memory_mb || 0} MB)`, tip: "Redémarrer le service si > 450 MB en continu" },
             { ok: (health?.latency || 0) < 800,           msg: `Latence API < 800ms (actuel : ${health?.latency || 0}ms)`,  tip: "Passer au plan Render Starter ($7/mois) pour éliminer les cold starts" },
-            { ok: !!process?.env?.REDIS_URL,               msg: "Cache Redis actif (Upstash)",                              tip: "Ajouter REDIS_URL dans Render → x5 plus rapide sur les listes" },
+            { ok: !!health?.redis?.connected,               msg: `Cache Redis ${health?.redis?.connected ? `actif — latence ${health?.redis?.latency_ms ?? "?"}ms` : "non connecté"}`,  tip: "Ajouter REDIS_URL (Upstash) dans Render → x5 plus rapide" },
             { ok: true,                                    msg: "Indexes DB critiques créés (17 indexes)",                  tip: "" },
             { ok: true,                                    msg: "CORS configuré (domaines Vercel autorisés)",               tip: "" },
             { ok: true,                                    msg: "Rate limiting activé (/api/*)",                            tip: "" },

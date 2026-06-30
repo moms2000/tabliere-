@@ -6,6 +6,7 @@ import compression from "compression";
 
 import { env }          from "./config/env.js";
 import { poolStats }    from "./config/db.js";
+import { redis }        from "./config/redis.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter }   from "./middleware/rateLimiter.js";
 import { logger }       from "./utils/logger.js";
@@ -95,19 +96,40 @@ app.use(`${v1}/restaurants`,   reviewsRoutes);
 app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check ────────────────────────────────────────────────────────────
-app.get("/health", (_req, res) => {
+app.get("/health", async (_req, res) => {
   const db = poolStats();
   const healthy = db.waiting === 0 && db.total > 0;
+
+  // Test Redis live — ping avec timeout 500ms
+  let redisOk = false;
+  let redisLatency = null;
+  if (redis) {
+    try {
+      const t = Date.now();
+      await Promise.race([
+        redis.ping(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 500)),
+      ]);
+      redisOk = true;
+      redisLatency = Date.now() - t;
+    } catch { redisOk = false; }
+  }
+
   res.status(healthy ? 200 : 503).json({
     status:    healthy ? "ok" : "degraded",
     ts:        new Date().toISOString(),
     uptime_s:  Math.floor(process.uptime()),
     memory_mb: Math.round(process.memoryUsage().heapUsed / 1_048_576),
     db: {
-      pool_total:   db.total,    // connexions ouvertes
-      pool_idle:    db.idle,     // disponibles
-      pool_waiting: db.waiting,  // requêtes en attente (0 = bonne santé)
+      pool_total:   db.total,
+      pool_idle:    db.idle,
+      pool_waiting: db.waiting,
       pool_max:     db.max,
+    },
+    redis: {
+      connected:  redisOk,
+      latency_ms: redisLatency,
+      url_set:    !!process.env.REDIS_URL,
     },
   });
 });

@@ -32,26 +32,44 @@ export const list = asyncHandler(async (req, res) => {
     recent:       "r.created_at DESC",
   };
   const orderBy = ORDER_MAP[sort] || "r.rating DESC";
+  const where   = `WHERE ${conditions.join(" AND ")}`;
 
-  const where = `WHERE ${conditions.join(" AND ")}`;
+  // ── Cache Redis/mémoire — clé unique par combinaison de filtres ────────────
+  // TTL 2 min pour la liste (données peu critiques, mise à jour fréquente)
+  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${search||""}`;
+  const cached = await cache.get(cacheKey).catch(() => null);
+  if (cached) return res.status(200).json(cached);
 
-  const { rows } = await query(
-    `SELECT r.id, r.name, r.slug, r.cuisine_type, r.address, r.ville, r.quartier,
-            r.price_range, r.rating, r.review_count, r.capacity,
-            r.opening_hours, r.phone, r.theme_color, r.qr_active,
-            r.logo_url, r.photos, r.options
-     FROM restaurants r
-     ${where}
-     ORDER BY ${orderBy}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
-  );
+  const [{ rows }, { rows: [{ count }] }] = await Promise.all([
+    query(
+      `SELECT r.id, r.name, r.slug, r.cuisine_type, r.address, r.ville, r.quartier,
+              r.price_range, r.rating, r.review_count, r.capacity,
+              r.opening_hours, r.phone, r.theme_color, r.qr_active,
+              r.logo_url, r.photos, r.options
+       FROM restaurants r
+       ${where}
+       ORDER BY ${orderBy}
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    ),
+    query(`SELECT COUNT(*) FROM restaurants r ${where}`, params),
+  ]);
 
-  const { rows: [{ count }] } = await query(
-    `SELECT COUNT(*) FROM restaurants r ${where}`, params
-  );
+  const result = {
+    success: true,
+    data: rows,
+    pagination: {
+      total: +count,
+      page: +page,
+      limit: +limit,
+      pages: Math.ceil(+count / +limit),
+    },
+  };
 
-  return paginated(res, rows, +count, +page, +limit);
+  // Mettre en cache 2 minutes (invalidé à chaque update restaurant)
+  await cache.set(cacheKey, result, 120).catch(() => {});
+
+  return res.status(200).json(result);
 });
 
 // ── GET /restaurants/:slug — détail public ───────────────────────────────────

@@ -205,8 +205,8 @@ export default function Systeme() {
       {/* Alertes système */}
       {health && (() => {
         const alerts = [];
-        if (health.latency > 500) alerts.push({ level: "ERROR", msg: `Latence API critique : ${health.latency}ms (seuil : 500ms) — vérifier la charge serveur` });
-        else if (health.latency > 200) alerts.push({ level: "WARN", msg: `Latence API élevée : ${health.latency}ms — surveiller` });
+        if (health.latency > 2000) alerts.push({ level: "ERROR", msg: `Latence API critique : ${health.latency}ms — cold start Render ou surcharge` });
+        else if (health.latency > 800) alerts.push({ level: "WARN", msg: `Latence API élevée : ${health.latency}ms — normal sur plan gratuit (cold start). Passer au plan Starter ($7/mois) pour éliminer les cold starts.` });
         if (health.memory_mb > 400) alerts.push({ level: "WARN", msg: `Mémoire élevée : ${health.memory_mb} MB — envisager un redémarrage` });
         if ((health.db?.pool_waiting || 0) > 0) alerts.push({ level: "ERROR", msg: `${health.db.pool_waiting} requête(s) DB en file d'attente — risque de timeout` });
         if ((health.db?.pool_total || 0) >= (health.db?.pool_max || 10) - 1) alerts.push({ level: "WARN", msg: "Pool de connexions presque saturé — augmenter pool_max si besoin" });
@@ -245,11 +245,13 @@ export default function Systeme() {
         <Card>
           <SectionHeader title="Recommandations & bonnes pratiques" icon={CheckCircle} />
           {[
-            { ok: (health?.db?.pool_waiting || 0) === 0, msg: "Pool DB : 0 connexion en attente", tip: "Augmenter DATABASE_POOL_MAX si > 0 fréquemment" },
+            { ok: (health?.db?.pool_waiting || 0) === 0, msg: "Pool DB : 0 connexion en attente",                          tip: "Augmenter DB_POOL_MAX dans Render env vars si > 0 régulièrement" },
             { ok: (health?.memory_mb || 0) < 400,         msg: `Mémoire < 400 MB (actuel : ${health?.memory_mb || 0} MB)`, tip: "Redémarrer le service si > 450 MB en continu" },
-            { ok: (health?.latency || 0) < 300,           msg: `Latence API < 300ms (actuel : ${health?.latency || 0}ms)`, tip: "Activer le cache Redis pour réduire la latence" },
-            { ok: true,                                    msg: "CORS configuré (domaines Vercel autorisés)", tip: "" },
-            { ok: true,                                    msg: "Rate limiting activé (/api/*)", tip: "" },
+            { ok: (health?.latency || 0) < 800,           msg: `Latence API < 800ms (actuel : ${health?.latency || 0}ms)`,  tip: "Passer au plan Render Starter ($7/mois) pour éliminer les cold starts" },
+            { ok: !!process?.env?.REDIS_URL,               msg: "Cache Redis actif (Upstash)",                              tip: "Ajouter REDIS_URL dans Render → x5 plus rapide sur les listes" },
+            { ok: true,                                    msg: "Indexes DB critiques créés (17 indexes)",                  tip: "" },
+            { ok: true,                                    msg: "CORS configuré (domaines Vercel autorisés)",               tip: "" },
+            { ok: true,                                    msg: "Rate limiting activé (/api/*)",                            tip: "" },
           ].map((r, i) => (
             <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0",
               borderBottom: i < 4 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>

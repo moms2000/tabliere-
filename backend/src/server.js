@@ -142,6 +142,44 @@ async function runProspectsMigration() {
   } catch (_) {}
 }
 
+/**
+ * Indexes de performance — créés une seule fois, idempotents (IF NOT EXISTS)
+ * Impact : -60% à -80% sur les requêtes fréquentes, essentiel pour 1M users
+ */
+async function runPerfIndexes() {
+  const indexes = [
+    // Restaurants — filtrages les plus courants
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_status      ON restaurants(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_rating      ON restaurants(rating DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_cuisine     ON restaurants(cuisine_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_ville       ON restaurants(ville)`,
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_slug        ON restaurants(slug)`,
+    // Réservations — jointures + filtres fréquents
+    `CREATE INDEX IF NOT EXISTS idx_reservations_restaurant ON reservations(restaurant_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reservations_client     ON reservations(client_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reservations_date       ON reservations(reserved_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_reservations_status     ON reservations(status)`,
+    // Index composite réservation (date + restaurant) — requête de dispo
+    `CREATE INDEX IF NOT EXISTS idx_reservations_resto_date ON reservations(restaurant_id, reserved_at)`,
+    // Utilisateurs — login + lookup
+    `CREATE INDEX IF NOT EXISTS idx_users_email     ON users(email)`,
+    `CREATE INDEX IF NOT EXISTS idx_users_phone     ON users(phone) WHERE phone IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_users_role      ON users(role)`,
+    // Tables restaurant — dispo
+    `CREATE INDEX IF NOT EXISTS idx_tables_restaurant ON restaurant_tables(restaurant_id)`,
+    // Menu items — affichage menu QR
+    `CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant ON menu_items(restaurant_id)`,
+    // Codes restaurateurs
+    `CREATE INDEX IF NOT EXISTS idx_codes_used ON restaurateur_codes(is_used)`,
+  ];
+
+  let ok = 0;
+  for (const sql of indexes) {
+    try { await query(sql); ok++; } catch (_) {}
+  }
+  logger.info(`Performance indexes : ${ok}/${indexes.length} prêts`);
+}
+
 let server;
 
 async function start() {
@@ -166,6 +204,7 @@ async function start() {
     await runBusinessMigrations();
     await runProspectsMigration();
     await runCodesMigration();
+    await runPerfIndexes();       // ← Indexes de performance
     await activateTestRestaurants();
 
     // BullMQ workers

@@ -162,17 +162,15 @@ export const listUsers = asyncHandler(async (req, res) => {
   const orderBy = ORDER_MAP[sort] || "full_name ASC";
 
   const { rows } = await query(
-    `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.status, u.created_at,
+    `SELECT DISTINCT ON (u.id) u.id, u.full_name, u.email, u.phone, u.role, u.status, u.created_at,
        (SELECT COUNT(*) FROM reservations WHERE client_id = u.id) AS resa_count,
-       re.name  AS resto_name,
-       re.slug  AS resto_slug,
-       re.status AS resto_status,
-       rc.code  AS access_code
+       (SELECT name   FROM restaurants WHERE owner_id = u.id LIMIT 1) AS resto_name,
+       (SELECT slug   FROM restaurants WHERE owner_id = u.id LIMIT 1) AS resto_slug,
+       (SELECT status FROM restaurants WHERE owner_id = u.id LIMIT 1) AS resto_status,
+       (SELECT code   FROM restaurateur_codes WHERE used_by = u.id LIMIT 1) AS access_code
      FROM users u
-     LEFT JOIN restaurants re ON re.owner_id = u.id
-     LEFT JOIN restaurateur_codes rc ON rc.used_by = u.id
      ${where}
-     ORDER BY ${orderBy}
+     ORDER BY u.id, ${orderBy}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );

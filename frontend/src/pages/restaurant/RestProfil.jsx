@@ -50,6 +50,12 @@ export default function RestProfil() {
           email:         r.email         || "",
           website:       r.website       || "",
           opening_hours: r.opening_hours || "",
+          lunch_hours:   r.lunch_hours   || "",
+          dinner_hours:  r.dinner_hours  || "",
+          tables_2:      r.tables_2      || "",
+          tables_4:      r.tables_4      || "",
+          tables_6:      r.tables_6      || "",
+          tables_8:      r.tables_8      || "",
           price_range:   r.price_range   || "",
           capacity:      r.capacity      || "",
           theme_color:   r.theme_color   || P,
@@ -423,7 +429,7 @@ export default function RestProfil() {
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>URL publique</div>
               <div style={{ fontSize: 12, fontFamily: "monospace", color: DARK,
                 background: BG, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all" }}>
-                tabliereci.net/restaurants/{resto.slug}
+                {resto?.slug ? `tabliereci.net/restaurants/${resto.slug}` : "URL disponible après activation"}
               </div>
             </Card>
           </motion.div>

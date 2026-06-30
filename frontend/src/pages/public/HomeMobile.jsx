@@ -434,7 +434,9 @@ export default function HomeMobile() {
             const { latitude } = pos.coords;
             const city = latitude >= 4.8 && latitude <= 6.2 ? "Abidjan" : "Abidjan";
             setSearch(city);
-            handleSearch();
+            // handleSearch est passé via callback pour éviter de lire le stale state
+            // On scroll vers la liste sans re-déclencher la recherche de dispo
+            listRef.current?.scrollIntoView({ behavior: "smooth" });
           }, () => {});
         }}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none",

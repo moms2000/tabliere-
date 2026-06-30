@@ -168,7 +168,10 @@ export const update = asyncHandler(async (req, res) => {
     values
   );
 
-  await cache.delPattern("restaurant:*").catch(() => {});
+  await Promise.all([
+    cache.delPattern("restaurant:*").catch(() => {}),
+    cache.delPattern("restaurants:list:*").catch(() => {}),
+  ]);
   logger.info("Restaurant mis à jour", { restoId: updated.id });
   return ok(res, { restaurant: updated }, "Restaurant mis à jour");
 });
@@ -199,7 +202,10 @@ export const generateQR = asyncHandler(async (req, res) => {
     [menuUrl, resto.id]
   );
 
-  await cache.delPattern("restaurant:*").catch(() => {});
+  await Promise.all([
+    cache.delPattern("restaurant:*").catch(() => {}),
+    cache.delPattern("restaurants:list:*").catch(() => {}),
+  ]);
   logger.info("QR activé", { restoId: resto.id });
   return ok(res, { qr_data_url: qrDataUrl, qr_url: menuUrl });
 });
@@ -309,7 +315,10 @@ export const generateTableQR = asyncHandler(async (req, res) => {
     [qrUrl, table.id]
   );
 
-  await cache.delPattern("restaurant:*").catch(() => {});
+  await Promise.all([
+    cache.delPattern("restaurant:*").catch(() => {}),
+    cache.delPattern("restaurants:list:*").catch(() => {}),
+  ]);
   logger.info("QR table généré", { tableId: table.id, label: table.label });
   return ok(res, { qr_url: qrUrl, table_label: table.label });
 });

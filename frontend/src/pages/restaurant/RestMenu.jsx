@@ -71,7 +71,13 @@ export default function RestMenu() {
 
   const handleQrToggle = async (val) => {
     try {
-      if (val) await restaurantsService.generateQR(user.resto_id);
+      if (val) {
+        // Activer → générer le QR code
+        await restaurantsService.generateQR(user.resto_id);
+      } else {
+        // Désactiver → persister en DB via PATCH
+        await restaurantsService.update(user.resto_id, { qr_active: false });
+      }
       setQrActive(val);
     } catch (e) { console.error(e); }
   };

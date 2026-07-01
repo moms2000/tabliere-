@@ -107,12 +107,17 @@ export const login = asyncHandler(async (req, res) => {
   const { access, refresh } = generateTokens(user.id, user.role);
   const { password_hash: _, ...safeUser } = user;
 
-  // Ajouter le slug du restaurant pour les restaurateurs
-  if (user.role === "restaurateur" && user.restaurant_id) {
+  // Ajouter resto_id / resto_slug / resto_name pour les restaurateurs
+  // Recherche par owner_id (plus fiable que restaurant_id qui peut être null)
+  if (user.role === "restaurateur") {
     const { rows: [resto] } = await query(
-      "SELECT slug, name FROM restaurants WHERE id = $1", [user.restaurant_id]
+      "SELECT id, slug, name FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
     ).catch(() => ({ rows: [] }));
-    if (resto) { safeUser.resto_slug = resto.slug; safeUser.resto_name = resto.name; }
+    if (resto) {
+      safeUser.resto_id   = resto.id;
+      safeUser.resto_slug = resto.slug;
+      safeUser.resto_name = resto.name;
+    }
   }
 
   logger.info("Connexion réussie", { userId: user.id, role: user.role });
@@ -152,12 +157,16 @@ export const me = asyncHandler(async (req, res) => {
      FROM users WHERE id = $1`, [req.user.id]
   );
 
-  // Ajouter le slug/nom du restaurant pour les restaurateurs
-  if (user?.role === "restaurateur" && user.restaurant_id) {
+  // Ajouter resto_id / resto_slug / resto_name pour les restaurateurs
+  if (user?.role === "restaurateur") {
     const { rows: [resto] } = await query(
-      "SELECT slug, name FROM restaurants WHERE id = $1", [user.restaurant_id]
+      "SELECT id, slug, name FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
     ).catch(() => ({ rows: [] }));
-    if (resto) { user.resto_slug = resto.slug; user.resto_name = resto.name; }
+    if (resto) {
+      user.resto_id   = resto.id;
+      user.resto_slug = resto.slug;
+      user.resto_name = resto.name;
+    }
   }
 
   return ok(res, { user });

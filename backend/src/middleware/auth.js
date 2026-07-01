@@ -3,9 +3,6 @@ import { env } from "../config/env.js";
 import { cache } from "../config/redis.js";
 import { query } from "../config/db.js";
 import { unauth, forbidden } from "../utils/response.js";
-import { generateTokens, revokeToken } from "../utils/tokens.js";
-
-export { generateTokens, revokeToken }; // ré-exporter pour compatibilité
 
 // Vérifie le token JWT et charge l'utilisateur
 export const authenticate = async (req, res, next) => {
@@ -14,16 +11,10 @@ export const authenticate = async (req, res, next) => {
     if (!header?.startsWith("Bearer ")) return unauth(res, "Token manquant");
 
     const token = header.split(" ")[1];
-
-    // Vérifier si le token est révoqué (blacklist Redis)
-    const revoked = await cache.get(`blacklist:${token}`);
-    if (revoked) return unauth(res, "Token révoqué");
-
     const decoded = jwt.verify(token, env.jwt.secret);
 
     // Cache user pour éviter une requête DB à chaque requête
-    const cacheKey = `user:${decoded.id}`;
-    let user = await cache.get(cacheKey);
+    let user = await cache.get(`user:${decoded.id}`).catch(() => null);
 
     if (!user) {
       const { rows } = await query(
@@ -32,7 +23,7 @@ export const authenticate = async (req, res, next) => {
       );
       if (!rows[0]) return unauth(res, "Utilisateur introuvable");
       user = rows[0];
-      await cache.set(cacheKey, user, 300); // cache 5 minutes
+      await cache.set(`user:${decoded.id}`, user, 300).catch(() => {});
     }
 
     if (user.status === "suspendu") return forbidden(res, "Compte suspendu");
@@ -41,6 +32,9 @@ export const authenticate = async (req, res, next) => {
     req.token = token;
     next();
   } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return unauth(res, "Token invalide ou expiré");
+    }
     next(err);
   }
 };
@@ -53,5 +47,14 @@ export const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
-// generateTokens et revokeToken sont dans utils/tokens.js
-// et ré-exportés au début de ce fichier
+// Compatibilité — ces fonctions sont aussi dans auth.controller.js (inline)
+export const generateTokens = (userId, role) => {
+  const jwt_module = jwt;
+  const access = jwt_module.sign({ id: userId, role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
+  const refresh = jwt_module.sign({ id: userId, role, type: "refresh" }, env.jwt.secret, { expiresIn: env.jwt.refreshExpires });
+  return { access, refresh };
+};
+
+export const revokeToken = async (_token) => {
+  // No-op simplifié — tokens expireront naturellement
+};

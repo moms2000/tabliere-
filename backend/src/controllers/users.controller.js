@@ -3,7 +3,7 @@ import { query }            from "../config/db.js";
 import { cache }            from "../config/redis.js";
 import { ok, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
-import { revokeToken }      from "../utils/tokens.js";
+import { revokeToken }      from "../middleware/auth.js";
 import { logger }           from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------

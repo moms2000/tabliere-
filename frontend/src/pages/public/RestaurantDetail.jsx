@@ -501,22 +501,10 @@ export default function RestaurantDetail() {
       try {
         const reserved_at = toDatetime(selDate, selSlot);
         const dateOnly    = selDate;
-        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers).catch(() => ({ available_tables: null }));
-        const table = avail?.available_tables?.[0];
-
-        // Aucune table dispo (mais l'API a répondu) → proposer alternatives
-        if (avail?.available_tables !== null && !table) {
-          const altSlots = ALL_SLOTS.filter(s => s !== selSlot && !isPastSlot(dateOnly, s));
-          setError(
-            `Complet pour ${selSlot} le ${fmtDate(dateOnly)} (${pers} pers.).\n` +
-            (altSlots.length > 0
-              ? `Autres créneaux disponibles : ${altSlots.slice(0, 5).join(", ")}`
-              : "Aucun autre créneau disponible ce jour. Essayez une autre date.")
-          );
-          setBooking(false);
-          return;
-        }
-        // Si l'API a échoué (available_tables === null) → on continue sans table assignée
+        // Récupérer une table disponible si possible (optionnel — ne bloque pas la réservation)
+        // Le backend vérifie la capacité totale du restaurant et rejette si dépassée
+        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers).catch(() => null);
+        const table = avail?.available_tables?.[0] || null;
 
         const payload     = {
           restaurant_id:   resto.id,

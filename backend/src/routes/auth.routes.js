@@ -58,6 +58,10 @@ router.get ("/me",              authenticate,                              ctrl.
 // Code restaurateur
 router.post("/verify-code",     authLimiter, validate(verifyCodeSchema),  ctrl.verifyRestaurateurCode);
 
+// Vérification e-mail
+router.get ("/verify-email",                                              ctrl.verifyEmail);
+router.post("/resend-verification", authLimiter,                          ctrl.resendVerification);
+
 // Mot de passe oublié
 router.post("/forgot-password", authLimiter, validate(forgotSchema),      ctrl.forgotPassword);
 router.post("/reset-password",  authLimiter, validate(resetSchema),       ctrl.resetPassword);

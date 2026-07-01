@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt    from "jsonwebtoken";
+import crypto from "crypto";
+import axios  from "axios";
 import { query, withTransaction } from "../config/db.js";
 import { cache } from "../config/redis.js";
 import { generateTokens, revokeToken } from "../middleware/auth.js";
@@ -7,6 +9,61 @@ import { ok, created, unauth } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { env } from "../config/env.js";
+
+// ── Helper email SendGrid (direct, ne bloque jamais l'inscription) ────────────
+async function sendVerificationEmail(email, fullName, token) {
+  if (!env.SENDGRID_API_KEY) {
+    logger.info(`[Email MOCK] Vérification → ${email} | token=${token}`);
+    return;
+  }
+  const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
+    .replace("tabliereci.ci", "tabliereci.net");
+  const frontUrl  = env.FRONTEND_URL || "https://tabliereci.net";
+  const verifyUrl = `${frontUrl}/verify-email?token=${token}`;
+  const firstName = (fullName || "").split(" ")[0] || "cher utilisateur";
+
+  try {
+    await axios.post("https://api.sendgrid.com/v3/mail/send", {
+      personalizations: [{ to: [{ email }] }],
+      from: { email: fromEmail, name: "TablièreCI" },
+      reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+      subject: "Activez votre compte TablièreCI",
+      content: [
+        { type: "text/plain", value: `Bonjour ${firstName}, activez votre compte TablièreCI : ${verifyUrl} (valable 24h)` },
+        { type: "text/html", value: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
+            <div style="background:#e8a045;padding:14px 20px;border-radius:8px 8px 0 0">
+              <span style="color:#1a1000;font-size:17px;font-weight:bold">TablièreCI</span>
+            </div>
+            <div style="background:#fff;padding:28px 24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px">
+              <h2 style="color:#1e2e28;margin:0 0 10px">Bienvenue, ${firstName} !</h2>
+              <p style="color:#666;line-height:1.6">Merci de vous être inscrit sur TablièreCI. Cliquez sur le bouton ci-dessous pour activer votre compte :</p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="${verifyUrl}" style="display:inline-block;background:#e8a045;color:#1a1000;padding:14px 36px;border-radius:30px;font-size:15px;font-weight:700;text-decoration:none">Activer mon compte</a>
+              </div>
+              <p style="color:#999;font-size:12px;text-align:center">Ce lien est valable 24 heures.<br>Si vous n'avez pas créé de compte, ignorez cet e-mail.</p>
+              <div style="margin-top:16px;padding:12px;background:#f8f5ef;border-radius:8px;font-size:11px;color:#999;word-break:break-all">
+                Lien : <a href="${verifyUrl}" style="color:#e8a045">${verifyUrl}</a>
+              </div>
+            </div>
+            <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
+          </div>` },
+      ],
+      headers: {
+        "List-Unsubscribe": "<mailto:unsubscribe@tabliereci.net>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    }, {
+      headers: {
+        Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    logger.info("[Email] Vérification envoyée", { email });
+  } catch (e) {
+    logger.warn("[Email] Échec envoi vérification", { email, error: e.response?.data || e.message });
+  }
+}
 
 export const register = asyncHandler(async (req, res) => {
   const { full_name, email, phone, password, role, restaurant_name, code_restaurateur } = req.body;
@@ -77,6 +134,18 @@ export const register = asyncHandler(async (req, res) => {
     ).catch(e => logger.warn("Marquage code échoué", { error: e.message }));
   }
 
+  // ── Générer token de vérification + envoyer l'email ─────────────────────────
+  const emailToken   = crypto.randomBytes(32).toString("hex");
+  const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+  await query(
+    `UPDATE users SET email_verified = FALSE, email_token = $1, email_token_expires = $2
+     WHERE id = $3`,
+    [emailToken, tokenExpires.toISOString(), result.id]
+  ).catch(e => logger.warn("[Register] Set email_token échoué", { error: e.message }));
+
+  // Envoi email (asynchrone, ne bloque pas la réponse)
+  sendVerificationEmail(email, full_name, emailToken).catch(() => {});
+
   const { access, refresh } = generateTokens(result.id, result.role);
   logger.info("Nouvel utilisateur inscrit", { userId: result.id, role });
 
@@ -84,7 +153,8 @@ export const register = asyncHandler(async (req, res) => {
     user: result,
     access_token:  access,
     refresh_token: refresh,
-  }, "Compte créé avec succès");
+    email_sent:    true,
+  }, "Compte créé — vérifiez votre e-mail");
 });
 
 export const login = asyncHandler(async (req, res) => {
@@ -189,6 +259,64 @@ export const verifyRestaurateurCode = asyncHandler(async (req, res) => {
     return ok(res, { valid: false }, "Code expiré");
   }
   return ok(res, { valid: true }, "Code valide");
+});
+
+// ── GET /auth/verify-email?token=xxx ─────────────────────────────────────────
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.query;
+  if (!token) throw new AppError("Token manquant", 400);
+
+  // Chercher un compte avec ce token non expiré
+  const { rows: [user] } = await query(
+    `SELECT id, email_verified FROM users
+     WHERE email_token = $1 AND email_token_expires > NOW()`,
+    [token]
+  ).catch(() => ({ rows: [] }));
+
+  if (!user) {
+    // Vérifier si déjà vérifié (token consommé mais compte actif)
+    const { rows: [used] } = await query(
+      "SELECT id FROM users WHERE email_token = $1", [token]
+    ).catch(() => ({ rows: [] }));
+    if (used) return ok(res, { already_verified: true }, "E-mail déjà vérifié");
+    throw new AppError("Lien invalide ou expiré", 400);
+  }
+
+  if (user.email_verified) {
+    return ok(res, { already_verified: true }, "E-mail déjà vérifié");
+  }
+
+  await query(
+    `UPDATE users SET email_verified = TRUE, email_token = NULL, email_token_expires = NULL
+     WHERE id = $1`,
+    [user.id]
+  );
+  await cache.del(`user:${user.id}`).catch(() => {});
+
+  return ok(res, { verified: true }, "E-mail vérifié avec succès");
+});
+
+// ── POST /auth/resend-verification ───────────────────────────────────────────
+export const resendVerification = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  // Toujours répondre OK (ne pas révéler si l'email existe)
+  if (!email) return ok(res, {}, "Si cet email existe, un lien a été envoyé.");
+
+  const { rows: [user] } = await query(
+    "SELECT id, full_name, email_verified FROM users WHERE email = $1", [email]
+  ).catch(() => ({ rows: [] }));
+
+  if (user && !user.email_verified) {
+    const token   = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await query(
+      `UPDATE users SET email_token = $1, email_token_expires = $2 WHERE id = $3`,
+      [token, expires.toISOString(), user.id]
+    ).catch(() => {});
+    sendVerificationEmail(email, user.full_name, token).catch(() => {});
+  }
+
+  return ok(res, {}, "Si cet email existe, un lien a été envoyé.");
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {

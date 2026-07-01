@@ -135,7 +135,7 @@ export const refresh = asyncHandler(async (req, res) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(refresh_token, env.jwt.secret);
+    decoded = jwt.verify(refresh_token, env.JWT_SECRET);
   } catch {
     return unauth(res, "Token invalide ou expiré");
   }

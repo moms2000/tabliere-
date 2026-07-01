@@ -16,7 +16,7 @@ export const authenticate = async (req, res, next) => {
     const revoked = await cache.get(`blacklist:${token}`).catch(() => null);
     if (revoked) return unauth(res, "Token révoqué");
 
-    const decoded = jwt.verify(token, env.jwt.secret);
+    const decoded = jwt.verify(token, env.JWT_SECRET);
 
     // Cache user pour éviter une requête DB à chaque requête
     const cacheKey = `user:${decoded.id}`;
@@ -54,13 +54,13 @@ export const authorize = (...roles) => (req, res, next) => {
 export const generateTokens = (userId, role) => {
   const access = jwt.sign(
     { id: userId, role },
-    env.jwt.secret,
-    { expiresIn: env.jwt.expiresIn }
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN }
   );
   const refresh = jwt.sign(
     { id: userId, role, type: "refresh" },
-    env.jwt.secret,
-    { expiresIn: env.jwt.refreshExpires }
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_REFRESH_IN }
   );
   return { access, refresh };
 };

@@ -4,7 +4,7 @@ import crypto   from "crypto";
 import axios    from "axios";
 import { query, withTransaction } from "../config/db.js";
 import { cache }            from "../config/redis.js";
-import { generateTokens, revokeToken } from "../middleware/auth.js";
+import { generateTokens, revokeToken } from "../utils/tokens.js";
 import { ok, created, unauth, conflict } from "../utils/response.js";
 import { asyncHandler, AppError }        from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";

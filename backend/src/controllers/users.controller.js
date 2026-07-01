@@ -2,8 +2,8 @@ import bcrypt              from "bcryptjs";
 import { query }            from "../config/db.js";
 import { cache }            from "../config/redis.js";
 import { ok, paginated, notFound } from "../utils/response.js";
-import { asyncHandler, AppError }  from "../middleware/errorHandler.js";
-import { revokeToken }             from "../middleware/auth.js";
+import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { revokeToken }      from "../utils/tokens.js";
 import { logger }           from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------
@@ -35,14 +35,14 @@ export const myReservations = asyncHandler(async (req, res) => {
   const { rows: [{ count }] } = await query(
     `SELECT COUNT(*) FROM reservations r ${where}`, params
   );
-  return paginated(res, rows, +count, +page, +limit);
+  return paginated(res, rows, { page: +page, limit: +limit, total: +count });
 });
 
 // ---------------------------------------------------------------------------
 // PATCH /users/me
 // ---------------------------------------------------------------------------
 export const updateProfile = asyncHandler(async (req, res) => {
-  const allowed = ["full_name", "phone", "password", "avatar_url"];
+  const allowed = ["full_name", "phone", "password"];
   const updates = [];
   const values  = [];
 
@@ -66,7 +66,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const { rows: [user] } = await query(
     `UPDATE users SET ${updates.join(", ")}, updated_at = NOW()
      WHERE id = $${values.length}
-     RETURNING id, full_name, email, phone, role, status, avatar_url`,
+     RETURNING id, full_name, email, phone, role, status`,
     values
   );
 

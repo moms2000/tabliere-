@@ -27,6 +27,7 @@ export const error = (res, message = "Erreur serveur", statusCode = 500, errors 
 
 export const notFound  = (res, msg = "Ressource introuvable") => error(res, msg, 404);
 export const forbidden = (res, msg = "Accès refusé")          => error(res, msg, 403);
-export const unauth    = (res, msg = "Non authentifié")        => error(res, msg, 401);
+export const unauth        = (res, msg = "Non authentifié")        => error(res, msg, 401);
+export const unauthorized  = unauth; // alias pour compatibilité
 export const badRequest= (res, msg, errs = null)               => error(res, msg, 400, errs);
 export const conflict  = (res, msg = "Conflit de données")     => error(res, msg, 409);

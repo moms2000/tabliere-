@@ -11,10 +11,16 @@ export const authenticate = async (req, res, next) => {
     if (!header?.startsWith("Bearer ")) return unauth(res, "Token manquant");
 
     const token = header.split(" ")[1];
+
+    // Vérifier si le token est révoqué (blacklist Redis)
+    const revoked = await cache.get(`blacklist:${token}`).catch(() => null);
+    if (revoked) return unauth(res, "Token révoqué");
+
     const decoded = jwt.verify(token, env.jwt.secret);
 
     // Cache user pour éviter une requête DB à chaque requête
-    let user = await cache.get(`user:${decoded.id}`).catch(() => null);
+    const cacheKey = `user:${decoded.id}`;
+    let user = await cache.get(cacheKey).catch(() => null);
 
     if (!user) {
       const { rows } = await query(
@@ -23,7 +29,7 @@ export const authenticate = async (req, res, next) => {
       );
       if (!rows[0]) return unauth(res, "Utilisateur introuvable");
       user = rows[0];
-      await cache.set(`user:${decoded.id}`, user, 300).catch(() => {});
+      await cache.set(cacheKey, user, 300).catch(() => {}); // cache 5 minutes
     }
 
     if (user.status === "suspendu") return forbidden(res, "Compte suspendu");
@@ -32,9 +38,6 @@ export const authenticate = async (req, res, next) => {
     req.token = token;
     next();
   } catch (err) {
-    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
-      return unauth(res, "Token invalide ou expiré");
-    }
     next(err);
   }
 };
@@ -47,14 +50,25 @@ export const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
-// Compatibilité — ces fonctions sont aussi dans auth.controller.js (inline)
+// Génération des tokens
 export const generateTokens = (userId, role) => {
-  const jwt_module = jwt;
-  const access = jwt_module.sign({ id: userId, role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
-  const refresh = jwt_module.sign({ id: userId, role, type: "refresh" }, env.jwt.secret, { expiresIn: env.jwt.refreshExpires });
+  const access = jwt.sign(
+    { id: userId, role },
+    env.jwt.secret,
+    { expiresIn: env.jwt.expiresIn }
+  );
+  const refresh = jwt.sign(
+    { id: userId, role, type: "refresh" },
+    env.jwt.secret,
+    { expiresIn: env.jwt.refreshExpires }
+  );
   return { access, refresh };
 };
 
-export const revokeToken = async (_token) => {
-  // No-op simplifié — tokens expireront naturellement
+// Révoquer un token (logout)
+export const revokeToken = async (token) => {
+  const decoded = jwt.decode(token);
+  if (!decoded?.exp) return;
+  const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+  if (ttl > 0) await cache.set(`blacklist:${token}`, "1", ttl).catch(() => {});
 };

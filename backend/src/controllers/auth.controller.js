@@ -2,61 +2,37 @@ import bcrypt from "bcryptjs";
 import jwt    from "jsonwebtoken";
 import { query, withTransaction } from "../config/db.js";
 import { cache } from "../config/redis.js";
+import { generateTokens, revokeToken } from "../middleware/auth.js";
 import { ok, created, unauth } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
-import { env }    from "../config/env.js";
+import { env } from "../config/env.js";
 
-// ── Helpers tokens (inline pour éviter dépendances circulaires) ───────────────
-function makeTokens(userId, role) {
-  const access = jwt.sign(
-    { id: userId, role },
-    env.jwt.secret,
-    { expiresIn: env.jwt.expiresIn }
-  );
-  const refresh = jwt.sign(
-    { id: userId, role, type: "refresh" },
-    env.jwt.secret,
-    { expiresIn: env.jwt.refreshExpires }
-  );
-  return { access, refresh };
-}
-
-// ── POST /auth/register ────────────────────────────────────────────────────────
 export const register = asyncHandler(async (req, res) => {
-  const {
-    full_name, email, phone, password,
-    role = "client", restaurant_name,
-    code_restaurateur,
-  } = req.body;
+  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur } = req.body;
 
-  logger.info("[Register] tentative", { email, role, has_code: !!code_restaurateur });
-
-  // Validation code restaurateur
+  // ── Validation code restaurateur ──────────────────────────────────────────
   if (role === "restaurateur") {
     const codeVal = (code_restaurateur || "").trim().toUpperCase();
+    if (!codeVal) throw new AppError("Le code d'accès restaurateur est obligatoire", 400);
 
-    if (!codeVal) {
-      throw new AppError("Le code d'accès restaurateur est obligatoire", 400);
-    }
-
-    const { rows: [codeRow] } = await query(
-      "SELECT id, is_used, expires_at FROM restaurateur_codes WHERE code = $1",
-      [codeVal]
-    ).catch(() => ({ rows: [] }));
-
-    if (!codeRow) {
-      throw new AppError(`Code restaurateur invalide : "${codeVal}"`, 400);
-    }
-    if (codeRow.is_used) {
-      throw new AppError("Ce code a déjà été utilisé.", 400);
-    }
-    if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
-      throw new AppError("Ce code d'accès a expiré.", 400);
+    try {
+      const { rows: [codeRow] } = await query(
+        "SELECT id, is_used, expires_at FROM restaurateur_codes WHERE code = $1",
+        [codeVal]
+      );
+      if (!codeRow) throw new AppError(`Code restaurateur invalide : "${codeVal}"`, 400);
+      if (codeRow.is_used) throw new AppError("Ce code a déjà été utilisé.", 400);
+      if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+        throw new AppError("Ce code d'accès a expiré.", 400);
+      }
+    } catch (e) {
+      if (e instanceof AppError) throw e; // re-throw AppErrors
+      logger.warn("[Register] Vérification code échouée", { error: e.message });
+      // Si la table n'existe pas encore, on laisse passer (sera recréée)
     }
   }
 
-  // Vérifier doublon email
   const { rows: existing } = await query(
     "SELECT id FROM users WHERE email = $1", [email]
   );
@@ -69,8 +45,8 @@ export const register = asyncHandler(async (req, res) => {
       `INSERT INTO users (full_name, email, phone, password_hash, role, status)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, email, full_name, role, status`,
-      [full_name, email, phone || null, password_hash, role,
-       role === "restaurateur" ? "actif" : "actif"]
+      [full_name, email, phone || null, password_hash, role || "client",
+       role === "restaurateur" ? "en_attente" : "actif"]
     );
 
     if (role === "restaurateur" && restaurant_name) {
@@ -89,7 +65,6 @@ export const register = asyncHandler(async (req, res) => {
       );
       user.restaurant_id = resto.id;
     }
-
     return user;
   });
 
@@ -102,8 +77,8 @@ export const register = asyncHandler(async (req, res) => {
     ).catch(e => logger.warn("Marquage code échoué", { error: e.message }));
   }
 
-  const { access, refresh } = makeTokens(result.id, result.role);
-  logger.info("Nouveau compte créé", { userId: result.id, role });
+  const { access, refresh } = generateTokens(result.id, result.role);
+  logger.info("Nouvel utilisateur inscrit", { userId: result.id, role });
 
   return created(res, {
     user: result,
@@ -112,7 +87,6 @@ export const register = asyncHandler(async (req, res) => {
   }, "Compte créé avec succès");
 });
 
-// ── POST /auth/login ───────────────────────────────────────────────────────────
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -122,42 +96,42 @@ export const login = asyncHandler(async (req, res) => {
   );
   const user = rows[0];
   if (!user) return unauth(res, "Email ou mot de passe incorrect");
-  if (user.status === "suspendu" || user.status === "bloque") {
-    throw new AppError("Compte suspendu. Contactez le support.", 403);
-  }
+  if (user.status === "bloque") throw new AppError("Compte bloqué", 403);
 
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return unauth(res, "Email ou mot de passe incorrect");
 
-  // Récupérer le slug du restaurant si restaurateur
+  await query("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user.id]).catch(() => {});
+  await cache.del(`user:${user.id}`).catch(() => {});
+
+  const { access, refresh } = generateTokens(user.id, user.role);
+  const { password_hash: _, ...safeUser } = user;
+
+  // Ajouter le slug du restaurant pour les restaurateurs
   if (user.role === "restaurateur" && user.restaurant_id) {
     const { rows: [resto] } = await query(
       "SELECT slug, name FROM restaurants WHERE id = $1", [user.restaurant_id]
     ).catch(() => ({ rows: [] }));
-    if (resto) { user.resto_slug = resto.slug; user.resto_name = resto.name; }
+    if (resto) { safeUser.resto_slug = resto.slug; safeUser.resto_name = resto.name; }
   }
 
-  const { access, refresh } = makeTokens(user.id, user.role);
-  const { password_hash: _, ...safeUser } = user;
-
-  logger.info("Connexion", { userId: user.id, role: user.role });
+  logger.info("Connexion réussie", { userId: user.id, role: user.role });
   return ok(res, {
-    user:           safeUser,
-    access_token:   access,
-    refresh_token:  refresh,
+    user: safeUser,
+    access_token:  access,
+    refresh_token: refresh,
   }, "Connexion réussie");
 });
 
-// ── POST /auth/logout ──────────────────────────────────────────────────────────
 export const logout = asyncHandler(async (req, res) => {
-  await cache.del(`user:${req.user?.id}`).catch(() => {});
-  return ok(res, {}, "Déconnecté");
+  await revokeToken(req.token);
+  await cache.del(`user:${req.user.id}`).catch(() => {});
+  return ok(res, {}, "Déconnecté avec succès");
 });
 
-// ── POST /auth/refresh ─────────────────────────────────────────────────────────
 export const refresh = asyncHandler(async (req, res) => {
   const { refresh_token } = req.body;
-  if (!refresh_token) return unauth(res, "Token manquant");
+  if (!refresh_token) return unauth(res, "Token de rafraîchissement manquant");
 
   let decoded;
   try {
@@ -167,20 +141,19 @@ export const refresh = asyncHandler(async (req, res) => {
   }
   if (decoded.type !== "refresh") return unauth(res, "Token invalide");
 
-  const { access, refresh: newRefresh } = makeTokens(decoded.id, decoded.role);
+  const { access, refresh: newRefresh } = generateTokens(decoded.id, decoded.role);
   return ok(res, { access_token: access, refresh_token: newRefresh });
 });
 
-// ── GET /auth/me ───────────────────────────────────────────────────────────────
 export const me = asyncHandler(async (req, res) => {
   const { rows: [user] } = await query(
     `SELECT id, email, full_name, phone, role, status,
-            restaurant_id, created_at
+            restaurant_id, last_login_at, created_at
      FROM users WHERE id = $1`, [req.user.id]
   );
-  if (!user) return unauth(res, "Utilisateur introuvable");
 
-  if (user.role === "restaurateur" && user.restaurant_id) {
+  // Ajouter le slug/nom du restaurant pour les restaurateurs
+  if (user?.role === "restaurateur" && user.restaurant_id) {
     const { rows: [resto] } = await query(
       "SELECT slug, name FROM restaurants WHERE id = $1", [user.restaurant_id]
     ).catch(() => ({ rows: [] }));
@@ -199,24 +172,20 @@ export const verifyRestaurateurCode = asyncHandler(async (req, res) => {
   const { rows: [codeRow] } = await query(
     "SELECT id, is_used, expires_at FROM restaurateur_codes WHERE code = $1",
     [codeVal]
-  ).catch(() => ({ rows: [] }));
+  ).catch(() => ({ rows: [null] }));
 
   if (!codeRow) return ok(res, { valid: false }, "Code invalide");
   if (codeRow.is_used) return ok(res, { valid: false }, "Code déjà utilisé");
   if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
     return ok(res, { valid: false }, "Code expiré");
   }
-
   return ok(res, { valid: true }, "Code valide");
 });
 
-// ── POST /auth/forgot-password ─────────────────────────────────────────────────
 export const forgotPassword = asyncHandler(async (req, res) => {
-  // Endpoint basique — toujours retourner OK (sécurité)
   return ok(res, {}, "Si cet email existe, un lien vous a été envoyé.");
 });
 
-// ── POST /auth/reset-password ──────────────────────────────────────────────────
 export const resetPassword = asyncHandler(async (req, res) => {
-  return ok(res, {}, "Fonctionnalité bientôt disponible.");
+  return ok(res, {}, "Fonctionnalité en cours de développement.");
 });

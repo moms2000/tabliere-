@@ -74,6 +74,42 @@ async function runBusinessMigrations() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_reviews_restaurant ON reviews(restaurant_id)`,
     `CREATE INDEX IF NOT EXISTS idx_reviews_client     ON reviews(client_id)`,
+
+    // ── Chat, notifications in-app, liste d'attente (migration 002) ──────────
+    `CREATE TABLE IF NOT EXISTS messages (
+       id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       reservation_id UUID NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+       sender_id      UUID NOT NULL REFERENCES users(id)        ON DELETE CASCADE,
+       content        TEXT NOT NULL,
+       is_read        BOOLEAN NOT NULL DEFAULT false,
+       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_reservation ON messages(reservation_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_sender      ON messages(sender_id, is_read)`,
+    `CREATE TABLE IF NOT EXISTS user_notifications (
+       id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       type       VARCHAR(40) NOT NULL DEFAULT 'info',
+       title      VARCHAR(120) NOT NULL,
+       body       TEXT,
+       meta       JSONB,
+       is_read    BOOLEAN NOT NULL DEFAULT false,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_user_notif_user ON user_notifications(user_id, is_read, created_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS waitlist (
+       id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+       user_id       UUID REFERENCES users(id) ON DELETE SET NULL,
+       client_name   VARCHAR(100) NOT NULL,
+       client_phone  VARCHAR(30),
+       party_size    INTEGER NOT NULL DEFAULT 2,
+       preferred_at  TIMESTAMPTZ,
+       status        VARCHAR(20) NOT NULL DEFAULT 'waiting',
+       notified_at   TIMESTAMPTZ,
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_waitlist_resto ON waitlist(restaurant_id, status)`,
   ];
 
   for (const sql of stmts) {

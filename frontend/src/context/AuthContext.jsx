@@ -38,8 +38,17 @@ export function AuthProvider({ children }) {
     return res;
   }, []);
 
+  // Recharger l'utilisateur depuis le serveur (après mise à jour profil/avatar)
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await authService.me();
+      setUser(u);
+      return u;
+    } catch (_) { return null; }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, register, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

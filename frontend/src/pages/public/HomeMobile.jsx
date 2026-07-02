@@ -251,8 +251,8 @@ export default function HomeMobile() {
                   border: `2px solid ${P}`, cursor: "pointer", overflow: "hidden",
                   background: P + "22", display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0 }}>
-                {localStorage.getItem("tci_avatar") ? (
-                  <img src={localStorage.getItem("tci_avatar")} alt=""
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt=""
                     style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <span style={{ fontSize: 14, fontWeight: 700, color: P }}>

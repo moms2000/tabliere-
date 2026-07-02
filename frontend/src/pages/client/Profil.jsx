@@ -83,15 +83,22 @@ const fmtRelative = (dt) => {
 export default function Profil() {
   const navigate   = useNavigate();
   const location   = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { lang, t, changeLang, langs } = useLang();
 
   // Onglet initial depuis ?tab=xxx
   const urlTab = new URLSearchParams(location.search).get("tab") || "profile";
   const [tab, setTab] = useState(urlTab);
 
-  const [photo,        setPhoto]        = useState(() => localStorage.getItem("tci_avatar") || null);
+  // Photo de profil : liée au COMPTE (user.avatar_url en DB), pas au navigateur
+  const [photo,        setPhoto]        = useState(user?.avatar_url || null);
   const [form,         setForm]         = useState({ nom: user?.full_name || "", phone: user?.phone || "" });
+
+  // Synchroniser avec le compte connecté (change quand on change de compte)
+  useEffect(() => {
+    setPhoto(user?.avatar_url || null);
+    setForm({ nom: user?.full_name || "", phone: user?.phone || "" });
+  }, [user?.id, user?.avatar_url, user?.full_name, user?.phone]);
   const [saved,        setSaved]        = useState(true);
   const [showLang,     setShowLang]     = useState(false);
   const [reservations, setReservations] = useState([]);
@@ -163,7 +170,8 @@ export default function Profil() {
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         const b64 = canvas.toDataURL("image/jpeg", 0.78);
         setPhoto(b64);
-        localStorage.setItem("tci_avatar", b64);
+        // Pas de localStorage global : la photo sera persistée en DB
+        // (user.avatar_url) à la sauvegarde → propre à chaque compte
         setSaved(false); // ← active le bouton Sauvegarder
       };
       img.src = ev.target.result;
@@ -360,7 +368,9 @@ export default function Profil() {
                       avatar_url: photo      || undefined,
                     };
                     await api.patch("/users/me", payload);
-                    if (photo) localStorage.setItem("tci_avatar", photo);
+                    // Photo persistée en DB (user.avatar_url) — propre au compte.
+                    // Recharger le user pour synchroniser avatar dans toute l'app.
+                    await refreshUser?.();
                     setSaved(true);
                   } catch (e) {
                     alert(e.response?.data?.message || "Erreur lors de la sauvegarde");

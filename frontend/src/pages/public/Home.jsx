@@ -832,8 +832,8 @@ export default function Home() {
                   padding: "5px 10px 5px 5px", background: WHITE, cursor: "pointer", fontFamily: FONT }}>
                 <div style={{ width: 26, height: 26, borderRadius: "50%", background: P,
                   display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {localStorage.getItem("tci_avatar")
-                    ? <img src={localStorage.getItem("tci_avatar")} alt=""
+                  {user?.avatar_url
+                    ? <img src={user.avatar_url} alt=""
                         style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     : <User size={13} color="white" />}
                 </div>

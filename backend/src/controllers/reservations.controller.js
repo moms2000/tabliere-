@@ -425,7 +425,7 @@ export const createGuest = asyncHandler(async (req, res) => {
   if (!walk_in_phone?.trim()) throw new AppError("Le numéro de téléphone est requis pour une réservation sans compte", 400);
 
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status = 'actif'",
+    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status IN ('actif','en_attente')",
     [restaurant_id]
   );
   if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
@@ -464,6 +464,14 @@ export const createGuest = asyncHandler(async (req, res) => {
     [nextref, restaurant_id, clientId, table_id || null, reserved_at, party_size,
      special_request || null, walk_in_name, walk_in_phone || null]
   );
+
+  // Marquer la table comme réservée (si une table a été assignée)
+  if (table_id) {
+    await query(
+      "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1 AND restaurant_id = $2",
+      [table_id, restaurant_id]
+    ).catch(() => {});
+  }
 
   // SSE → restaurateur
   try {

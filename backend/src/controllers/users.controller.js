@@ -42,7 +42,7 @@ export const myReservations = asyncHandler(async (req, res) => {
 // PATCH /users/me
 // ---------------------------------------------------------------------------
 export const updateProfile = asyncHandler(async (req, res) => {
-  const allowed = ["full_name", "phone", "password"];
+  const allowed = ["full_name", "phone", "password", "avatar_url"];
   const updates = [];
   const values  = [];
 
@@ -66,7 +66,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const { rows: [user] } = await query(
     `UPDATE users SET ${updates.join(", ")}, updated_at = NOW()
      WHERE id = $${values.length}
-     RETURNING id, full_name, email, phone, role, status`,
+     RETURNING id, full_name, email, phone, role, status, avatar_url`,
     values
   );
 

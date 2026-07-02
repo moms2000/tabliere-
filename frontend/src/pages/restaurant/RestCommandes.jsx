@@ -204,7 +204,7 @@ export default function RestCommandes() {
     });
     setEditOrder(order);
     setEditCart(cart);
-    setEditNote(order.notes || "");
+    setEditNote(order.note || "");  // colonne DB = 'note' (singulier)
   };
 
   const editItems  = Object.values(editCart);
@@ -227,7 +227,7 @@ export default function RestCommandes() {
       }));
       await ordersService.updateItems(editOrder.id, items, editNote);
       setOrders(prev => prev.map(o => o.id === editOrder.id
-        ? { ...o, items, total: editTotal, notes: editNote }
+        ? { ...o, items, total: editTotal, note: editNote }
         : o
       ));
       setEditOrder(null);

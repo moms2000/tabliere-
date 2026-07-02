@@ -168,8 +168,8 @@ export const list = asyncHandler(async (req, res) => {
             COALESCE(r.walk_in_phone, u.phone)    AS client_phone,
             t.label AS table_label, t.zone AS table_zone
      FROM reservations r
-     JOIN restaurants re ON re.id = r.restaurant_id
-     JOIN users u ON u.id = r.client_id
+     LEFT JOIN restaurants re ON re.id = r.restaurant_id
+     LEFT JOIN users u ON u.id = r.client_id
      LEFT JOIN restaurant_tables t ON t.id = r.table_id
      ${where}
      ORDER BY r.reserved_at DESC

@@ -10,13 +10,15 @@ import { logger }           from "../utils/logger.js";
 // GET /users/me/reservations
 // ---------------------------------------------------------------------------
 export const myReservations = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status } = req.query;
+  const { page = 1, limit = 100, status } = req.query;
   const offset = (page - 1) * limit;
   const params = [req.user.id];
   let where = "WHERE r.client_id = $1";
 
   if (status) { params.push(status); where += ` AND r.status = $${params.length}`; }
 
+  // LEFT JOIN pour ne JAMAIS perdre une réservation même si le restaurant
+  // a été supprimé/désactivé → l'historique du client reste complet
   const { rows } = await query(
     `SELECT r.id, r.ref, r.status, r.reserved_at, r.party_size,
             r.special_request, r.cancel_reason,
@@ -24,7 +26,7 @@ export const myReservations = asyncHandler(async (req, res) => {
             re.address, re.phone AS resto_phone,
             p.status AS payment_status, p.method AS payment_method
      FROM reservations r
-     JOIN restaurants re ON re.id = r.restaurant_id
+     LEFT JOIN restaurants re ON re.id = r.restaurant_id
      LEFT JOIN payments p ON p.reservation_id = r.id
      ${where}
      ORDER BY r.reserved_at DESC

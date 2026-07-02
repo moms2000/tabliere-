@@ -437,7 +437,7 @@ export default function RestMenu() {
                 value={(formItem.options?.cuissons || []).join(", ")}
                 onChange={e => setFormItem(p => ({
                   ...p, options: { ...p.options,
-                    cuissons: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }
+                    cuissons: e.target.value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean) }
                 }))}
                 placeholder="Saignant, À point, Bien cuit" />
             </FormField>
@@ -446,7 +446,7 @@ export default function RestMenu() {
                 value={(formItem.options?.accompagnements || []).join(", ")}
                 onChange={e => setFormItem(p => ({
                   ...p, options: { ...p.options,
-                    accompagnements: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }
+                    accompagnements: e.target.value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean) }
                 }))}
                 placeholder="Frites, Riz, Attiéké, Salade" />
             </FormField>

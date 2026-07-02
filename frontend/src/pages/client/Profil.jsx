@@ -62,6 +62,15 @@ const fmtDate = (dt) => dt
   ? new Date(dt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
   : "—";
 
+// Date + heure pour les réservations (ex: "03 juillet 2026 à 19h00")
+const fmtDateTime = (dt) => {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  const date = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+  const heure = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  return `${date} à ${heure}`;
+};
+
 const fmtRelative = (dt) => {
   if (!dt) return "";
   const diff = (Date.now() - new Date(dt)) / 1000;
@@ -435,7 +444,7 @@ export default function Profil() {
                           {r.restaurant_name || r.resto_name || "—"}
                         </div>
                         <div style={{ fontSize: 12, color: "#888", marginTop: 1 }}>
-                          {fmtDate(r.reserved_at)} · {r.party_size} pers.
+                          {fmtDateTime(r.reserved_at)} · {r.party_size} pers.
                         </div>
                         {r.ref && (
                           <div style={{ fontSize: 11, color: "#bbb", marginTop: 2, fontFamily: "monospace" }}>

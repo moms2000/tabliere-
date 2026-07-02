@@ -271,7 +271,19 @@ export default function ClientMenu() {
 
   const parseOpts = (item) => {
     if (!item?.options) return null;
-    try { return typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; }
+    let opts;
+    try { opts = typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; }
+    if (!opts) return null;
+    // Normaliser : re-découper chaque entrée sur , ; ou retour ligne
+    // (corrige les anciennes données saisies avec ; au lieu de ,)
+    const splitAll = (arr) => (Array.isArray(arr) ? arr : [])
+      .flatMap(s => String(s).split(/[,;\n]/))
+      .map(s => s.trim()).filter(Boolean);
+    return {
+      ...opts,
+      cuissons:        splitAll(opts.cuissons),
+      accompagnements: splitAll(opts.accompagnements),
+    };
   };
 
   const addItemToCart = () => {

@@ -108,9 +108,10 @@ export const create = asyncHandler(async (req, res) => {
   });
 
   // SSE temps réel → restaurateur (récupérer l'owner du resto)
+  // Utilise resa.restaurant_id (garanti après INSERT) et non le param brut
   try {
     const { rows: [owner] } = await query(
-      "SELECT owner_id FROM restaurants WHERE id = $1", [restaurant_id]
+      "SELECT owner_id FROM restaurants WHERE id = $1", [resa.restaurant_id]
     );
     if (owner?.owner_id) {
       emitToUser(owner.owner_id, "new_reservation", {

@@ -53,11 +53,9 @@ export default function QRThemes() {
     setThemeMap(p => ({ ...p, [selected.id]: themeId }));
     try {
       const color = THEMES.find(t => t.id === themeId)?.primary || "#1D9E75";
-      // Persiste theme_color en DB via PATCH /admin/restaurants/:id
-      await import("../../services/api.js").then(({ default: api }) =>
-        api.patch(`/admin/restaurants/${selected.id}/theme`, { theme_color: color })
-          .catch(() => api.patch(`/restaurants/${selected.id}`, { theme_color: color }))
-      );
+      // Persiste theme_color en DB (l'admin passe _assertOwnerOrAdmin)
+      const { default: api } = await import("../../services/api.js");
+      await api.patch(`/restaurants/${selected.id}`, { theme_color: color });
     } catch (_) {}
   };
 

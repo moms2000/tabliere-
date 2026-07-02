@@ -249,10 +249,9 @@ export default function Inscription() {
             Vous n'avez pas reçu l'email ?{" "}
             <button onClick={async () => {
               try {
-                const res = await fetch((import.meta.env.VITE_API_URL || "/api/v1") + "/auth/resend-verification",
-                  { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ email: form.email }) });
-                alert("E-mail renvoyé !");
-              } catch (_) { alert("E-mail renvoyé !"); }
+                await api.post("/auth/resend-verification", { email: form.email });
+              } catch (_) {}
+              alert("E-mail renvoyé ! Vérifiez votre boîte de réception (et les spams).");
             }} style={{ background: "none", border: "none", color: P, cursor: "pointer",
               fontSize: 12, fontWeight: 600, textDecoration: "underline" }}>
               Renvoyer

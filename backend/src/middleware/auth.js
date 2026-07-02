@@ -32,7 +32,7 @@ export const authenticate = async (req, res, next) => {
       await cache.set(cacheKey, user, 300).catch(() => {}); // cache 5 minutes
     }
 
-    if (user.status === "suspendu") return forbidden(res, "Compte suspendu");
+    if (["suspendu", "bloque"].includes(user.status)) return forbidden(res, "Compte suspendu");
 
     req.user  = user;
     req.token = token;

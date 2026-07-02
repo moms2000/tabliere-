@@ -13,10 +13,13 @@ router.get("/:slug", ctrl.getPublicMenu);
 const itemSchema = Joi.object({
   category_id:  Joi.string().uuid().required(),
   name:         Joi.string().min(2).max(255).required(),
-  description:  Joi.string().max(1000).optional(),
+  description:  Joi.string().max(1000).optional().allow("", null),
   price:        Joi.number().integer().min(0).required(),
   is_active:    Joi.boolean().default(true),
+  is_available: Joi.boolean().optional(),
   position:     Joi.number().integer().default(0),
+  image_url:    Joi.string().optional().allow("", null),   // photo du plat (URL ou base64)
+  options:      Joi.any().optional(),                       // cuissons / accompagnements (JSONB)
 });
 
 router.get   ("/:slug/manage",    authenticate, authorize("restaurateur","admin"), ctrl.getFullMenu);

@@ -130,6 +130,10 @@ export const update = asyncHandler(async (req, res) => {
   const ALLOWED = [
     "name","description","cuisine_type","address","quartier","ville",
     "phone","email","website","opening_hours","price_range","capacity","theme_color","logo_url","photos",
+    // Activation/désactivation QR par le restaurateur
+    "qr_active",
+    // Créneaux de service + nombre de tables par taille de groupe
+    "lunch_hours","dinner_hours","tables_2","tables_4","tables_6","tables_8",
   ];
   const updates = [];
   const values  = [];
@@ -154,6 +158,14 @@ export const update = asyncHandler(async (req, res) => {
       } else if (typeof val === "object") {
         val = JSON.stringify(val);
       }
+    }
+    // Champs INTEGER (nombre de tables) : "" → 0, sinon cast numérique
+    if (["tables_2","tables_4","tables_6","tables_8","capacity"].includes(field)) {
+      val = (val === "" || val === null) ? 0 : (parseInt(val, 10) || 0);
+    }
+    // qr_active : booléen strict
+    if (field === "qr_active") {
+      val = (val === true || val === "true" || val === 1);
     }
     values.push(val);
     updates.push(`${field} = $${values.length}`);
@@ -219,6 +231,13 @@ async function ensureRestaurantColumns() {
   try {
     await query(`
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS logo_url TEXT;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS qr_active     BOOLEAN DEFAULT FALSE;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lunch_hours   VARCHAR(100);
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS dinner_hours  VARCHAR(100);
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_2      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_4      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_6      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_8      INTEGER DEFAULT 0;
     `);
   } catch (_) {}
   restaurantMigrated = true;

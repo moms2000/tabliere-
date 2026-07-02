@@ -6,17 +6,32 @@ export const ok = (res, data = {}, message = "Succès", statusCode = 200) =>
 export const created = (res, data = {}, message = "Créé avec succès") =>
   res.status(201).json({ success: true, message, data });
 
-export const paginated = (res, data, meta) =>
-  res.status(200).json({
-    success: true,
+/**
+ * Réponse paginée — accepte DEUX signatures pour compatibilité :
+ *   paginated(res, data, { page, limit, total })          ← objet meta
+ *   paginated(res, data, total, page, limit)              ← positionnel
+ * Renvoie à la fois `pagination` ET `meta` (alias) car le frontend
+ * lit `pagination` partout mais d'anciens appels attendaient `meta`.
+ */
+export const paginated = (res, data, metaOrTotal, page, limit) => {
+  let total, p, l;
+  if (metaOrTotal !== null && typeof metaOrTotal === "object") {
+    total = metaOrTotal.total; p = metaOrTotal.page; l = metaOrTotal.limit;
+  } else {
+    total = metaOrTotal; p = page; l = limit;
+  }
+  total = Number(total) || 0;
+  p     = Number(p) || 1;
+  l     = Number(l) || 20;
+  const pages = Math.max(1, Math.ceil(total / l));
+  const info  = { page: p, limit: l, total, pages, totalPages: pages };
+  return res.status(200).json({
+    success:    true,
     data,
-    meta: {
-      page:       meta.page,
-      limit:      meta.limit,
-      total:      meta.total,
-      totalPages: Math.ceil(meta.total / meta.limit),
-    },
+    pagination: info,   // ← clé lue par le frontend
+    meta:       info,   // ← alias rétro-compatible
   });
+};
 
 export const error = (res, message = "Erreur serveur", statusCode = 500, errors = null) =>
   res.status(statusCode).json({

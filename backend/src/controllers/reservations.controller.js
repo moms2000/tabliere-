@@ -214,9 +214,7 @@ export const confirm = asyncHandler(async (req, res) => {
   );
   if (!resa) return notFound(res, "Réservation introuvable");
 
-  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
-    throw new AppError("Accès refusé", 403);
-  }
+  await assertOwnsReservation(req, resa);
   if (resa.status !== "en_attente") throw new AppError("Seules les réservations en attente peuvent être confirmées", 400);
 
   // Vérifier que la table appartient bien au restaurant et est libre
@@ -282,9 +280,7 @@ export const assignTable = asyncHandler(async (req, res) => {
   );
   if (!resa) return notFound(res, "Réservation introuvable");
 
-  if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
-    throw new AppError("Accès refusé", 403);
-  }
+  await assertOwnsReservation(req, resa);
 
   // Vérifier la table
   const { rows: [tbl] } = await query(
@@ -499,5 +495,25 @@ function _assertAccess(req, resa) {
   if (req.user.role === "admin") return;
   if (req.user.role === "restaurateur" && req.user.restaurant_id === resa.restaurant_id) return;
   if (req.user.id === resa.client_id) return;
+  throw new AppError("Accès refusé", 403);
+}
+
+/**
+ * Vérification d'accès ROBUSTE via owner_id (async).
+ * Fiable même si req.user.restaurant_id est NULL ou périmé en cache Redis.
+ * Utilisée pour les actions restaurateur sur les réservations.
+ */
+async function assertOwnsReservation(req, resa) {
+  if (req.user.role === "admin") return;
+  if (req.user.id === resa.client_id) return;
+  if (req.user.role === "restaurateur") {
+    if (req.user.restaurant_id && req.user.restaurant_id === resa.restaurant_id) return;
+    // Fallback fiable : le resto de la résa appartient-il au user ?
+    const { rows: [own] } = await query(
+      "SELECT 1 FROM restaurants WHERE id = $1 AND owner_id = $2",
+      [resa.restaurant_id, req.user.id]
+    );
+    if (own) return;
+  }
   throw new AppError("Accès refusé", 403);
 }

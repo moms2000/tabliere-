@@ -9,7 +9,10 @@ const router = Router();
 const tableSchema = Joi.object({
   label:    Joi.string().min(1).max(20).required(),
   capacity: Joi.number().integer().min(1).max(30).default(2),
-  zone:     Joi.string().valid("interieur","terrasse","salon_prive").default("interieur"),
+  zone:     Joi.string().valid("interieur","terrasse","bar","vip","salon_prive").default("interieur"),
+  status:   Joi.string().optional(),
+  pos_x:    Joi.number().integer().optional(),
+  pos_y:    Joi.number().integer().optional(),
 });
 
 // ── Public ───────────────────────────────────────────────────────────────────

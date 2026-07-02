@@ -103,7 +103,7 @@ export const register = asyncHandler(async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, email, full_name, role, status`,
       [full_name, email, phone || null, password_hash, role || "client",
-       role === "restaurateur" ? "en_attente" : "actif"]
+       "actif"]  // compte actif immédiatement (restaurateur opérationnel dès l'inscription)
     );
 
     if (role === "restaurateur" && restaurant_name) {
@@ -113,7 +113,7 @@ export const register = asyncHandler(async (req, res) => {
 
       const { rows: [resto] } = await client.query(
         `INSERT INTO restaurants (owner_id, name, slug, status)
-         VALUES ($1, $2, $3, 'en_attente') RETURNING id`,
+         VALUES ($1, $2, $3, 'actif') RETURNING id`,  // resto actif → menu QR + liste publique immédiats
         [user.id, restaurant_name, slug]
       );
       await client.query(

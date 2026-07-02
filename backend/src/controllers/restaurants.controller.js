@@ -84,7 +84,7 @@ export const getOne = asyncHandler(async (req, res) => {
             u.email     AS owner_email
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
-     WHERE r.slug = $1 AND r.status = 'actif'`,
+     WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
@@ -277,6 +277,22 @@ export const createTable = asyncHandler(async (req, res) => {
   return created(res, { table }, "Table créée");
 });
 
+// Normalise un statut de table vers l'ENUM valide (libre/occupe/reserve)
+// Accepte accents, anglais, majuscules → évite les erreurs SQL 500
+function normalizeTableStatus(s) {
+  const v = String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (["reserve","reserved","reservee"].includes(v)) return "reserve";
+  if (["occupe","occupied","occupied"].includes(v))  return "occupe";
+  return "libre";
+}
+
+// Normalise une zone vers une valeur acceptée
+function normalizeZone(z) {
+  const v = String(z || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const allowed = ["interieur","terrasse","bar","vip","salon_prive"];
+  return allowed.includes(v) ? v : "interieur";
+}
+
 export const updateTable = asyncHandler(async (req, res) => {
   await ensureTableColumns();
   const ALLOWED = ["label","capacity","zone","status","is_active","pos_x","pos_y"];
@@ -285,7 +301,12 @@ export const updateTable = asyncHandler(async (req, res) => {
 
   for (const field of ALLOWED) {
     if (req.body[field] === undefined) continue;
-    values.push(req.body[field]);
+    let val = req.body[field];
+    // Normaliser status et zone pour éviter les valeurs ENUM invalides (500)
+    if (field === "status") val = normalizeTableStatus(val);
+    if (field === "zone")   val = normalizeZone(val);
+    if (["capacity","pos_x","pos_y"].includes(field)) val = parseInt(val, 10) || 0;
+    values.push(val);
     updates.push(`${field} = $${values.length}`);
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);

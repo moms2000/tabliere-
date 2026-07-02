@@ -35,7 +35,7 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
   const { rows: [resto] } = await query(
     `SELECT id, name, slug, description, cuisine_type, address, quartier,
             opening_hours, phone, theme_color, qr_active
-     FROM restaurants WHERE slug = $1 AND status = 'actif'`,
+     FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

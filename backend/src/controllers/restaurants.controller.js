@@ -299,6 +299,14 @@ function normalizeZone(z) {
 
 export const updateTable = asyncHandler(async (req, res) => {
   await ensureTableColumns();
+  // Vérifier l'ownership du restaurant (sinon IDOR : un restaurateur pourrait
+  // modifier les tables d'un autre resto via l'id d'URL)
+  const { rows: [resto] } = await query(
+    "SELECT id, owner_id FROM restaurants WHERE id = $1", [req.params.id]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+  _assertOwnerOrAdmin(req, resto);
+
   const ALLOWED = ["label","capacity","zone","status","is_active","pos_x","pos_y"];
   const updates = [];
   const values  = [];
@@ -315,10 +323,14 @@ export const updateTable = asyncHandler(async (req, res) => {
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);
 
+  // Scoper l'UPDATE au restaurant vérifié : la table doit lui appartenir
   values.push(req.params.tableId);
+  const tableIdx = values.length;
+  values.push(resto.id);
+  const restoIdx = values.length;
   const { rows: [table] } = await query(
     `UPDATE restaurant_tables SET ${updates.join(", ")}
-     WHERE id = $${values.length} RETURNING *`,
+     WHERE id = $${tableIdx} AND restaurant_id = $${restoIdx} RETURNING *`,
     values
   );
   if (!table) return notFound(res, "Table introuvable");
@@ -328,9 +340,16 @@ export const updateTable = asyncHandler(async (req, res) => {
 });
 
 export const deleteTable = asyncHandler(async (req, res) => {
+  // Vérifier l'ownership du restaurant avant de désactiver la table (anti-IDOR)
+  const { rows: [resto] } = await query(
+    "SELECT id, owner_id FROM restaurants WHERE id = $1", [req.params.id]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+  _assertOwnerOrAdmin(req, resto);
+
   const { rows: [table] } = await query(
-    "UPDATE restaurant_tables SET is_active = FALSE WHERE id = $1 RETURNING id",
-    [req.params.tableId]
+    "UPDATE restaurant_tables SET is_active = FALSE WHERE id = $1 AND restaurant_id = $2 RETURNING id",
+    [req.params.tableId, resto.id]
   );
   if (!table) return notFound(res, "Table introuvable");
   return ok(res, null, "Table désactivée");
@@ -369,8 +388,10 @@ export const generateTableQR = asyncHandler(async (req, res) => {
 
 // ── Disponibilités ─────────────────────────────────────────────────────────────
 export const getAvailability = asyncHandler(async (req, res) => {
-  const { date, party_size = 2 } = req.query;
+  const { date } = req.query;
   if (!date) throw new AppError("Paramètre 'date' requis (ex: 2025-08-15)", 400);
+  // Parse robuste : un party_size non numérique casserait la comparaison INTEGER (500)
+  const party_size = Math.max(1, parseInt(req.query.party_size, 10) || 2);
 
   const { rows: [resto] } = await query(
     "SELECT id FROM restaurants WHERE slug = $1 AND status = 'actif'",

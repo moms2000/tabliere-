@@ -56,8 +56,9 @@ export const listRestaurants = asyncHandler(async (req, res) => {
   const params = [];
   const conditions = [];
 
-  if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
-  if (plan)   { params.push(plan);   conditions.push(`r.plan = $${params.length}`); }
+  // Cast ::text : un filtre ENUM invalide (status/plan) donne 0 résultat, pas un 500
+  if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
+  if (plan)   { params.push(plan);   conditions.push(`r.plan::text = $${params.length}`); }
   if (search) { params.push(`%${search}%`); conditions.push(`r.name ILIKE $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -289,8 +290,9 @@ export const listPayments = asyncHandler(async (req, res) => {
   const params = [];
   const conditions = [];
 
-  if (method) { params.push(method); conditions.push(`p.method = $${params.length}`); }
-  if (status) { params.push(status); conditions.push(`p.status = $${params.length}`); }
+  // Cast ::text : filtre ENUM invalide (method/status) → 0 résultat, pas un 500
+  if (method) { params.push(method); conditions.push(`p.method::text = $${params.length}`); }
+  if (status) { params.push(status); conditions.push(`p.status::text = $${params.length}`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -319,7 +321,7 @@ export const listReservations = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
-  const where = status ? (params.push(status), `WHERE r.status = $1`) : "";
+  const where = status ? (params.push(status), `WHERE r.status::text = $1`) : "";
 
   const { rows } = await query(
     `SELECT r.*, re.name AS resto_name, u.full_name AS client_name
@@ -454,6 +456,16 @@ export const updateReservation = asyncHandler(async (req, res) => {
     "SELECT id FROM reservations WHERE id = $1", [req.params.id]
   );
   if (!resa) return notFound(res, "Réservation introuvable");
+
+  // Validation avant écriture (évite les 500 ENUM/CHECK)
+  const RESA_STATUSES = ["en_attente", "confirme", "annule", "no_show", "termine"];
+  if (req.body.status !== undefined && !RESA_STATUSES.includes(req.body.status)) {
+    throw new AppError("Statut de réservation invalide", 400);
+  }
+  if (req.body.party_size !== undefined) {
+    const n = parseInt(req.body.party_size, 10);
+    if (!Number.isFinite(n) || n <= 0) throw new AppError("Nombre de couverts invalide", 400);
+  }
 
   const ALLOWED = ["reserved_at","party_size","status","notes","special_request","table_id"];
   const updates = [];

@@ -216,7 +216,18 @@ export const refresh = asyncHandler(async (req, res) => {
   }
   if (decoded.type !== "refresh") return unauth(res, "Token invalide");
 
-  const { access, refresh: newRefresh } = generateTokens(decoded.id, decoded.role);
+  // Relire le rôle et le statut réels en base : sinon un compte rétrogradé ou
+  // suspendu conserverait ses anciens droits tant qu'il détient un refresh token
+  // (valable 30 jours). On régénère avec le rôle DB actuel.
+  const { rows: [user] } = await query(
+    "SELECT id, role, status FROM users WHERE id = $1", [decoded.id]
+  );
+  if (!user) return unauth(res, "Compte introuvable");
+  if (["suspendu", "bloque"].includes(user.status)) {
+    return unauth(res, "Compte suspendu");
+  }
+
+  const { access, refresh: newRefresh } = generateTokens(user.id, user.role);
   return ok(res, { access_token: access, refresh_token: newRefresh });
 });
 

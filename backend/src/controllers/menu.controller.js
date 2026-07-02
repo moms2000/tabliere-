@@ -123,6 +123,14 @@ export const createCategory = asyncHandler(async (req, res) => {
 
 // ── PATCH /menu/categories/:id ────────────────────────────────────────────────
 export const updateCategory = asyncHandler(async (req, res) => {
+  // Vérifier l'ownership AVANT toute modification (sinon IDOR : un restaurateur
+  // pourrait modifier les catégories d'un autre restaurant via l'id d'URL)
+  const { rows: [own] } = await query(
+    "SELECT restaurant_id FROM menu_categories WHERE id = $1", [req.params.id]
+  );
+  if (!own) return notFound(res, "Catégorie introuvable");
+  _assertOwnerOrAdmin(req, { id: own.restaurant_id });
+
   const ALLOWED = ["name", "position", "is_active"];
   const updates = [];
   const values  = [];

@@ -173,6 +173,17 @@ export const refund = asyncHandler(async (req, res) => {
     "SELECT * FROM payments WHERE id = $1", [req.params.id]
   );
   if (!payment) return notFound(res, "Paiement introuvable");
+
+  // Anti-IDOR : un restaurateur ne peut rembourser que les paiements de SON
+  // restaurant. L'admin peut tout rembourser.
+  if (req.user.role !== "admin") {
+    const { rows: [own] } = await query(
+      "SELECT 1 FROM restaurants WHERE id = $1 AND owner_id = $2",
+      [payment.restaurant_id, req.user.id]
+    );
+    if (!own) throw new AppError("Accès refusé à ce paiement", 403);
+  }
+
   if (payment.status !== "succes") throw new AppError("Seuls les paiements réussis peuvent être remboursés", 400);
 
   await withTransaction(async (client) => {

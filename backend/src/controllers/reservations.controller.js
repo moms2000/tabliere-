@@ -11,6 +11,10 @@ import { notificationQueue }      from "../queues/index.js";
 import { logger }                 from "../utils/logger.js";
 import { emitToUser }             from "../utils/sse.js";
 
+// Valeurs valides de l'ENUM resa_status — toute autre valeur écrite en base
+// déclenche une erreur 500 ("invalid input value for enum resa_status")
+const RESA_STATUSES = ["en_attente", "confirme", "annule", "no_show", "termine"];
+
 // Migration silencieuse : colonnes walk-in (une par une pour éviter les échecs silencieux)
 let resaMigrated = false;
 async function ensureResaColumns() {
@@ -170,7 +174,8 @@ export const list = asyncHandler(async (req, res) => {
     conditions.push(`r.client_id = $${params.length}`);
   }
 
-  if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
+  // Cast ::text côté colonne : un status invalide donne 0 résultat au lieu d'un 500
+  if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
   if (date)   { params.push(date);   conditions.push(`r.reserved_at::date = $${params.length}::date`); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -411,6 +416,15 @@ export const update = asyncHandler(async (req, res) => {
   if (!resa) return notFound(res, "Réservation introuvable");
   if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
     throw new AppError("Accès refusé", 403);
+  }
+
+  // Validation des valeurs sensibles avant écriture (évite les 500 ENUM/CHECK)
+  if (req.body.status !== undefined && !RESA_STATUSES.includes(req.body.status)) {
+    throw new AppError("Statut de réservation invalide", 400);
+  }
+  if (req.body.party_size !== undefined) {
+    const n = parseInt(req.body.party_size, 10);
+    if (!Number.isFinite(n) || n <= 0) throw new AppError("Nombre de couverts invalide", 400);
   }
 
   const ALLOWED = ["reserved_at","party_size","status","notes","special_request","table_id"];

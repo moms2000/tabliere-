@@ -56,4 +56,22 @@ export const env = {
   STRIPE_WEBHOOK_SECRET: optional("STRIPE_WEBHOOK_SECRET", ""),
 };
 
+// ── Garde-fou sécurité : en production, refuser le secret JWT par défaut ───────
+// JWT_SECRET signe TOUS les tokens (access + refresh). Sa valeur par défaut est
+// publique dans le code : un attaquant pourrait forger des tokens admin. On
+// refuse de démarrer si elle n'a pas été surchargée en production.
+// (JWT_REFRESH_SECRET n'est pas encore utilisé pour signer → simple avertissement,
+//  pour ne pas crasher un déploiement où seule JWT_SECRET est définie.)
+if (env.isProd) {
+  if (env.JWT_SECRET === "change_me_in_production_super_secret_key") {
+    throw new Error(
+      "[SÉCURITÉ] JWT_SECRET par défaut détecté en production. " +
+      "Définissez une valeur aléatoire forte (>=32 octets) dans les variables d'environnement avant de démarrer."
+    );
+  }
+  if (env.JWT_REFRESH_SECRET === "change_me_refresh_secret_key") {
+    console.warn("[SÉCURITÉ] JWT_REFRESH_SECRET utilise la valeur par défaut — à définir avant utilisation.");
+  }
+}
+
 export const config = env; // alias pour compatibilité avec qr.service.js

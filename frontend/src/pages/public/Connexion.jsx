@@ -370,16 +370,25 @@ function StepForm({ type, onBack }) {
 /* ── Composant principal ─────────────────────────────────────────────────────── */
 export default function Connexion() {
   const [step, setStep] = useState("choix"); // "choix" | "client" | "restaurateur"
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const nav = useNavigate();
+  const initialCheckDone = React.useRef(false);
 
-  // Si déjà connecté → rediriger vers le bon espace immédiatement
+  // Rediriger UNIQUEMENT si l'utilisateur est DÉJÀ connecté en arrivant sur
+  // la page (session existante). Pendant une tentative de connexion sur cette
+  // page, c'est handleSubmit qui gère la redirection APRÈS vérification du
+  // rôle (sinon un client se connectant sur l'espace restaurateur serait
+  // redirigé avant de voir le message d'erreur).
   React.useEffect(() => {
-    if (!user) return;
-    if (user.role === "admin")        nav("/admin",      { replace: true });
-    else if (user.role === "restaurateur") nav("/restaurant", { replace: true });
-    else                              nav("/",           { replace: true });
-  }, [user, nav]);
+    if (loading) return;                 // attendre le chargement de la session
+    if (initialCheckDone.current) return; // ne s'exécute qu'une fois
+    initialCheckDone.current = true;
+    if (user) {
+      if (user.role === "admin")             nav("/admin",      { replace: true });
+      else if (user.role === "restaurateur") nav("/restaurant", { replace: true });
+      else                                   nav("/",           { replace: true });
+    }
+  }, [loading, user, nav]);
 
   return (
     <AnimatePresence mode="wait">

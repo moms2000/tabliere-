@@ -252,6 +252,7 @@ async function ensureTableColumns() {
       ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_x INTEGER DEFAULT 20;
       ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_y INTEGER DEFAULT 20;
       ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS qr_url TEXT;
+      ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     `);
   } catch (_) {}
   tablesMigrated = true;

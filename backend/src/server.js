@@ -22,10 +22,11 @@ async function runStartupMigrations() {
     `ALTER TABLE restaurants ALTER COLUMN qr_code_url TYPE TEXT`,
     // Utilisateurs — avatar_url élargi
     `ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT`,
-    // Tables — colonne QR URL
+    // Tables — colonne QR URL + updated_at (requis par le trigger trg_updated_at)
     `ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_x   INTEGER DEFAULT 20`,
     `ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS pos_y   INTEGER DEFAULT 20`,
     `ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS qr_url  TEXT`,
+    `ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
     // Menu items — options JSONB
     `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`,
     // Restaurants — options/spécificités (Terrasse, Live music, Halal…)

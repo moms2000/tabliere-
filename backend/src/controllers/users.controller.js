@@ -96,7 +96,7 @@ export const deleteAccount = asyncHandler(async (req, res) => {
        email         = $1,
        phone         = NULL,
        password_hash = '',
-       status        = 'bloque',
+       status        = 'suspendu',
        updated_at    = NOW()
      WHERE id = $2`,
     [`deleted_${req.user.id}@tabliereci.ci`, req.user.id]

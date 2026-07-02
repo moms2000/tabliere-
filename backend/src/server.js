@@ -11,10 +11,12 @@ import { logger }    from "./utils/logger.js";
  */
 async function runStartupMigrations() {
   const migrations = [
-    // Réservations — colonnes walk-in + no-show
+    // Réservations — colonnes walk-in + no-show + notes
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_name  VARCHAR(255)`,
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(30)`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_email VARCHAR(255)`,
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_noshow     BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS notes         TEXT`,
     // Menu items — image_url élargi (base64 peut faire 100k chars)
     `ALTER TABLE menu_items ALTER COLUMN image_url TYPE TEXT`,
     // Restaurants — logo_url élargi + colonne

@@ -18,7 +18,9 @@ async function ensureResaColumns() {
   const stmts = [
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_name  VARCHAR(255)`,
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(30)`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS walk_in_email VARCHAR(255)`,
     `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_noshow     BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS notes         TEXT`,
   ];
   for (const sql of stmts) {
     try { await query(sql); } catch (_) {}

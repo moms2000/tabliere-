@@ -123,13 +123,19 @@ export const setRestaurantPlan = asyncHandler(async (req, res) => {
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
 
-  // Upsert subscription
-  await query(
-    `INSERT INTO subscriptions (restaurant_id, plan, started_at, status)
-     VALUES ($1, $2, NOW(), TRUE)
-     ON CONFLICT (restaurant_id) DO UPDATE SET plan = $2, starts_at = NOW(), is_active = TRUE`,
-    [resto.id, plan]
-  );
+  // Enregistrer la subscription (colonnes réelles : starts_at, price, is_active)
+  // Pas d'ON CONFLICT car aucune contrainte unique sur restaurant_id → DELETE+INSERT
+  const priceMap = { gratuit: 0, standard: 25000, premium: 60000 };
+  try {
+    await query("DELETE FROM subscriptions WHERE restaurant_id = $1", [resto.id]);
+    await query(
+      `INSERT INTO subscriptions (restaurant_id, plan, price, starts_at, is_active)
+       VALUES ($1, $2, $3, NOW(), TRUE)`,
+      [resto.id, plan, priceMap[plan] ?? 0]
+    );
+  } catch (e) {
+    logger.warn("Subscription non enregistrée (plan mis à jour quand même)", { error: e.message });
+  }
 
   await cache.delPattern(`restaurant:*`);
   await cache.del("admin:stats");

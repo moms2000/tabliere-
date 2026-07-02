@@ -220,11 +220,22 @@ export const updateOrder = asyncHandler(async (req, res) => {
   const { status } = req.body;
   if (!status) throw new AppError("status requis", 400);
 
-  const { rows: [order] } = await query(
-    `UPDATE qr_orders SET status = $1, updated_at = NOW()
-     WHERE id = $2 RETURNING *`,
-    [status, req.params.id]
-  );
+  // Valider le statut contre la CHECK constraint (évite un 500 SQL)
+  const VALID = ["en_attente", "en_cours", "servi", "annule"];
+  if (!VALID.includes(status)) {
+    throw new AppError(`Statut invalide. Valeurs acceptées : ${VALID.join(", ")}`, 400);
+  }
+
+  // Scope au restaurant du user (sécurité : ne pas modifier la commande d'un autre resto)
+  const isAdmin = req.user.role === "admin";
+  const sql = isAdmin
+    ? `UPDATE qr_orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`
+    : `UPDATE qr_orders SET status = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3 RETURNING *`;
+  const params = isAdmin
+    ? [status, req.params.id]
+    : [status, req.params.id, req.user.restaurant_id];
+
+  const { rows: [order] } = await query(sql, params);
   if (!order) return notFound(res, "Commande introuvable");
 
   return ok(res, { order }, "Commande mise à jour");

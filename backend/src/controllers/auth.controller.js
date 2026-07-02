@@ -166,7 +166,7 @@ export const login = asyncHandler(async (req, res) => {
   );
   const user = rows[0];
   if (!user) return unauth(res, "Email ou mot de passe incorrect");
-  if (user.status === "bloque") throw new AppError("Compte bloqué", 403);
+  if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
 
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return unauth(res, "Email ou mot de passe incorrect");

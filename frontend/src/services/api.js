@@ -69,7 +69,12 @@ api.interceptors.response.use(
     const original = err.config;
     const status   = err.response?.status;
 
-    if (status === 401 && !original._retry && !original.url?.includes("/auth/")) {
+    // Ne PAS tenter de refresh sur login/register/refresh (sinon boucle ou
+    // mauvais message d'erreur). MAIS inclure /auth/me pour rester connecté.
+    const noRefresh = ["/auth/login", "/auth/register", "/auth/refresh"]
+      .some((u) => original.url?.includes(u));
+
+    if (status === 401 && !original._retry && !noRefresh) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           queue.push({ resolve, reject });

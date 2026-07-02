@@ -34,6 +34,12 @@ export const create = asyncHandler(async (req, res) => {
   const { restaurant_id, table_id, reserved_at, party_size, special_request,
           walk_in_name, walk_in_phone } = req.body;
 
+  // Interdire les réservations dans le passé (client uniquement — un
+  // restaurateur peut enregistrer un walk-in en cours/passé récent)
+  if (req.user.role === "client" && new Date(reserved_at) < new Date()) {
+    throw new AppError("Impossible de réserver à une date ou une heure déjà passée.", 400);
+  }
+
   // Vérifier que le restaurant est actif
   // Pour restaurateur créant une réservation walk-in :
   // utiliser son propre restaurant si restaurant_id absent
@@ -426,6 +432,11 @@ export const createGuest = asyncHandler(async (req, res) => {
 
   // Téléphone obligatoire pour les réservations invité
   if (!walk_in_phone?.trim()) throw new AppError("Le numéro de téléphone est requis pour une réservation sans compte", 400);
+
+  // Interdire les réservations dans le passé
+  if (new Date(reserved_at) < new Date()) {
+    throw new AppError("Impossible de réserver à une date ou une heure déjà passée.", 400);
+  }
 
   const { rows: [resto] } = await query(
     "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status IN ('actif','en_attente')",

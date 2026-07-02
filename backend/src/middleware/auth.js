@@ -38,6 +38,11 @@ export const authenticate = async (req, res, next) => {
     req.token = token;
     next();
   } catch (err) {
+    // Token expiré / invalide = événement NORMAL (le frontend rafraîchit).
+    // On renvoie un 401 propre sans remonter au gestionnaire d'erreurs
+    // (évite de polluer les logs avec des "erreurs" qui n'en sont pas).
+    if (err.name === "TokenExpiredError") return unauth(res, "Token expiré");
+    if (err.name === "JsonWebTokenError") return unauth(res, "Token invalide");
     next(err);
   }
 };

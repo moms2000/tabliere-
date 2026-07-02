@@ -15,13 +15,27 @@ export const asyncHandler = (fn) => (req, res, next) =>
 
 // eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, req, res, next) => {
-  logger.error("Erreur non gérée", {
-    message:  err.message,
-    stack:    err.stack,
-    url:      req.originalUrl,
-    method:   req.method,
-    userId:   req.user?.id,
-  });
+  const httpStatus = err.statusCode || err.status ||
+    (err.code === "23505" ? 409 : err.code === "23503" ? 400 : 500);
+
+  // Ne logger en ERROR que les vraies erreurs serveur (5xx).
+  // Les erreurs client (4xx : validation, auth, not found) sont des
+  // événements normaux → log léger en "warn", sans stack trace.
+  if (httpStatus >= 500) {
+    logger.error("Erreur serveur", {
+      message: err.message,
+      stack:   err.stack,
+      url:     req.originalUrl,
+      method:  req.method,
+      userId:  req.user?.id,
+    });
+  } else {
+    logger.warn("Requête rejetée", {
+      message: err.message,
+      status:  httpStatus,
+      url:     req.originalUrl,
+    });
+  }
 
   // Erreurs PostgreSQL connues
   if (err.code === "23505") {

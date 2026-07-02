@@ -134,6 +134,8 @@ export const update = asyncHandler(async (req, res) => {
     "qr_active",
     // Créneaux de service + nombre de tables par taille de groupe
     "lunch_hours","dinner_hours","tables_2","tables_4","tables_6","tables_8",
+    // Confirmation automatique ou manuelle des réservations
+    "auto_confirm",
   ];
   const updates = [];
   const values  = [];
@@ -163,8 +165,8 @@ export const update = asyncHandler(async (req, res) => {
     if (["tables_2","tables_4","tables_6","tables_8","capacity"].includes(field)) {
       val = (val === "" || val === null) ? 0 : (parseInt(val, 10) || 0);
     }
-    // qr_active : booléen strict
-    if (field === "qr_active") {
+    // Booléens stricts
+    if (field === "qr_active" || field === "auto_confirm") {
       val = (val === true || val === "true" || val === 1);
     }
     values.push(val);
@@ -238,6 +240,7 @@ async function ensureRestaurantColumns() {
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_4      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_6      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_8      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS auto_confirm  BOOLEAN DEFAULT TRUE;
     `);
   } catch (_) {}
   restaurantMigrated = true;

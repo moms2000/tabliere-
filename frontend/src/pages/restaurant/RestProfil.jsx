@@ -61,6 +61,7 @@ export default function RestProfil() {
           theme_color:   r.theme_color   || P,
           logo_url:      r.logo_url      || "",
           photos:        Array.isArray(r.photos) ? r.photos : [],
+          auto_confirm:  r.auto_confirm !== false, // défaut true
         });
       })
       .catch(console.error)
@@ -225,6 +226,33 @@ export default function RestProfil() {
           <motion.div variants={fadeUp}>
             <Card>
               <SectionHeader title="Créneaux & Disponibilités" icon={DollarSign} />
+
+              {/* Mode de confirmation des réservations */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                gap: 12, padding: "12px 14px", background: form.auto_confirm ? "#F0FBF6" : "#FFF7ED",
+                border: `0.5px solid ${form.auto_confirm ? "#1D9E7533" : "#F0C98A"}`,
+                borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28" }}>
+                    {form.auto_confirm ? "Confirmation automatique" : "Confirmation manuelle"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 3, lineHeight: 1.5 }}>
+                    {form.auto_confirm
+                      ? "Les réservations sont confirmées immédiatement. Le client reçoit l'e-mail de confirmation tout de suite."
+                      : "Vous validez chaque réservation manuellement. L'e-mail de confirmation n'est envoyé qu'après votre validation."}
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, auto_confirm: !p.auto_confirm }))}
+                  style={{ position: "relative", width: 46, height: 26, borderRadius: 13,
+                    border: "none", cursor: "pointer", flexShrink: 0, transition: "background .2s",
+                    background: form.auto_confirm ? "#1D9E75" : "#ccc" }}>
+                  <span style={{ position: "absolute", top: 3, left: form.auto_confirm ? 23 : 3,
+                    width: 20, height: 20, borderRadius: "50%", background: "white",
+                    transition: "left .2s" }} />
+                </button>
+              </div>
+
               <div style={{ fontSize: 12, color: "#888", marginBottom: 12, lineHeight: 1.6 }}>
                 Indiquez les horaires de service et le nombre de tables disponibles par taille de groupe.
                 Ces informations aident les clients à trouver le bon créneau.

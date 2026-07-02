@@ -112,19 +112,28 @@ function createNotificationWorker() {
             "SELECT full_name, phone, email FROM users WHERE id = $1", [data.userId]
           );
 
-          // Email de confirmation
+          // Le message dépend du statut : confirmée (auto) ou en attente (manuel)
+          const isPending = data.status === "en_attente";
+          const titre   = isPending ? "Demande de réservation reçue" : "Réservation confirmée ✓";
+          const sujet   = isPending
+            ? `Demande de réservation chez ${data.restoName} — ${data.reservationRef}`
+            : `Réservation confirmée chez ${data.restoName} — ${data.reservationRef}`;
+          const noteBas = isPending
+            ? "Votre demande a bien été reçue. Le restaurant va la confirmer prochainement — vous recevrez un e-mail dès validation."
+            : "Mentionnez cette référence à votre arrivée. Annulation gratuite jusqu'à 2h avant.";
+
           if (user?.email) {
             await sendEmail({
               to:      user.email,
-              subject: `Réservation chez ${data.restoName} — ${data.reservationRef}`,
-              text:    `Bonjour ${user.full_name}, votre réservation chez ${data.restoName} est confirmée. Date : ${fmtDate(data.reservedAt)}. Référence : ${data.reservationRef}.`,
+              subject: sujet,
+              text:    `Bonjour ${user.full_name}, ${isPending ? "votre demande de réservation" : "votre réservation"} chez ${data.restoName} — ${fmtDate(data.reservedAt)}. Référence : ${data.reservationRef}. ${noteBas}`,
               html:    `
                 <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
                   <div style="background:#e8a045;padding:12px 20px;border-radius:8px 8px 0 0">
                     <span style="color:#1a1000;font-size:16px;font-weight:bold">TablièreCI</span>
                   </div>
                   <div style="background:#fff;padding:24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px">
-                    <h2 style="color:#1e2e28;margin:0 0 8px">Réservation confirmée ✓</h2>
+                    <h2 style="color:#1e2e28;margin:0 0 8px">${titre}</h2>
                     <p style="color:#666">Bonjour <strong>${user.full_name}</strong>,</p>
                     <div style="background:#fef6ec;border-radius:8px;padding:16px;margin:16px 0">
                       <p style="margin:4px 0"><strong>Restaurant :</strong> ${data.restoName}</p>
@@ -132,15 +141,15 @@ function createNotificationWorker() {
                       <p style="margin:4px 0"><strong>Couverts :</strong> ${data.partySize} personne${data.partySize > 1 ? "s" : ""}</p>
                       <p style="margin:4px 0"><strong>Référence :</strong> <span style="color:#e8a045;font-weight:bold;font-size:18px">${data.reservationRef}</span></p>
                     </div>
-                    <p style="color:#666;font-size:13px">Mentionnez cette référence à votre arrivée. Annulation gratuite jusqu'à 2h avant.</p>
+                    <p style="color:#666;font-size:13px">${noteBas}</p>
                   </div>
                   <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
                 </div>`,
             });
           }
 
-          // WhatsApp (si configuré)
-          if (user?.phone) {
+          // WhatsApp seulement si confirmée (pas pour une simple demande en attente)
+          if (user?.phone && !isPending) {
             await whatsappService.sendReservationConfirmation({
               phone:      user.phone,
               name:       user.full_name,

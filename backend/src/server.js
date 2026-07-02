@@ -33,6 +33,8 @@ async function runStartupMigrations() {
     `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`,
     // Restaurants — options/spécificités (Terrasse, Live music, Halal…)
     `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS options JSONB DEFAULT '[]'`,
+    // Restaurants — confirmation auto ou manuelle des réservations
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS auto_confirm BOOLEAN DEFAULT TRUE`,
     // Platform settings
     `CREATE TABLE IF NOT EXISTS platform_settings (
        key        VARCHAR(100) PRIMARY KEY,

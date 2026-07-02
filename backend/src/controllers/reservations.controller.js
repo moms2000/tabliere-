@@ -48,7 +48,7 @@ export const create = asyncHandler(async (req, res) => {
 
   // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1",
+    "SELECT id, name, capacity, status, auto_confirm FROM restaurants WHERE id = $1",
     [effectiveRestoId]
   );
   if (!resto) throw new AppError("Restaurant introuvable", 404);
@@ -75,7 +75,12 @@ export const create = asyncHandler(async (req, res) => {
   );
 
   const isResto = req.user.role === "restaurateur";
-  const initialStatus = isResto ? "confirme" : "en_attente";
+  // Statut initial :
+  //  - Restaurateur walk-in → confirmé directement
+  //  - Client → 'confirme' si le resto a l'auto-confirmation (défaut),
+  //             'en_attente' si le resto confirme manuellement
+  const autoConfirm = resto.auto_confirm !== false; // défaut = true
+  const initialStatus = (isResto || autoConfirm) ? "confirme" : "en_attente";
 
   const resa = await withTransaction(async (client) => {
     let newResa;
@@ -131,13 +136,16 @@ export const create = asyncHandler(async (req, res) => {
     emitToUser("admin", "new_reservation", { ref: resa.ref, resto: resto.name });
   } catch (_) {}
 
-  // Notification WhatsApp asynchrone
+  // Email/WhatsApp asynchrone — le message dépend du statut :
+  //  - 'confirme'   → "Réservation confirmée"
+  //  - 'en_attente' → "Demande reçue, en attente de confirmation du restaurant"
   await notificationQueue.add("confirmation", {
     userId:         req.user.id,
     restoName:      resto.name,
     reservedAt:     reserved_at,
     partySize:      party_size,
     reservationRef: resa.ref,
+    status:         resa.status,
   }).catch(() => {}); // ne pas bloquer si Redis absent
 
   logger.info("Réservation créée", { resaId: resa.id, ref: resa.ref, userId: req.user.id });

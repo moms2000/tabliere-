@@ -757,7 +757,7 @@ export default function Home() {
                   padding: "6px 10px", background: WHITE, cursor: "pointer", display: "flex",
                   alignItems: "center" }}>
                 <Bell size={15} color={MUTED} />
-                {notifs.filter(n => !n.read_at).length > 0 && (
+                {notifs.filter(n => !n.is_read).length > 0 && (
                   <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8,
                     borderRadius: "50%", background: "#DC2626", border: "1.5px solid white" }} />
                 )}
@@ -773,9 +773,9 @@ export default function Home() {
                     <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${BORDER}`,
                       display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: DARK }}>Notifications</span>
-                      {notifs.filter(n => !n.read_at).length > 0 && (
+                      {notifs.filter(n => !n.is_read).length > 0 && (
                         <button onClick={async () => {
-                          try { await api.patch("/notifications/read-all"); setNotifs(p => p.map(n => ({ ...n, read_at: new Date().toISOString() }))); } catch(_) {}
+                          try { await api.patch("/notifications/read-all"); setNotifs(p => p.map(n => ({ ...n, is_read: true }))); } catch(_) {}
                         }} style={{ fontSize: 11, color: P, background: "none", border: "none",
                           cursor: "pointer", fontFamily: FONT }}>
                           Tout lire
@@ -794,14 +794,14 @@ export default function Home() {
                       ) : notifs.map(n => (
                         <div key={n.id}
                           style={{ padding: "10px 16px", borderBottom: `0.5px solid ${BORDER}`,
-                            background: n.read_at ? "transparent" : "#FEF6EC",
+                            background: n.is_read ? "transparent" : "#FEF6EC",
                             cursor: "pointer" }}
                           onClick={async () => {
-                            if (!n.read_at) {
-                              try { await api.patch(`/notifications/${n.id}/read`); setNotifs(p => p.map(x => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)); } catch(_) {}
+                            if (!n.is_read) {
+                              try { await api.patch(`/notifications/${n.id}/read`); setNotifs(p => p.map(x => x.id === n.id ? { ...x, is_read: true } : x)); } catch(_) {}
                             }
                           }}>
-                          <div style={{ fontSize: 12, color: DARK, fontWeight: n.read_at ? 400 : 600 }}>
+                          <div style={{ fontSize: 12, color: DARK, fontWeight: n.is_read ? 400 : 600 }}>
                             {n.title || n.message}
                           </div>
                           {n.body && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{n.body}</div>}

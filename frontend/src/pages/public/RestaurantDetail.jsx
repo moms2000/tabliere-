@@ -681,15 +681,28 @@ export default function RestaurantDetail() {
               <CalendarCheck size={15} color={P} /> Créneaux disponibles aujourd'hui
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {ALL_SLOTS.map((s, i) => (
-                <motion.button key={i} whileTap={{ scale: 0.95 }}
-                  onClick={() => openModal({ date: buildDays()[0].iso, slot: s, pers: 2 })}
-                  style={{ fontSize: 13, fontWeight: 500, padding: "8px 14px",
-                    borderRadius: 8, border: `0.5px solid ${P}66`,
-                    background: PL, color: DARK, cursor: "pointer", fontFamily: FONT }}>
-                  {s}
-                </motion.button>
-              ))}
+              {(() => {
+                const todayIso = buildDays()[0].iso;
+                // Ne proposer que les créneaux encore à venir aujourd'hui : cliquer
+                // un créneau déjà passé provoquait un échec 400 côté serveur.
+                const upcoming = ALL_SLOTS.filter(s => !isPastSlot(todayIso, s));
+                if (upcoming.length === 0) {
+                  return (
+                    <div style={{ fontSize: 13, color: MUTED, fontFamily: FONT }}>
+                      Plus de créneaux aujourd'hui — choisissez une autre date dans le formulaire de réservation.
+                    </div>
+                  );
+                }
+                return upcoming.map((s, i) => (
+                  <motion.button key={i} whileTap={{ scale: 0.95 }}
+                    onClick={() => openModal({ date: todayIso, slot: s, pers: 2 })}
+                    style={{ fontSize: 13, fontWeight: 500, padding: "8px 14px",
+                      borderRadius: 8, border: `0.5px solid ${P}66`,
+                      background: PL, color: DARK, cursor: "pointer", fontFamily: FONT }}>
+                    {s}
+                  </motion.button>
+                ));
+              })()}
             </div>
           </div>
 

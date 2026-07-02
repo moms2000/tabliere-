@@ -30,8 +30,8 @@ const STATUS_BADGE = {
 
 const TABLE_COLOR = {
   libre: S, free: S,
-  occupé: "#DC2626", occupied: "#DC2626",
-  réservé: "#C47D1A", reserved: "#C47D1A",
+  occupe: "#DC2626", occupé: "#DC2626", occupied: "#DC2626",
+  reserve: "#C47D1A", réservé: "#C47D1A", reserved: "#C47D1A",
 };
 
 const fmtDate = (dt) => dt
@@ -100,6 +100,8 @@ export default function RestDashboard() {
   const annuled     = filteredResas.filter(r => ["annule","annulé"].includes(r.status)).length;
   const noShows     = filteredResas.filter(r => r.is_noshow || r.status === "no_show").length;
   const libres      = tables.filter(t => ["libre","free"].includes(t.status)).length;
+  const occupeesTb  = tables.filter(t => ["occupe","occupé","occupied"].includes(t.status)).length;
+  const reserveesTb = tables.filter(t => ["reserve","réservé","reserved"].includes(t.status)).length;
   const avgParty    = filteredResas.length ? (filteredResas.reduce((s, r) => s + (r.party_size || 0), 0) / filteredResas.length).toFixed(1) : 0;
   const tauxConfirm = filteredResas.length ? Math.round(confirmed / filteredResas.length * 100) : 0;
   // Commandes QR du jour
@@ -243,11 +245,11 @@ export default function RestDashboard() {
                     })}
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 12, fontSize: 11, color: MUTED }}>
-                    <span>{tables.filter(t => ["libre","free"].includes(t.status)).length} libres</span>
+                    <span>{libres} libres</span>
                     <span>·</span>
-                    <span>{tables.filter(t => ["occupé","occupied"].includes(t.status)).length} occupées</span>
+                    <span>{occupeesTb} occupées</span>
                     <span>·</span>
-                    <span>{tables.filter(t => ["réservé","reserved"].includes(t.status)).length} réservées</span>
+                    <span>{reserveesTb} réservées</span>
                   </div>
                 </>
               )}

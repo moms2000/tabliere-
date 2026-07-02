@@ -533,7 +533,7 @@ export default function RestPOS() {
               cartItems={cartItems} cartTotal={cartTotal} cartCount={cartCount}
               tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
               setOrderNote={setOrderNote} error={error} submitting={submitting}
-              onSend={sendOrder} onClear={clearCart} onRemove={removeItem}
+              onSend={sendOrder} onClear={clearCart} onRemove={removeItem} onAdd={addItem}
               showNote={showNote} setShowNote={setShowNote} P={P} PL={PL}
               DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
             />
@@ -566,7 +566,7 @@ export default function RestPOS() {
                 tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
                 setOrderNote={setOrderNote} error={error} submitting={submitting}
                 onSend={() => { sendOrder(); setShowCart(false); }} onClear={clearCart}
-                onRemove={removeItem} showNote={showNote} setShowNote={setShowNote}
+                onRemove={removeItem} onAdd={addItem} showNote={showNote} setShowNote={setShowNote}
                 P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
               />
             </motion.div>
@@ -580,7 +580,7 @@ export default function RestPOS() {
 
 /* ── Panneau panier (réutilisé mobile + desktop) ──────────────────────────── */
 function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, orderNote, setOrderNote,
-  error, submitting, onSend, onClear, onRemove, showNote, setShowNote,
+  error, submitting, onSend, onClear, onRemove, onAdd, showNote, setShowNote,
   P, PL, DARK, BG, BORDER, MUTED, FONT, S, fmt }) {
   return (
     <>
@@ -627,7 +627,7 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
                 <Minus size={10} color={MUTED} />
               </button>
               <span style={{ fontSize: 13, fontWeight: 700, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
-              <button onClick={() => {}}
+              <button onClick={() => onAdd(item)}
                 style={{ width: 26, height: 26, borderRadius: "50%", border: "none",
                   background: P, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Plus size={10} color="white" />

@@ -21,18 +21,25 @@ const fmt = (n) => n ? Number(n).toLocaleString("fr-FR") + " F" : "0 F";
 const STATUS_BADGE = {
   succès: "green", "en attente": "amber", remboursé: "red", échec: "red",
   success: "green", pending: "amber", refunded: "red", failed: "red",
+  // valeurs réelles de l'ENUM DB pay_status
+  succes: "green", en_attente: "amber", rembourse: "red", echec: "red",
 };
 
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
 /* Mapping API → display */
 function mapPayment(p) {
-  const STATUS_MAP = { success: "succès", pending: "en attente", refunded: "remboursé", failed: "échec" };
+  const STATUS_MAP = {
+    success: "succès", pending: "en attente", refunded: "remboursé", failed: "échec",
+    // valeurs réelles de l'ENUM DB pay_status
+    succes: "succès", en_attente: "en attente", rembourse: "remboursé", echec: "échec",
+  };
+  const isRefund = p.status === "refunded" || p.status === "rembourse";
   return {
     id:      p.resa_ref || `#${p.id}`,
     type:    "Paiement",
     resto:   p.resto_name || "—",
-    montant: p.status === "refunded" ? -Math.abs(Number(p.amount)) : Number(p.amount),
+    montant: isRefund ? -Math.abs(Number(p.amount)) : Number(p.amount),
     mode:    p.method || "—",
     date:    p.created_at,
     status:  STATUS_MAP[p.status] || p.status,

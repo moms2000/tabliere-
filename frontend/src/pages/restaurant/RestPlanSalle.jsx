@@ -18,18 +18,27 @@ const BORDER = "#E4DFD8";
 const MUTED  = "#9BA89F";
 const FONT   = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
 
+const _FREE = { bg: "#E8F5EE", border: "#3D6B55", dot: "#3D6B55", shadow: "rgba(61,107,85,0.35)", badge: "green" };
+const _RESV = { bg: "#FEF6E4", border: "#C47D1A", dot: "#C47D1A", shadow: "rgba(196,125,26,0.35)", badge: "amber" };
+const _OCCU = { bg: "#FEF2F2", border: "#DC2626", dot: "#DC2626", shadow: "rgba(220,38,38,0.35)", badge: "red" };
 const STATUS_COLOR = {
-  libre:    { bg: "#E8F5EE", border: "#3D6B55", dot: "#3D6B55", shadow: "rgba(61,107,85,0.35)", badge: "green" },
-  réservé:  { bg: "#FEF6E4", border: "#C47D1A", dot: "#C47D1A", shadow: "rgba(196,125,26,0.35)", badge: "amber" },
-  occupé:   { bg: "#FEF2F2", border: "#DC2626", dot: "#DC2626", shadow: "rgba(220,38,38,0.35)", badge: "red" },
-  free:     { bg: "#E8F5EE", border: "#3D6B55", dot: "#3D6B55", shadow: "rgba(61,107,85,0.35)", badge: "green" },
-  reserved: { bg: "#FEF6E4", border: "#C47D1A", dot: "#C47D1A", shadow: "rgba(196,125,26,0.35)", badge: "amber" },
-  occupied: { bg: "#FEF2F2", border: "#DC2626", dot: "#DC2626", shadow: "rgba(220,38,38,0.35)", badge: "red" },
+  // clés DB (ENUM sans accent), françaises accentuées et anglaises — le backend
+  // stocke 'libre'/'reserve'/'occupe' mais l'UI peut recevoir plusieurs formes
+  libre: _FREE,    reserve: _RESV,  occupe: _OCCU,
+  réservé: _RESV,  occupé: _OCCU,
+  free: _FREE,     reserved: _RESV, occupied: _OCCU,
 };
 const STATUS_LABEL = {
-  libre: "Libre", réservé: "Réservé", occupé: "Occupé",
+  libre: "Libre", reserve: "Réservé", occupe: "Occupé",
+  réservé: "Réservé", occupé: "Occupé",
   free: "Libre", reserved: "Réservé", occupied: "Occupé",
 };
+// Ramène n'importe quelle forme de statut vers la clé accentuée d'affichage
+const canonStatus = (s) => ({
+  libre: "libre", free: "libre",
+  reserve: "réservé", reserved: "réservé", réservé: "réservé",
+  occupe: "occupé", occupied: "occupé", occupé: "occupé",
+}[s] || "libre");
 
 const ZONE_META = {
   interieur: { label: "Salle intérieure", icon: "🪑", floor: "#EDE0CB" },
@@ -342,8 +351,8 @@ export default function RestPlanSalle() {
   const zones = [...new Set(["interieur", ...tables.map(t => t.zone || "interieur")])];
   const zoneTables = tables.filter(t => (t.zone || "interieur") === activeZone);
   const libres   = tables.filter(t => ["libre","free"].includes(t.status)).length;
-  const occupees = tables.filter(t => ["occupé","occupied"].includes(t.status)).length;
-  const reservees = tables.filter(t => ["réservé","reserved"].includes(t.status)).length;
+  const occupees = tables.filter(t => ["occupe","occupé","occupied"].includes(t.status)).length;
+  const reservees = tables.filter(t => ["reserve","réservé","reserved"].includes(t.status)).length;
   const zm = ZONE_META[activeZone] || ZONE_META.interieur;
 
   const tableQrUrl = (t) =>
@@ -596,7 +605,7 @@ export default function RestPlanSalle() {
                   Changer le statut
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {["libre","réservé","occupé"].filter(s => s !== selected.status).map(s => {
+                  {["libre","réservé","occupé"].filter(s => s !== canonStatus(selected.status)).map(s => {
                     const sc = STATUS_COLOR[s];
                     return (
                       <button key={s} onClick={() => updateStatus(selected.id, s)}

@@ -123,13 +123,20 @@ function AppWithNav({ children }) {
   );
 }
 
-// ── PWA Service Worker ────────────────────────────────────────────────────────
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js")
-      .then(() => console.log("SW enregistré"))
+// ── Désactivation du Service Worker ──────────────────────────────────────────
+// Le SW causait des erreurs "text/html is not a valid JavaScript MIME type"
+// après chaque déploiement : d'anciens chunks JS en cache disparaissaient de
+// Vercel → 404 HTML servi comme JS. On désenregistre tout SW existant et on
+// purge ses caches pour nettoyer les utilisateurs déjà affectés.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => regs.forEach((reg) => reg.unregister()))
+    .catch(() => {});
+  if (window.caches) {
+    caches.keys()
+      .then((keys) => keys.forEach((k) => caches.delete(k)))
       .catch(() => {});
-  });
+  }
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

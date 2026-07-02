@@ -447,12 +447,15 @@ export const createGuest = asyncHandler(async (req, res) => {
   }
 
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status FROM restaurants WHERE id = $1 AND status IN ('actif','en_attente')",
+    "SELECT id, name, capacity, status, auto_confirm FROM restaurants WHERE id = $1 AND status IN ('actif','en_attente')",
     [restaurant_id]
   );
   if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
   if (party_size > resto.capacity)
     throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
+
+  // Statut selon le réglage du restaurant (auto-confirmation ou manuel)
+  const guestStatus = (resto.auto_confirm !== false) ? "confirme" : "en_attente";
 
   // Utiliser un compte "invité" générique ou le premier admin comme placeholder
   const { rows: [guestUser] } = await query(
@@ -482,9 +485,9 @@ export const createGuest = asyncHandler(async (req, res) => {
     `INSERT INTO reservations
        (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
         special_request, status, walk_in_name, walk_in_phone)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'en_attente',$8,$9) RETURNING *`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     [nextref, restaurant_id, clientId, table_id || null, reserved_at, party_size,
-     special_request || null, walk_in_name, walk_in_phone || null]
+     special_request || null, guestStatus, walk_in_name, walk_in_phone || null]
   );
 
   // Marquer la table comme réservée (si une table a été assignée)

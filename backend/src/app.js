@@ -25,6 +25,10 @@ import reviewsRoutes       from "./routes/reviews.routes.js";
 
 const app = express();
 
+// ── Trust proxy (Render/Vercel sont derrière un reverse proxy) ──────────────
+// Nécessaire pour que express-rate-limit identifie les IPs via X-Forwarded-For
+app.set("trust proxy", 1);
+
 // ── Compression gzip (réduit les réponses de 60-80%) ────────────────────────
 app.use(compression({ level: 6, threshold: 1024 }));
 

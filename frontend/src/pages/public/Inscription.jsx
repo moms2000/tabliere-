@@ -88,7 +88,7 @@ const STRENGTH_COLORS = ["", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#16A34
 export default function Inscription() {
   const navigate          = useNavigate();
   const [searchParams]    = useState(() => new URLSearchParams(window.location.search));
-  const { register, login } = useAuth();
+  const { register, login, user, logout } = useAuth();
   const { t, lang }       = useLang();
   const isRTL             = lang === "ar";
 
@@ -175,7 +175,9 @@ export default function Inscription() {
 
     try {
       await register(payload);
-      try { await login(payload.email, payload.password); } catch (_) {}
+      // PAS d'auto-login : évite d'écraser/exposer une session existante
+      // (ex: un admin qui crée un compte ne doit pas mélanger sa session).
+      // L'utilisateur se connecte ensuite manuellement.
       setStep(3);
     } catch (err) {
       const status = err.response?.status;
@@ -194,6 +196,42 @@ export default function Inscription() {
       setLoading(false);
     }
   };
+
+  // ── Garde-fou sécurité : bloquer l'inscription si déjà connecté ───────────
+  // Empêche un admin/restaurateur/client connecté de créer un nouveau compte
+  // sans se déconnecter — évite une session résiduelle exposée sur l'appareil.
+  if (user && step !== 3) return (
+    <div style={{ minHeight: "100vh", background: BG, display: "flex",
+      alignItems: "center", justifyContent: "center", padding: 24, fontFamily: FONT }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: "40px 36px",
+        border: `0.5px solid ${BORDER}`, maxWidth: 440, width: "100%", textAlign: "center",
+        boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: DARK, marginBottom: 8 }}>
+          Vous êtes déjà connecté
+        </h2>
+        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.6, marginBottom: 24 }}>
+          Vous êtes connecté en tant que <strong style={{ color: DARK }}>{user.full_name || user.email}</strong>
+          {user.role === "admin" ? " (administrateur)" : user.role === "restaurateur" ? " (restaurateur)" : ""}.
+          <br /><br />
+          Pour créer un nouveau compte, déconnectez-vous d'abord. Cela protège votre session.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <motion.button whileTap={{ scale: 0.97 }}
+            onClick={async () => { await logout(); }}
+            style={{ background: P, color: "#1A1000", border: "none", borderRadius: 10,
+              padding: "12px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+            Se déconnecter
+          </motion.button>
+          <button onClick={() => navigate("/")}
+            style={{ background: "transparent", border: "none", color: MUTED,
+              fontSize: 13, cursor: "pointer", fontFamily: FONT }}>
+            Retour à l'accueil
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ── Succès — Vérification email requise ───────────────────────────────────
   if (step === 3) return (

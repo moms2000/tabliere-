@@ -426,10 +426,19 @@ export default function RestReservations() {
 
   // Modifier une réservation en ligne
   const updateReservation = async (id, fields) => {
+    // Ne plus masquer les erreurs serveur : appliquer le changement uniquement
+    // après succès, sinon prévenir et resynchroniser avec l'état réel en base.
     try {
-      await reservationsService.update(id, fields).catch(() => null);
+      await reservationsService.update(id, fields);
       setData(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      const msg = e?.response?.data?.error?.message || e?.message || "Échec de la mise à jour";
+      alert(`Mise à jour impossible : ${msg}`);
+      reservationsService.list({ limit: 100 })
+        .then(res => setData(res.data || []))
+        .catch(() => {});
+    }
   };
 
   // Filtrage par mode date

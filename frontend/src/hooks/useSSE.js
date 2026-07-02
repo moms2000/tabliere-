@@ -10,6 +10,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
  */
 export function useSSE(handlers = {}, enabled = true) {
   const esRef      = useRef(null);
+  const retryRef   = useRef(null);
   const handlersRef = useRef(handlers);
 
   // Garder les handlers à jour sans re-créer la connexion
@@ -30,8 +31,10 @@ export function useSSE(handlers = {}, enabled = true) {
     es.onerror = () => {
       es.close();
       esRef.current = null;
-      // Reconnexion automatique après 5s
-      setTimeout(connect, 5000);
+      // Reconnexion automatique après 5s — l'id est mémorisé pour pouvoir
+      // annuler le timer au démontage (sinon fuite : reconnexion post-unmount)
+      if (retryRef.current) clearTimeout(retryRef.current);
+      retryRef.current = setTimeout(connect, 5000);
     };
 
     // Écouteurs dynamiques basés sur les handlers fournis
@@ -51,6 +54,7 @@ export function useSSE(handlers = {}, enabled = true) {
     if (!enabled) return;
     connect();
     return () => {
+      if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
       esRef.current?.close();
       esRef.current = null;
     };

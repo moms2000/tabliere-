@@ -92,10 +92,23 @@ export default function Reservations() {
   };
 
   const updateInline = async (id, fields) => {
+    // Ne plus masquer les erreurs : on n'applique le changement local qu'après
+    // succès serveur, sinon on prévient l'admin et on resynchronise depuis l'API.
     try {
-      await adminService.updateReservation?.(id, fields).catch(() => null);
+      if (!adminService.updateReservation) throw new Error("Action indisponible");
+      await adminService.updateReservation(id, fields);
       setData(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      const msg = e?.response?.data?.error?.message || e?.message || "Échec de la mise à jour";
+      alert(`Mise à jour impossible : ${msg}`);
+      // Resynchroniser la liste avec l'état réel en base
+      const params = { limit: 200 };
+      if (filter !== "tous") params.status = filter;
+      adminService.listReservations(params)
+        .then(res => setData(res.data || []))
+        .catch(() => {});
+    }
   };
 
   const openEdit = (r) => {

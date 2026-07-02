@@ -74,8 +74,11 @@ export const create = asyncHandler(async (req, res) => {
   }
 
   // Générer un ref unique RES-XXXX
+  // Réf atomique via la séquence dédiée (resa_ref_seq) : COUNT(*)+1 provoquait
+  // des collisions UNIQUE sous concurrence (deux réservations simultanées →
+  // même ref → 500). nextval est atomique et suit le même format que le trigger.
   const { rows: [{ nextref }] } = await query(
-    "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
+    "SELECT 'RES-' || LPAD(nextval('resa_ref_seq')::text, 4, '0') AS nextref"
   );
 
   const isResto = req.user.role === "restaurateur";
@@ -491,8 +494,11 @@ export const createGuest = asyncHandler(async (req, res) => {
     clientId = gu.id;
   }
 
+  // Réf atomique via la séquence dédiée (resa_ref_seq) : COUNT(*)+1 provoquait
+  // des collisions UNIQUE sous concurrence (deux réservations simultanées →
+  // même ref → 500). nextval est atomique et suit le même format que le trigger.
   const { rows: [{ nextref }] } = await query(
-    "SELECT 'RES-' || LPAD((COUNT(*) + 1)::text, 4, '0') AS nextref FROM reservations"
+    "SELECT 'RES-' || LPAD(nextval('resa_ref_seq')::text, 4, '0') AS nextref"
   );
 
   const { rows: [resa] } = await query(

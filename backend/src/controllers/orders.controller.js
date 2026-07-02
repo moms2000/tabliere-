@@ -58,7 +58,14 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (!resto) throw new AppError("Restaurant introuvable", 404);
   if (!resto.qr_active) throw new AppError("Les commandes QR ne sont pas activées pour ce restaurant", 403);
 
-  const total = items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
+  // Coercition numérique stricte : un price/qty non numérique produirait NaN,
+  // rejeté par la colonne INTEGER (500). On borne à des entiers >= 0.
+  const total = items.reduce((sum, it) => {
+    const price = Number(it.price); const qty = Number(it.qty);
+    const p = Number.isFinite(price) && price > 0 ? price : 0;
+    const q = Number.isFinite(qty)   && qty   > 0 ? qty   : 1;
+    return sum + p * q;
+  }, 0);
 
   const { rows: [order] } = await query(
     `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note)
@@ -177,7 +184,14 @@ export const createManualOrder = asyncHandler(async (req, res) => {
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
 
-  const total = items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
+  // Coercition numérique stricte : un price/qty non numérique produirait NaN,
+  // rejeté par la colonne INTEGER (500). On borne à des entiers >= 0.
+  const total = items.reduce((sum, it) => {
+    const price = Number(it.price); const qty = Number(it.qty);
+    const p = Number.isFinite(price) && price > 0 ? price : 0;
+    const q = Number.isFinite(qty)   && qty   > 0 ? qty   : 1;
+    return sum + p * q;
+  }, 0);
 
   const { rows: [order] } = await query(
     `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note, status)

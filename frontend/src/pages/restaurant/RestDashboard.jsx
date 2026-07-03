@@ -204,7 +204,7 @@ export default function RestDashboard() {
                 </thead>
                 <tbody>
                   {filteredResas.slice(0, 10).map((r, i) => (
-                    <motion.tr key={i} whileHover={{ background: PL }}
+                    <motion.tr key={r.id || r.ref || i} whileHover={{ background: PL }}
                       style={{ borderBottom: `0.5px solid ${BG}` }}>
                       <td style={{ padding: "8px 8px", fontWeight: 600, color: DARK }}>{r.client_name || "—"}</td>
                       <td style={{ padding: "8px 8px", color: MUTED, fontSize: 12 }}>{fmtDate(r.reserved_at)}</td>
@@ -233,7 +233,7 @@ export default function RestDashboard() {
                     {tables.slice(0, 9).map((t, i) => {
                       const color = TABLE_COLOR[t.status] || MUTED;
                       return (
-                        <motion.div key={i} whileHover={{ scale: 1.04 }}
+                        <motion.div key={t.id || i} whileHover={{ scale: 1.04 }}
                           style={{ borderRadius: 8, padding: "8px 4px", textAlign: "center",
                             background: color + "18", border: `0.5px solid ${color}44` }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color }}>{t.label}</div>

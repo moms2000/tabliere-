@@ -8,6 +8,20 @@ import { ok, created, notFound, forbidden, paginated } from "../utils/response.j
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 
+// Un client est éligible pour laisser un avis s'il a une réservation passée
+// confirmée ou terminée dans ce restaurant (anti-faux-avis / spam).
+async function hasEligibleVisit(restaurantId, clientId) {
+  const { rows: [row] } = await query(
+    `SELECT 1 FROM reservations
+     WHERE restaurant_id = $1 AND client_id = $2
+       AND status IN ('confirme','termine')
+       AND reserved_at < NOW()
+     LIMIT 1`,
+    [restaurantId, clientId]
+  );
+  return !!row;
+}
+
 // ── GET /restaurants/:slug/reviews ───────────────────────────────────────────
 export const listReviews = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
@@ -58,9 +72,18 @@ export const createReview = asyncHandler(async (req, res) => {
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
 
-  // Vérifier que le client a au moins visité ou réservé (critère assoupli pour la démo)
-  // En production: restreindre aux réservations confirmées passées
-  // const { rows: [eligibleResa] } = await query(...);
+  // Éligibilité : réservation passée confirmée/terminée, OU avis déjà existant
+  // (pour permettre à l'auteur de modifier son propre avis).
+  const { rows: [already] } = await query(
+    "SELECT id FROM reviews WHERE restaurant_id = $1 AND client_id = $2",
+    [resto.id, req.user.id]
+  );
+  if (!already) {
+    const eligible = await hasEligibleVisit(resto.id, req.user.id);
+    if (!eligible) {
+      throw new AppError("Vous pourrez laisser un avis après une réservation honorée dans ce restaurant.", 403);
+    }
+  }
 
   // Insérer ou mettre à jour (ON CONFLICT = mise à jour de l'avis)
   const { rows: [review] } = await query(
@@ -98,14 +121,16 @@ export const canReview = asyncHandler(async (req, res) => {
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
 
-  // Tout utilisateur connecté peut laisser un avis
   const { rows: [existing] } = await query(
     "SELECT id, rating, comment FROM reviews WHERE restaurant_id = $1 AND client_id = $2",
     [resto.id, req.user.id]
   );
 
+  // Peut noter s'il a déjà un avis (édition) ou une visite éligible
+  const canReviewNow = !!existing || await hasEligibleVisit(resto.id, req.user.id);
+
   return ok(res, {
-    can_review:      true, // ouvert à tous les utilisateurs connectés
+    can_review:      canReviewNow,
     has_review:      !!existing,
     existing_review: existing || null,
   });

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 
 const TRANSLATIONS = {
   fr: {
@@ -493,22 +493,29 @@ const LanguageContext = createContext(null);
 export function LanguageProvider({ children }) {
   const [lang, setLang] = useState(() => localStorage.getItem("tci_lang") || "fr");
 
-  const t = (key) => TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS.fr[key] ?? key;
+  const t = useCallback(
+    (key) => TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS.fr[key] ?? key,
+    [lang]
+  );
 
-  const changeLang = (l) => {
+  const changeLang = useCallback((l) => {
     setLang(l);
     localStorage.setItem("tci_lang", l);
-    document.documentElement.dir  = l === "ar" ? "rtl" : "ltr";
-    document.documentElement.lang = l;
-  };
+  }, []);
 
-  if (typeof document !== "undefined") {
+  // Effet de bord DOM déplacé hors du rendu (anti-pattern) → useEffect idempotent
+  useEffect(() => {
     document.documentElement.dir  = lang === "ar" ? "rtl" : "ltr";
     document.documentElement.lang = lang;
-  }
+  }, [lang]);
+
+  const value = useMemo(
+    () => ({ lang, t, changeLang, langs: ["fr", "en", "ar"] }),
+    [lang, t, changeLang]
+  );
 
   return (
-    <LanguageContext.Provider value={{ lang, t, changeLang, langs: ["fr", "en", "ar"] }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

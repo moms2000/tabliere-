@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../middleware/auth.js";
+import { orderLimiter } from "../middleware/rateLimiter.js";
 import * as ctrl from "../controllers/orders.controller.js";
 
 const router = Router();
 
-// Public — client via QR
-router.post("/", ctrl.createOrder);
+// Public — client via QR (limité pour éviter le spam de commandes)
+router.post("/", orderLimiter, ctrl.createOrder);
 
 // Restaurateur / Admin
 router.get   ("/",             authenticate, authorize("restaurateur","admin"), ctrl.listOrders);

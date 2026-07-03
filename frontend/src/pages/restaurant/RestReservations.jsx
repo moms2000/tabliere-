@@ -965,7 +965,7 @@ export default function RestReservations() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {conversations.map((c, i) => (
-                      <motion.div key={i} whileHover={{ x: 2 }}
+                      <motion.div key={c.reservation_id || c.id || i} whileHover={{ x: 2 }}
                         onClick={() => setChatRes({ id: c.reservation_id, name: c.client_name })}
                         style={{ display: "flex", alignItems: "center", gap: 10,
                           padding: "11px 12px", background: "#fafafa", borderRadius: 10,

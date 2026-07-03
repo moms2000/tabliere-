@@ -489,6 +489,20 @@ export default function RestaurantDetail() {
   }, []);
   const closeModal = () => { setModal(false); setStep(1); setError(""); };
 
+  // Verrouiller le scroll de l'arrière-plan quand la modale est ouverte
+  // (sinon, sur mobile, la page derrière défilait au lieu du contenu de la modale)
+  useEffect(() => {
+    if (!modal) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [modal]);
+
   const fmtDate = (iso) => {
     const d = new Date(iso + "T12:00:00");
     return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -888,7 +902,8 @@ export default function RestaurantDetail() {
                   maxHeight: "calc(92vh - 62px - env(safe-area-inset-bottom, 0px))",
                   boxShadow: "0 -8px 40px rgba(0,0,0,.18)" }}>
                 <div style={{ width: 40, height: 4, borderRadius: 2, background: BORDER, margin: "12px auto 8px", flexShrink: 0 }} />
-                <div style={{ overflowY: "auto", flex: 1, padding: "0 20px 20px" }}>
+                <div style={{ overflowY: "auto", flex: 1, padding: "0 20px 20px",
+                  overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
                 <ModalSteps
                   step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
                   selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
@@ -917,6 +932,7 @@ export default function RestaurantDetail() {
                   transition={{ type: "spring", stiffness: 380, damping: 34 }}
                   style={{ background: "white", borderRadius: 16, padding: "32px",
                     width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto",
+                    overscrollBehavior: "contain",
                     boxShadow: "0 12px 48px rgba(0,0,0,.2)", fontFamily: FONT,
                     pointerEvents: "auto", position: "relative" }}>
                   <ModalSteps

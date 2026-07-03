@@ -322,7 +322,7 @@ function DashboardSkeleton() {
         <Bone w="220px" h={22} mb={8} />
         <Bone w="320px" h={13} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 14 }}>
         {[1,2,3,4].map(i => (
           <div key={i} style={{ background: "white", border: `0.5px solid ${BORDER}`,
             borderRadius: 12, padding: 16 }}>
@@ -332,7 +332,7 @@ function DashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 280px", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
         <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: 16 }}>
           <Bone w="40%" h={18} mb={16} />
           {[1,2,3,4].map(i => (

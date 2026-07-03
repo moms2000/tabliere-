@@ -11,6 +11,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import api from "../../services/api.js";
 import { useLang } from "../../context/LanguageContext.jsx";
 import { reservationsService } from "../../services/reservations.service.js";
+import { usersService } from "../../services/users.service.js";
 import { notificationsService, chatService } from "../../services/chat.service.js";
 import Chat from "../../components/Chat.jsx";
 
@@ -123,10 +124,33 @@ export default function Profil() {
       .then(res => {
         const list = res.data || [];
         setReservations(list);
+        // Points : calcul local en secours immédiat (remplacé par le solde serveur ci-dessous)
         setPoints(list.filter(r => ["confirme","confirmé"].includes(r.status)).length * 50);
       })
       .catch(() => {})
       .finally(() => setLoadingR(false));
+  }, []);
+
+  // Solde de fidélité réel (source serveur, cohérent sur tous les appareils)
+  useEffect(() => {
+    usersService.loyalty()
+      .then(d => { if (d && typeof d.points === "number") setPoints(d.points); })
+      .catch(() => {}); // en cas d'échec on garde le calcul local
+  }, []);
+
+  // Favoris synchronisés au compte (fusion avec le local)
+  useEffect(() => {
+    usersService.listFavorites()
+      .then(rows => {
+        if (!Array.isArray(rows)) return;
+        const mapped = rows.map(f => ({
+          slug: f.slug, name: f.name, ville: f.ville,
+          cuisine_type: f.cuisine_type, restaurant_id: f.restaurant_id,
+        }));
+        setFavorites(mapped);
+        try { localStorage.setItem("tci_favorites", JSON.stringify(mapped)); } catch {}
+      })
+      .catch(() => {});
   }, []);
 
   // Charger notifications
@@ -180,9 +204,12 @@ export default function Profil() {
   };
 
   const removeFavorite = (slug) => {
+    const fav = favorites.find(f => f.slug === slug);
     const updated = favorites.filter(f => f.slug !== slug);
     setFavorites(updated);
     localStorage.setItem("tci_favorites", JSON.stringify(updated));
+    // Synchroniser la suppression côté serveur si on connaît l'id
+    if (fav?.restaurant_id) usersService.removeFavorite(fav.restaurant_id).catch(() => {});
   };
 
   // Partage réservation via WhatsApp

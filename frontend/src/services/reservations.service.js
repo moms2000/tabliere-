@@ -47,4 +47,22 @@ export const reservationsService = {
     const res = await api.get("/users/me/reservations", { params });
     return res.data;
   },
+
+  // ── Liste d'attente (restaurateur) ─────────────────────────────────────────
+  async listWaitlist() {
+    const res = await api.get("/reservations/waitlist");
+    return res.data.data?.waitlist || [];
+  },
+  async addWaitlist(entry) {
+    const res = await api.post("/reservations/waitlist", entry);
+    return res.data.data?.entry;
+  },
+  async updateWaitlist(id, status) {
+    const res = await api.patch(`/reservations/waitlist/${id}`, { status });
+    return res.data.data?.entry;
+  },
+  async deleteWaitlist(id) {
+    const res = await api.delete(`/reservations/waitlist/${id}`);
+    return res.data;
+  },
 };

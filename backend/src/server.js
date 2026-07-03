@@ -112,6 +112,14 @@ async function runBusinessMigrations() {
        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_waitlist_resto ON waitlist(restaurant_id, status)`,
+    `CREATE TABLE IF NOT EXISTS favorites (
+       id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       UNIQUE (user_id, restaurant_id)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
   ];
 
   for (const sql of stmts) {

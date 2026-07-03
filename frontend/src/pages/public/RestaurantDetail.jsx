@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Star, MapPin, Clock, Users, Calendar,
@@ -87,11 +87,15 @@ function Stars({ rating }) {
 }
 
 /** Sidebar / widget de réservation style OpenTable */
-function BookingWidget({ onBook }) {
+function BookingWidget({ onBook, initialDate, initialGuests }) {
   const DAYS = buildDays();
-  const [selDate, setSelDate] = useState(DAYS[0].iso);
+  // Pré-remplissage depuis la recherche d'accueil, avec garde-fous :
+  // la date n'est retenue que si elle appartient à la fenêtre proposée.
+  const validInitial = initialDate && DAYS.some(d => d.iso === initialDate) ? initialDate : DAYS[0].iso;
+  const initGuests = Math.min(20, Math.max(1, parseInt(initialGuests, 10) || 2));
+  const [selDate, setSelDate] = useState(validInitial);
   const [selSlot, setSelSlot] = useState(null);
-  const [pers,    setPers]    = useState(2);
+  const [pers,    setPers]    = useState(initGuests);
   const [carouselStart, setCarouselStart] = useState(0);
   const VISIBLE = 5;
 
@@ -404,6 +408,10 @@ export default function RestaurantDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  // Contexte de réservation transmis depuis la recherche d'accueil (pré-remplissage)
+  const prefillDate   = searchParams.get("date")   || undefined;
+  const prefillGuests = searchParams.get("guests") || undefined;
 
   const [resto,   setResto]   = useState(null);
   usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
@@ -709,13 +717,13 @@ export default function RestaurantDetail() {
           {/* Sur mobile, le widget de réservation apparaît ici aussi */}
           {isMobile && (
             <div style={{ marginTop: 28 }}>
-              <BookingWidget onBook={openModal} />
+              <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />
             </div>
           )}
         </div>
 
         {/* Sidebar — desktop seulement */}
-        {!isMobile && <BookingWidget onBook={openModal} />}
+        {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
       </div>
 
       {/* ── Section Avis ── */}

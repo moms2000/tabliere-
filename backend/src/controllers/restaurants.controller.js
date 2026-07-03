@@ -15,7 +15,7 @@ export const list = asyncHandler(async (req, res) => {
   const {
     page = 1, limit = 12,
     ville, quartier, cuisine_type,
-    search, sort = "rating",
+    search, sort = "rating", min_capacity,
   } = req.query;
   const offset = (page - 1) * limit;
   const params = ["actif"];
@@ -25,6 +25,11 @@ export const list = asyncHandler(async (req, res) => {
   if (quartier)      { params.push(quartier);        conditions.push(`r.quartier ILIKE $${params.length}`); }
   if (cuisine_type)  { params.push(cuisine_type);    conditions.push(`r.cuisine_type ILIKE $${params.length}`); }
   if (search)        { params.push(`%${search}%`);   conditions.push(`r.name ILIKE $${params.length}`); }
+  // Filtre "personnes" : restaurants pouvant accueillir la table (parse robuste)
+  const minCap = parseInt(min_capacity, 10);
+  if (Number.isFinite(minCap) && minCap > 0) {
+    params.push(minCap); conditions.push(`r.capacity >= $${params.length}`);
+  }
 
   const ORDER_MAP = {
     rating:       "r.rating DESC",
@@ -36,7 +41,7 @@ export const list = asyncHandler(async (req, res) => {
 
   // ── Cache Redis/mémoire — clé unique par combinaison de filtres ────────────
   // TTL 2 min pour la liste (données peu critiques, mise à jour fréquente)
-  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${search||""}`;
+  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${search||""}:${min_capacity||""}`;
   const cached = await cache.get(cacheKey).catch(() => null);
   if (cached) return res.status(200).json(cached);
 
@@ -78,10 +83,21 @@ export const getOne = asyncHandler(async (req, res) => {
   const cached = await cache.get(cacheKey).catch(() => null);
   if (cached) return ok(res, { restaurant: cached });
 
+  // Endpoint PUBLIC : liste blanche stricte de colonnes non sensibles.
+  // On NE joint PAS l'email du propriétaire (u.email) — le laisser fuiter ici
+  // exposait chaque adresse à du scraping (spam/phishing ciblé). owner_email
+  // reste disponible uniquement sur les endpoints admin authentifiés.
+  // On se limite aux colonnes garanties présentes au démarrage (schéma de base
+  // + migrations server.js). On EXCLUT volontairement lunch_hours/dinner_hours/
+  // tables_* (ajoutées seulement par la migration paresseuse, absentes ici) et
+  // les données internes non publiques (owner_id, plan, commission_pct).
   const { rows: [resto] } = await query(
-    `SELECT r.*,
-            u.full_name AS owner_name,
-            u.email     AS owner_email
+    `SELECT r.id, r.name, r.slug, r.description, r.cuisine_type,
+            r.address, r.ville, r.quartier, r.phone, r.email, r.website,
+            r.price_range, r.capacity, r.rating, r.review_count,
+            r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
+            r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
+            u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
      WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')`,

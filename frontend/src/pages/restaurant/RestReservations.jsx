@@ -327,10 +327,22 @@ export default function RestReservations() {
       .then(setConversations)
       .catch(() => {});
 
-    // Charger liste d'attente depuis localStorage (backend optionnel)
-    try {
-      setWaitlist(JSON.parse(localStorage.getItem("tci_waitlist") || "[]"));
-    } catch { setWaitlist([]); }
+    // Charger la liste d'attente depuis le serveur (synchro équipe) ;
+    // localStorage sert de secours hors-ligne / si l'API échoue.
+    reservationsService.listWaitlist()
+      .then(rows => {
+        const mapped = rows.map(w => ({
+          id: w.id, name: w.client_name, phone: w.client_phone,
+          party: w.party_size, status: w.status,
+          notified_at: w.notified_at, created_at: w.created_at,
+        }));
+        setWaitlist(mapped);
+        try { localStorage.setItem("tci_waitlist", JSON.stringify(mapped)); } catch {}
+      })
+      .catch(() => {
+        try { setWaitlist(JSON.parse(localStorage.getItem("tci_waitlist") || "[]")); }
+        catch { setWaitlist([]); }
+      });
   }, []);
 
   // Ouvre la modale de confirmation avec sélection de table
@@ -455,23 +467,36 @@ export default function RestReservations() {
     });
   };
 
-  const addWaitlist = () => {
+  const persistWaitlist = (list) => {
+    try { localStorage.setItem("tci_waitlist", JSON.stringify(list)); } catch {}
+  };
+
+  const addWaitlist = async () => {
     if (!newWait.name) return;
-    const entry = {
-      id: Date.now(), ...newWait,
-      created_at: new Date().toISOString(), status: "waiting",
-    };
-    const updated = [entry, ...waitlist];
-    setWaitlist(updated);
-    localStorage.setItem("tci_waitlist", JSON.stringify(updated));
+    try {
+      const saved = await reservationsService.addWaitlist({
+        client_name: newWait.name, client_phone: newWait.phone, party_size: Number(newWait.party) || 2,
+      });
+      const entry = saved
+        ? { id: saved.id, name: saved.client_name, phone: saved.client_phone,
+            party: saved.party_size, status: saved.status, created_at: saved.created_at }
+        : { id: Date.now(), ...newWait, created_at: new Date().toISOString(), status: "waiting" };
+      const updated = [entry, ...waitlist];
+      setWaitlist(updated); persistWaitlist(updated);
+    } catch (e) {
+      // Secours local si l'API échoue — ne bloque pas le restaurateur
+      const entry = { id: Date.now(), ...newWait, created_at: new Date().toISOString(), status: "waiting" };
+      const updated = [entry, ...waitlist];
+      setWaitlist(updated); persistWaitlist(updated);
+    }
     setNewWait({ name: "", phone: "", party: 2 });
     setShowAddWait(false);
   };
 
-  const notifyWaitlist = (id) => {
+  const notifyWaitlist = async (id) => {
     const updated = waitlist.map(w => w.id === id ? { ...w, status: "notified", notified_at: new Date().toISOString() } : w);
-    setWaitlist(updated);
-    localStorage.setItem("tci_waitlist", JSON.stringify(updated));
+    setWaitlist(updated); persistWaitlist(updated);
+    reservationsService.updateWaitlist(id, "notified").catch(() => {});
     const w = waitlist.find(x => x.id === id);
     if (w?.phone) {
       const msg = encodeURIComponent(`🍽️ Une table se libère chez votre restaurant ! Cliquez ici pour confirmer votre réservation : tabliereci.net`);
@@ -479,10 +504,10 @@ export default function RestReservations() {
     }
   };
 
-  const removeWaitlist = (id) => {
+  const removeWaitlist = async (id) => {
     const updated = waitlist.filter(w => w.id !== id);
-    setWaitlist(updated);
-    localStorage.setItem("tci_waitlist", JSON.stringify(updated));
+    setWaitlist(updated); persistWaitlist(updated);
+    reservationsService.deleteWaitlist(id).catch(() => {});
   };
 
   const filteredByDate = filterByDate(data);

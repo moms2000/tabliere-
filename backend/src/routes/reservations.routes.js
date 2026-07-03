@@ -40,6 +40,13 @@ router.post("/guest", reservationLimiter, validate(
   })
 ), ctrl.createGuest);
 
+// Liste d'attente (restaurateur/admin) — AVANT les routes /:id pour éviter la
+// collision avec le paramètre dynamique
+router.get   ("/waitlist",      authenticate, authorize("restaurateur","admin"), ctrl.listWaitlist);
+router.post  ("/waitlist",      authenticate, authorize("restaurateur","admin"), ctrl.addWaitlist);
+router.patch ("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.updateWaitlist);
+router.delete("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.deleteWaitlist);
+
 router.get("/",        authenticate,                          ctrl.list);
 router.get("/:id",     authenticate,                          ctrl.getOne);
 router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"), ctrl.confirm);

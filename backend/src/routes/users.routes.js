@@ -8,4 +8,10 @@ router.get   ("/me/reservations", authenticate, ctrl.myReservations);
 router.patch ("/me",              authenticate, ctrl.updateProfile);
 router.delete("/me",              authenticate, ctrl.deleteAccount);
 
+// Favoris (synchro compte) + fidélité
+router.get   ("/me/favorites",               authenticate, ctrl.listFavorites);
+router.post  ("/me/favorites",               authenticate, ctrl.addFavorite);
+router.delete("/me/favorites/:restaurantId", authenticate, ctrl.removeFavorite);
+router.get   ("/me/loyalty",                 authenticate, ctrl.getLoyalty);
+
 export default router;

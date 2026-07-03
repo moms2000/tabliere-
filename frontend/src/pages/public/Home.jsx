@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import HomeMobile from "./HomeMobile.jsx";
 import { restaurantsService } from "../../services/restaurants.service.js";
+import { usersService } from "../../services/users.service.js";
 import api from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
@@ -602,25 +603,56 @@ export default function Home() {
     if (sort !== "rating") params.sort = sort;
     const ck = Object.entries(checkedC).filter(([,v]) => v).map(([k]) => k);
     if (ck.length === 1) params.cuisine_type = ck[0];
+    // Le sélecteur "personnes" filtre les restaurants pouvant accueillir la table
+    if (resaGuests > 1) params.min_capacity = resaGuests;
     setLoading(true);
     restaurantsService.list(params)
       .then(res => { setRestaurants(res.data || []); setTotal(res.pagination?.total || 0); })
       .catch(() => setRestaurants([]))
       .finally(() => setLoading(false));
-  }, [search, sort, checkedC, activeTab]);
+  }, [search, sort, checkedC, activeTab, resaGuests]);
+
+  // Ouvre une fiche restaurant en transmettant le contexte de réservation
+  // (date/heure/couverts) pour pré-remplir le formulaire de réservation.
+  const openRestaurant = (slug) => {
+    const qs = new URLSearchParams({
+      date: resaDate || "", time: resaTime || "", guests: String(resaGuests || 2),
+    }).toString();
+    navigate(`/restaurants/${slug}?${qs}`);
+  };
 
   const toggle = (setter, key) => setter(prev => ({ ...prev, [key]: !prev[key] }));
 
   const toggleFavorite = (e, r) => {
     e.stopPropagation();
-    const stored = JSON.parse(localStorage.getItem("tci_favorites") || "[]");
-    const exists = stored.some(f => f.slug === r.slug);
+    const exists = favorites.some(f => f.slug === r.slug);
     const updated = exists
-      ? stored.filter(f => f.slug !== r.slug)
-      : [...stored, { slug: r.slug, name: r.name, ville: r.ville, cuisine_type: r.cuisine_type }];
+      ? favorites.filter(f => f.slug !== r.slug)
+      : [...favorites, { slug: r.slug, name: r.name, ville: r.ville, cuisine_type: r.cuisine_type, restaurant_id: r.id }];
     setFavorites(updated);
     localStorage.setItem("tci_favorites", JSON.stringify(updated));
+    // Si connecté : synchroniser côté serveur (favoris retrouvés sur tout appareil)
+    if (user) {
+      if (exists) usersService.removeFavorite(r.id).catch(() => {});
+      else        usersService.addFavorite({ slug: r.slug }).catch(() => {});
+    }
   };
+
+  // Charger les favoris du compte à la connexion (fusion avec le local)
+  useEffect(() => {
+    if (!user) return;
+    usersService.listFavorites()
+      .then(rows => {
+        if (!Array.isArray(rows)) return;
+        const mapped = rows.map(f => ({
+          slug: f.slug, name: f.name, ville: f.ville,
+          cuisine_type: f.cuisine_type, restaurant_id: f.restaurant_id,
+        }));
+        setFavorites(mapped);
+        try { localStorage.setItem("tci_favorites", JSON.stringify(mapped)); } catch {}
+      })
+      .catch(() => {}); // en cas d'échec on garde le local
+  }, [user]);
 
   const isFav   = (slug) => favorites.some(f => f.slug === slug);
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1161,7 +1193,7 @@ export default function Home() {
                 {restaurants.map((r, idx) => (
                   <motion.div key={r.id} variants={fadeUp}
                     whileHover={{ y: -2, boxShadow: "0 4px 18px rgba(30,46,40,.07)" }}
-                    onClick={() => navigate(`/restaurants/${r.slug}`)}
+                    onClick={() => openRestaurant(r.slug)}
                     style={{ display: "grid", gridTemplateColumns: "120px 1fr",
                       border: `0.5px solid ${BORDER}`, borderRadius: 12,
                       overflow: "hidden", marginBottom: 10, background: WHITE,

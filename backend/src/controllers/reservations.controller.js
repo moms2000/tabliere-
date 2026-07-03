@@ -570,3 +570,73 @@ async function assertOwnsReservation(req, resa) {
   }
   throw new AppError("Accès refusé", 403);
 }
+
+// ── Liste d'attente (waitlist) — restaurateur ────────────────────────────────
+// Résout de façon fiable le restaurant du restaurateur connecté.
+async function resolveRestoId(req) {
+  if (req.user.role === "admin" && req.query.restaurant_id) return req.query.restaurant_id;
+  if (req.user.restaurant_id) return req.user.restaurant_id;
+  const { rows: [r] } = await query(
+    "SELECT id FROM restaurants WHERE owner_id = $1 LIMIT 1", [req.user.id]
+  );
+  return r?.id || null;
+}
+
+const WAITLIST_STATUSES = ["waiting", "notified", "seated", "cancelled"];
+
+// GET /reservations/waitlist
+export const listWaitlist = asyncHandler(async (req, res) => {
+  const restoId = await resolveRestoId(req);
+  if (!restoId) return ok(res, { waitlist: [] });
+  const { rows } = await query(
+    `SELECT id, client_name, client_phone, party_size, preferred_at,
+            status, notified_at, created_at
+     FROM waitlist WHERE restaurant_id = $1
+     ORDER BY created_at DESC LIMIT 200`,
+    [restoId]
+  );
+  return ok(res, { waitlist: rows });
+});
+
+// POST /reservations/waitlist
+export const addWaitlist = asyncHandler(async (req, res) => {
+  const restoId = await resolveRestoId(req);
+  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  const { client_name, client_phone, party_size, preferred_at } = req.body;
+  if (!client_name?.trim()) throw new AppError("Nom du client requis", 400);
+  const size = Math.max(1, parseInt(party_size, 10) || 2);
+  const { rows: [entry] } = await query(
+    `INSERT INTO waitlist (restaurant_id, client_name, client_phone, party_size, preferred_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [restoId, client_name.trim(), client_phone || null, size, preferred_at || null]
+  );
+  return created(res, { entry }, "Ajouté à la liste d'attente");
+});
+
+// PATCH /reservations/waitlist/:id
+export const updateWaitlist = asyncHandler(async (req, res) => {
+  const restoId = await resolveRestoId(req);
+  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  const { status } = req.body;
+  if (!WAITLIST_STATUSES.includes(status)) throw new AppError("Statut invalide", 400);
+  const notifiedAt = status === "notified" ? "NOW()" : "notified_at";
+  const { rows: [entry] } = await query(
+    `UPDATE waitlist SET status = $1, notified_at = ${notifiedAt}
+     WHERE id = $2 AND restaurant_id = $3 RETURNING *`,
+    [status, req.params.id, restoId]
+  );
+  if (!entry) return notFound(res, "Entrée introuvable");
+  return ok(res, { entry }, "Liste d'attente mise à jour");
+});
+
+// DELETE /reservations/waitlist/:id
+export const deleteWaitlist = asyncHandler(async (req, res) => {
+  const restoId = await resolveRestoId(req);
+  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  const { rows: [entry] } = await query(
+    "DELETE FROM waitlist WHERE id = $1 AND restaurant_id = $2 RETURNING id",
+    [req.params.id, restoId]
+  );
+  if (!entry) return notFound(res, "Entrée introuvable");
+  return ok(res, null, "Retiré de la liste d'attente");
+});

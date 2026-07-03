@@ -15,7 +15,8 @@ export const myReservations = asyncHandler(async (req, res) => {
   const params = [req.user.id];
   let where = "WHERE r.client_id = $1";
 
-  if (status) { params.push(status); where += ` AND r.status = $${params.length}`; }
+  // Cast ::text : un status invalide renvoie 0 résultat au lieu d'un 500 ENUM
+  if (status) { params.push(status); where += ` AND r.status::text = $${params.length}`; }
 
   // LEFT JOIN pour ne JAMAIS perdre une réservation même si le restaurant
   // a été supprimé/désactivé → l'historique du client reste complet
@@ -111,4 +112,79 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   await cache.del(`user:${req.user.id}`);
   logger.info("Compte supprimé (anonymisé)", { userId: req.user.id });
   return ok(res, null, "Votre compte a été supprimé");
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/me/favorites — liste des restaurants favoris (synchro compte)
+// ---------------------------------------------------------------------------
+export const listFavorites = asyncHandler(async (req, res) => {
+  const { rows } = await query(
+    `SELECT f.restaurant_id, f.created_at,
+            r.name, r.slug, r.cuisine_type, r.ville, r.quartier,
+            r.rating, r.review_count, r.price_range, r.logo_url, r.photos
+     FROM favorites f
+     JOIN restaurants r ON r.id = f.restaurant_id
+     WHERE f.user_id = $1
+     ORDER BY f.created_at DESC`,
+    [req.user.id]
+  );
+  return ok(res, { favorites: rows });
+});
+
+// ---------------------------------------------------------------------------
+// POST /users/me/favorites { restaurant_id | slug } — ajouter un favori
+// ---------------------------------------------------------------------------
+export const addFavorite = asyncHandler(async (req, res) => {
+  const { restaurant_id, slug } = req.body;
+  if (!restaurant_id && !slug) throw new AppError("restaurant_id ou slug requis", 400);
+
+  const { rows: [resto] } = await query(
+    restaurant_id
+      ? "SELECT id FROM restaurants WHERE id = $1"
+      : "SELECT id FROM restaurants WHERE slug = $1",
+    [restaurant_id || slug]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+
+  // ON CONFLICT : idempotent, pas d'erreur si déjà favori
+  await query(
+    `INSERT INTO favorites (user_id, restaurant_id) VALUES ($1, $2)
+     ON CONFLICT (user_id, restaurant_id) DO NOTHING`,
+    [req.user.id, resto.id]
+  );
+  return ok(res, { restaurant_id: resto.id }, "Ajouté aux favoris");
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /users/me/favorites/:restaurantId — retirer un favori
+// ---------------------------------------------------------------------------
+export const removeFavorite = asyncHandler(async (req, res) => {
+  await query(
+    "DELETE FROM favorites WHERE user_id = $1 AND restaurant_id = $2",
+    [req.user.id, req.params.restaurantId]
+  );
+  return ok(res, null, "Retiré des favoris");
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/me/loyalty — solde de points de fidélité (calcul serveur)
+// Règle : 50 points par réservation honorée (confirmée/terminée et passée).
+// Source unique de vérité, cohérente sur tous les appareils.
+// ---------------------------------------------------------------------------
+export const getLoyalty = asyncHandler(async (req, res) => {
+  const POINTS_PER_VISIT = 50;
+  const { rows: [row] } = await query(
+    `SELECT COUNT(*)::int AS honored
+     FROM reservations
+     WHERE client_id = $1
+       AND status IN ('confirme','termine')
+       AND reserved_at < NOW()`,
+    [req.user.id]
+  );
+  const honored = row?.honored || 0;
+  return ok(res, {
+    points:          honored * POINTS_PER_VISIT,
+    honored_visits:  honored,
+    points_per_visit: POINTS_PER_VISIT,
+  });
 });

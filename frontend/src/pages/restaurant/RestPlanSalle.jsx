@@ -693,7 +693,7 @@ export default function RestPlanSalle() {
       {modalTable && (
         <Modal open title={editTable ? "Modifier la table" : "Nouvelle table"}
           onClose={() => { setModalTable(false); setEditTable(null); }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             <FormField label="Numéro / Label">
               <Input value={form.label}
                 onChange={e => setForm(p => ({ ...p, label: e.target.value }))}

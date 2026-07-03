@@ -6,6 +6,7 @@ import { Card, SectionHeader, PageTitle, Btn, Toggle, Modal, FormField, Input, P
 import { menuService }        from "../../services/menu.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useIsMobile } from "../../hooks/useIsMobile.js";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -80,6 +81,7 @@ function OptionEditor({ label, addLabel, placeholder, items, onChange }) {
 
 export default function RestMenu() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [categories, setCategories] = useState([]);
   const [activeTab,  setActiveTab]  = useState(null);
   const [qrActive,   setQrActive]   = useState(false);
@@ -305,7 +307,7 @@ export default function RestMenu() {
       {loading ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: 13 }}>Chargement…</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "210px 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "210px 1fr", gap: 14 }}>
 
           {/* Catégories */}
           <motion.div variants={fadeUp}>
@@ -470,7 +472,7 @@ export default function RestMenu() {
               La photo est compressée automatiquement depuis votre appareil.
             </div>
           </FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             <FormField label="Prix (FCFA)">
               <Input value={formItem.price} type="number"
                 onChange={e => setFormItem(p => ({ ...p, price: e.target.value }))}

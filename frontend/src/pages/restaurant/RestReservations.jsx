@@ -144,7 +144,7 @@ function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
   return (
     <Modal open title="Nouvelle réservation" onClose={onClose} width={540}>
       {/* ── Client ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 16 }}>
         <FormField label="Nom du client">
           <Input value={form.client_name} onChange={setField("client_name")} placeholder="Jean Kouassi" />
         </FormField>
@@ -677,7 +677,7 @@ export default function RestReservations() {
       {/* ── ANALYTICS ──────────────────────────────────────────────────── */}
       {mainTab === "analytics" && (
         <motion.div variants={fadeUp}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
             <Card>
               <SectionHeader title="Heures de pointe" icon={Clock} />
               <BarChart data={hourStats} color={G} />
@@ -736,7 +736,7 @@ export default function RestReservations() {
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   style={{ background: "#f8f8f8", borderRadius: 10, padding: 14, marginBottom: 14, overflow: "hidden" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: 8, alignItems: "end" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, alignItems: "end" }}>
                     <div>
                       <label style={{ fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>Nom</label>
                       <input value={newWait.name} onChange={e => setNewWait(p=>({...p,name:e.target.value}))}

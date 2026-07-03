@@ -126,7 +126,8 @@ export function PageTitle({ title, subtitle }) {
 // ── Table ─────────────────────────────────────────────────────────────────────
 export function Table({ columns, rows, onRowClick }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: FONT }}>
+    <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+    <table style={{ width: "100%", minWidth: 520, borderCollapse: "collapse", fontSize: 13, fontFamily: FONT }}>
       <thead>
         <tr style={{ borderBottom: `0.5px solid ${BORDER}` }}>
           {columns.map(c => (
@@ -153,6 +154,7 @@ export function Table({ columns, rows, onRowClick }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 

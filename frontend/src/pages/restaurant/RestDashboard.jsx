@@ -9,6 +9,7 @@ import { ordersService } from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useIsMobile } from "../../hooks/useIsMobile.js";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -40,6 +41,7 @@ const fmtDate = (dt) => dt
 
 export default function RestDashboard() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [resto,    setResto]    = useState(null);
   const [resas,    setResas]    = useState([]);
   const [orders,   setOrders]   = useState([]);
@@ -181,7 +183,7 @@ export default function RestDashboard() {
         </motion.div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 14, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 280px", gap: 14, marginBottom: 14 }}>
 
         {/* Réservations récentes */}
         <motion.div variants={fadeUp}>
@@ -330,7 +332,7 @@ function DashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 280px", gap: 14 }}>
         <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: 16 }}>
           <Bone w="40%" h={18} mb={16} />
           {[1,2,3,4].map(i => (

@@ -433,7 +433,7 @@ export default function RestCommandes() {
 
       {/* ── Onglet stats ── */}
       {activeTab === "stats" && stats && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
 
           {/* Chiffres clés */}
           <motion.div variants={fadeUp}>
@@ -567,7 +567,7 @@ export default function RestCommandes() {
               </div>
 
               {/* Infos client + table */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 16 }}>
                 {[
                   { label: "Nom client", key: "client_name", ph: "Jean Kouassi" },
                   { label: "Téléphone", key: "client_phone", ph: "+225 07 00 00 00 00" },

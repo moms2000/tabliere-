@@ -14,9 +14,16 @@ export function AuthProvider({ children }) {
 
     authService.me()
       .then(setUser)
-      .catch(() => {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
+      .catch((e) => {
+        // Nettoyer les tokens UNIQUEMENT si la session est réellement invalide
+        // (401/403 après tentative de refresh). Sur erreur réseau/timeout/cold
+        // start, on GARDE les tokens pour ne pas déconnecter à tort.
+        const st = e?.response?.status;
+        if (st === 401 || st === 403) {
+          ["access_token", "refresh_token", "tci_remember"].forEach((k) => {
+            localStorage.removeItem(k); sessionStorage.removeItem(k);
+          });
+        }
       })
       .finally(() => setLoading(false));
   }, []);

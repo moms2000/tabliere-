@@ -65,6 +65,61 @@ async function sendVerificationEmail(email, fullName, token) {
   }
 }
 
+// ── Helper email SendGrid — réinitialisation de mot de passe ──────────────────
+async function sendResetEmail(email, fullName, token) {
+  if (!env.SENDGRID_API_KEY) {
+    logger.info(`[Email MOCK] Reset MDP → ${email} | token=${token}`);
+    return;
+  }
+  const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
+    .replace("tabliereci.ci", "tabliereci.net");
+  const frontUrl  = env.FRONTEND_URL || "https://tabliereci.net";
+  const resetUrl  = `${frontUrl}/reset-password?token=${token}`;
+  const firstName = (fullName || "").split(" ")[0] || "cher utilisateur";
+
+  try {
+    await axios.post("https://api.sendgrid.com/v3/mail/send", {
+      personalizations: [{ to: [{ email }] }],
+      from: { email: fromEmail, name: "TablièreCI" },
+      reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+      subject: "Réinitialisez votre mot de passe TablièreCI",
+      content: [
+        { type: "text/plain", value: `Bonjour ${firstName}, réinitialisez votre mot de passe TablièreCI : ${resetUrl} (valable 1h). Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.` },
+        { type: "text/html", value: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
+            <div style="background:#e8a045;padding:14px 20px;border-radius:8px 8px 0 0">
+              <span style="color:#1a1000;font-size:17px;font-weight:bold">TablièreCI</span>
+            </div>
+            <div style="background:#fff;padding:28px 24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px">
+              <h2 style="color:#1e2e28;margin:0 0 10px">Réinitialisation du mot de passe</h2>
+              <p style="color:#666;line-height:1.6">Bonjour ${firstName}, vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous :</p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="${resetUrl}" style="display:inline-block;background:#e8a045;color:#1a1000;padding:14px 36px;border-radius:30px;font-size:15px;font-weight:700;text-decoration:none">Réinitialiser mon mot de passe</a>
+              </div>
+              <p style="color:#999;font-size:12px;text-align:center">Ce lien est valable 1 heure.<br>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe reste inchangé.</p>
+              <div style="margin-top:16px;padding:12px;background:#f8f5ef;border-radius:8px;font-size:11px;color:#999;word-break:break-all">
+                Lien : <a href="${resetUrl}" style="color:#e8a045">${resetUrl}</a>
+              </div>
+            </div>
+            <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
+          </div>` },
+      ],
+      headers: {
+        "List-Unsubscribe": "<mailto:unsubscribe@tabliereci.net>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    }, {
+      headers: {
+        Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    logger.info("[Email] Reset MDP envoyé", { email });
+  } catch (e) {
+    logger.warn("[Email] Échec envoi reset MDP", { email, error: e.response?.data || e.message });
+  }
+}
+
 export const register = asyncHandler(async (req, res) => {
   const { full_name, email, phone, password, role, restaurant_name, code_restaurateur } = req.body;
 
@@ -330,10 +385,56 @@ export const resendVerification = asyncHandler(async (req, res) => {
   return ok(res, {}, "Si cet email existe, un lien a été envoyé.");
 });
 
+// ── POST /auth/forgot-password ───────────────────────────────────────────────
 export const forgotPassword = asyncHandler(async (req, res) => {
-  return ok(res, {}, "Si cet email existe, un lien vous a été envoyé.");
+  const { email } = req.body;
+  // Toujours répondre OK (ne jamais révéler si l'email existe → anti-énumération)
+  const genericMsg = "Si cet email existe, un lien de réinitialisation vous a été envoyé.";
+  if (!email) return ok(res, {}, genericMsg);
+
+  const { rows: [user] } = await query(
+    "SELECT id, full_name, status FROM users WHERE email = $1", [email]
+  ).catch(() => ({ rows: [] }));
+
+  // Ne pas envoyer aux comptes inexistants ou suspendus/supprimés
+  if (user && !["suspendu", "bloque"].includes(user.status)) {
+    const token   = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1h
+    await query(
+      `UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3`,
+      [token, expires.toISOString(), user.id]
+    ).catch((e) => logger.warn("forgotPassword: échec stockage token", { error: e?.message }));
+    await sendResetEmail(email, user.full_name, token);
+  }
+
+  return ok(res, {}, genericMsg);
 });
 
+// ── POST /auth/reset-password ────────────────────────────────────────────────
 export const resetPassword = asyncHandler(async (req, res) => {
-  return ok(res, {}, "Fonctionnalité en cours de développement.");
+  const { token, password } = req.body;
+  if (!token || !password) throw new AppError("Token et nouveau mot de passe requis", 400);
+  if (password.length < 6) throw new AppError("Le mot de passe doit contenir au moins 6 caractères", 400);
+
+  const { rows: [user] } = await query(
+    `SELECT id FROM users
+     WHERE password_reset_token = $1
+       AND password_reset_expires IS NOT NULL
+       AND password_reset_expires > NOW()`,
+    [token]
+  ).catch(() => ({ rows: [] }));
+
+  if (!user) throw new AppError("Lien invalide ou expiré. Veuillez refaire une demande.", 400);
+
+  const password_hash = await bcrypt.hash(password, 10);
+  await query(
+    `UPDATE users
+     SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = NOW()
+     WHERE id = $2`,
+    [password_hash, user.id]
+  );
+  await cache.del(`user:${user.id}`).catch(() => {});
+
+  logger.info("Mot de passe réinitialisé", { userId: user.id });
+  return ok(res, { reset: true }, "Mot de passe réinitialisé avec succès. Vous pouvez vous connecter.");
 });

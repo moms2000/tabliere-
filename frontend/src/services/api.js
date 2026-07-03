@@ -42,10 +42,38 @@ export const clearTokens = () => {
   });
 };
 
-const isRemembered = () =>
-  localStorage.getItem("tci_remember") === "1" ||
-  // Si stocké en sessionStorage → pas remembered
-  (sessionStorage.getItem("access_token") !== null ? false : true);
+// "Remember me" = les tokens vivent dans localStorage (persistants)
+const isRemembered = () => localStorage.getItem("refresh_token") !== null;
+
+// Pages publiques : ne PAS éjecter l'utilisateur vers /connexion s'il y est déjà
+function onPublicPage() {
+  const p = window.location.pathname;
+  const PUBLIC = ["/", "/connexion", "/inscription", "/restaurants", "/menu",
+    "/verify-email", "/mot-de-passe", "/reset-password", "/cgu",
+    "/mentions-legales", "/confidentialite"];
+  return PUBLIC.some((x) => p === x || p.startsWith(x + "/") || (x !== "/" && p.startsWith(x)));
+}
+
+// Refresh résilient : réessaie sur erreur réseau/timeout/5xx (cold start Render),
+// mais échoue immédiatement sur 401/403 (refresh token réellement invalide).
+async function attemptRefresh(refreshToken) {
+  let lastErr;
+  for (let i = 0; i < 2; i++) {
+    try {
+      return await axios.post(
+        `${BASE_URL}/auth/refresh`,
+        { refresh_token: refreshToken },
+        { timeout: 30_000 } // large : survit aux réveils à froid du backend
+      );
+    } catch (e) {
+      const st = e.response?.status;
+      if (st === 401 || st === 403) throw e; // token invalide → inutile de réessayer
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+  throw lastErr;
+}
 
 // ── Intercepteur requête : injecter le token ─────────────────────────────────
 api.interceptors.request.use((config) => {
@@ -89,11 +117,15 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = getStoredToken("refresh_token");
-        if (!refreshToken) throw new Error("No refresh token");
+        if (!refreshToken) {
+          // Pas de refresh token du tout → session absente. On rejette sans
+          // rediriger brutalement (l'app/route protégée gère l'absence de user).
+          const noTok = new Error("No refresh token");
+          noTok._noToken = true;
+          throw noTok;
+        }
 
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
+        const { data } = await attemptRefresh(refreshToken);
 
         const { access_token, refresh_token } = data.data;
         // Conserver le même storage que lors du login
@@ -104,8 +136,17 @@ api.interceptors.response.use(
         return api(original);
       } catch (refreshErr) {
         processQueue(refreshErr, null);
-        clearTokens();
-        window.location.href = "/connexion";
+
+        // Déconnexion UNIQUEMENT si le refresh token est réellement invalide/expiré
+        // (401/403) ou absent. Sur erreur réseau/timeout/5xx (cold start, coupure
+        // passagère) : NE PAS déconnecter — la session reste valide, on rejette
+        // juste la requête pour un nouvel essai ultérieur.
+        const st = refreshErr.response?.status;
+        const authFailure = st === 401 || st === 403 || refreshErr._noToken;
+        if (authFailure) {
+          clearTokens();
+          if (!onPublicPage()) window.location.href = "/connexion";
+        }
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;

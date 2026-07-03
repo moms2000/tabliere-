@@ -15,7 +15,9 @@ export const env = {
   // JWT
   JWT_SECRET:         optional("JWT_SECRET", "change_me_in_production_super_secret_key"),
   JWT_REFRESH_SECRET: optional("JWT_REFRESH_SECRET", "change_me_refresh_secret_key"),
-  JWT_EXPIRES_IN:     optional("JWT_EXPIRES_IN", "15m"),
+  // Access token allongé à 2h (au lieu de 15m) : réduit fortement la fréquence
+  // des refresh et donc les risques de déconnexion sur coupure/cold-start
+  JWT_EXPIRES_IN:     optional("JWT_EXPIRES_IN", "2h"),
   JWT_REFRESH_IN:     optional("JWT_REFRESH_IN", "30d"),
 
   // Redis

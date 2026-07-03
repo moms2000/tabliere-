@@ -29,6 +29,55 @@ function QrSvg({ url, size = 140, dark = DARK, light = "white" }) {
   );
 }
 
+// Normalise une valeur d'options (tableau OU chaîne legacy "Saignant!Biencuit")
+// vers un tableau de choix propres. Gère les anciens séparateurs , ; ! saut de ligne.
+function normalizeChoices(val) {
+  if (Array.isArray(val)) {
+    return val.flatMap(s => String(s).split(/[,;!\n]/)).map(s => s.trim()).filter(Boolean);
+  }
+  if (typeof val === "string") {
+    return val.split(/[,;!\n]/).map(s => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+// Éditeur de choix répétables (une bulle par choix) avec bouton "Ajouter"
+function OptionEditor({ label, addLabel, placeholder, items, onChange }) {
+  const list = Array.isArray(items) ? items : [];
+  const setAt    = (i, v) => onChange(list.map((x, idx) => (idx === i ? v : x)));
+  const removeAt = (i)    => onChange(list.filter((_, idx) => idx !== i));
+  const add      = ()     => onChange([...list, ""]);
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 8 }}>{label}</div>
+      {list.length === 0 && (
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
+          Aucun choix pour l'instant.
+        </div>
+      )}
+      {list.map((val, i) => (
+        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <div style={{ flex: 1 }}>
+            <Input value={val} onChange={e => setAt(i, e.target.value)} placeholder={placeholder} />
+          </div>
+          <button type="button" onClick={() => removeAt(i)} aria-label="Supprimer ce choix"
+            style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 8, border: `1px solid ${BORDER}`,
+              background: "white", cursor: "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", color: "#DC2626" }}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px",
+          borderRadius: 8, border: `1px dashed ${MUTED}`, background: "transparent", cursor: "pointer",
+          color: DARK, fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
+        <Plus size={14} /> {addLabel}
+      </button>
+    </div>
+  );
+}
+
 export default function RestMenu() {
   const { user } = useAuth();
   const [categories, setCategories] = useState([]);
@@ -113,7 +162,13 @@ export default function RestMenu() {
   };
 
   const saveItem = async () => {
-    const payload = { ...formItem, price: Number(formItem.price) };
+    // Nettoyer les choix : retirer les lignes vides ajoutées mais non remplies
+    const clean = (arr) => (Array.isArray(arr) ? arr.map(s => String(s).trim()).filter(Boolean) : []);
+    const options = {
+      cuissons:        clean(formItem.options?.cuissons),
+      accompagnements: clean(formItem.options?.accompagnements),
+    };
+    const payload = { ...formItem, options, price: Number(formItem.price) };
     try {
       if (editItem) {
         await menuService.updateItem(editItem.id, payload);
@@ -145,7 +200,12 @@ export default function RestMenu() {
     setEditItem(item);
     let parsedOpts = { cuissons: [], accompagnements: [] };
     try { parsedOpts = typeof item.options === "string" ? JSON.parse(item.options) : (item.options || parsedOpts); } catch(_) {}
-    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active, options: parsedOpts });
+    // Normaliser (gère les données legacy "Saignant!Biencuit" collées en une bulle)
+    const options = {
+      cuissons:        normalizeChoices(parsedOpts?.cuissons),
+      accompagnements: normalizeChoices(parsedOpts?.accompagnements),
+    };
+    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active, options });
     setModalItem(true);
   };
   const openNewItem  = ()     => {
@@ -432,24 +492,20 @@ export default function RestMenu() {
           <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 14, marginTop: 4 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase",
               letterSpacing: "0.8px", marginBottom: 10 }}>Options client (optionnel)</div>
-            <FormField label="Cuissons disponibles (séparées par des virgules)">
-              <Input
-                value={(formItem.options?.cuissons || []).join(", ")}
-                onChange={e => setFormItem(p => ({
-                  ...p, options: { ...p.options,
-                    cuissons: e.target.value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean) }
-                }))}
-                placeholder="Saignant, À point, Bien cuit" />
-            </FormField>
-            <FormField label="Accompagnements disponibles (séparés par des virgules)">
-              <Input
-                value={(formItem.options?.accompagnements || []).join(", ")}
-                onChange={e => setFormItem(p => ({
-                  ...p, options: { ...p.options,
-                    accompagnements: e.target.value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean) }
-                }))}
-                placeholder="Frites, Riz, Attiéké, Salade" />
-            </FormField>
+            <OptionEditor
+              label="Cuissons disponibles"
+              addLabel="Ajouter une cuisson"
+              placeholder="Ex : Saignant"
+              items={formItem.options?.cuissons || []}
+              onChange={(arr) => setFormItem(p => ({ ...p, options: { ...p.options, cuissons: arr } }))}
+            />
+            <OptionEditor
+              label="Accompagnements disponibles"
+              addLabel="Ajouter un accompagnement"
+              placeholder="Ex : Frites"
+              items={formItem.options?.accompagnements || []}
+              onChange={(arr) => setFormItem(p => ({ ...p, options: { ...p.options, accompagnements: arr } }))}
+            />
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>

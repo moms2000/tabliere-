@@ -274,11 +274,14 @@ export default function ClientMenu() {
     let opts;
     try { opts = typeof item.options === "string" ? JSON.parse(item.options) : item.options; } catch { return null; }
     if (!opts) return null;
-    // Normaliser : re-découper chaque entrée sur , ; ou retour ligne
-    // (corrige les anciennes données saisies avec ; au lieu de ,)
-    const splitAll = (arr) => (Array.isArray(arr) ? arr : [])
-      .flatMap(s => String(s).split(/[,;\n]/))
-      .map(s => s.trim()).filter(Boolean);
+    // Normaliser : accepter tableau OU chaîne legacy, et re-découper chaque
+    // entrée sur , ; ! ou retour ligne (corrige les données "Saignant!Biencuit"
+    // qui s'affichaient en une seule bulle)
+    const splitAll = (val) => {
+      const arr = Array.isArray(val) ? val : (val == null ? [] : [val]);
+      return arr.flatMap(s => String(s).split(/[,;!\n]/))
+        .map(s => s.trim()).filter(Boolean);
+    };
     return {
       ...opts,
       cuissons:        splitAll(opts.cuissons),

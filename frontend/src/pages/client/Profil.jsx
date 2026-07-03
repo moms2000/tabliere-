@@ -118,9 +118,17 @@ export default function Profil() {
 
   const [points, setPoints] = useState(0);
 
+  // Filtres + pagination de l'onglet réservations
+  const [fltYear,  setFltYear]  = useState("");
+  const [fltMonth, setFltMonth] = useState("");
+  const [fltDay,   setFltDay]   = useState("");
+  const [fltResto, setFltResto] = useState("");
+  const [resaPage, setResaPage] = useState(1);
+  const RESA_PER_PAGE = 10;
+
   // Charger réservations
   useEffect(() => {
-    reservationsService.myReservations({ limit: 50 })
+    reservationsService.myReservations({ limit: 200 })
       .then(res => {
         const list = res.data || [];
         setReservations(list);
@@ -236,6 +244,29 @@ export default function Profil() {
     { id: "rewards",       label: t("tab_rewards"),      icon: Award },
     { id: "saved",         label: t("tab_saved"),        icon: Heart },
   ];
+
+  // ── Filtres + pagination des réservations (client-side) ────────────────────
+  const restoOf = (r) => r.restaurant_name || r.resto_name || "—";
+  const resaYears = [...new Set(reservations.map(r => r.reserved_at && new Date(r.reserved_at).getFullYear()).filter(Boolean))].sort((a, b) => b - a);
+  const resaRestos = [...new Set(reservations.map(restoOf).filter(v => v && v !== "—"))].sort();
+  const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+  const filteredResas = reservations.filter(r => {
+    if (!r.reserved_at) return !(fltYear || fltMonth || fltDay); // sans date : visible seulement sans filtre date
+    const d = new Date(r.reserved_at);
+    if (fltYear  && d.getFullYear() !== +fltYear)  return false;
+    if (fltMonth && (d.getMonth() + 1) !== +fltMonth) return false;
+    if (fltDay   && d.getDate() !== +fltDay)       return false;
+    if (fltResto && restoOf(r) !== fltResto)       return false;
+    return true;
+  });
+  const resaPageCount = Math.max(1, Math.ceil(filteredResas.length / RESA_PER_PAGE));
+  const safeResaPage  = Math.min(resaPage, resaPageCount);
+  const pagedResas    = filteredResas.slice((safeResaPage - 1) * RESA_PER_PAGE, safeResaPage * RESA_PER_PAGE);
+  const hasResaFilter = fltYear || fltMonth || fltDay || fltResto;
+  const resetResaFilters = () => { setFltYear(""); setFltMonth(""); setFltDay(""); setFltResto(""); setResaPage(1); };
+  const selStyle = { padding: "8px 10px", borderRadius: 8, border: "0.5px solid #ddd",
+    fontSize: 12, background: "white", fontFamily: "inherit", color: "#333", cursor: "pointer" };
 
   return (
     <div style={{ fontFamily: "Inter, sans-serif", background: "#f7f7f5", minHeight: "100vh",
@@ -468,8 +499,47 @@ export default function Profil() {
               </EmptyState>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {reservations.map((r, i) => (
-                  <div key={i} style={{ background: "white", borderRadius: 14,
+                {/* ── Filtres ── */}
+                <div style={{ background: "white", borderRadius: 14, border: "0.5px solid #eee",
+                  padding: "12px 12px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
+                    <select value={fltYear} onChange={e => { setFltYear(e.target.value); setResaPage(1); }} style={selStyle}>
+                      <option value="">Toutes années</option>
+                      {resaYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={fltMonth} onChange={e => { setFltMonth(e.target.value); setResaPage(1); }} style={selStyle}>
+                      <option value="">Tous les mois</option>
+                      {MONTHS_FR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                    <select value={fltDay} onChange={e => { setFltDay(e.target.value); setResaPage(1); }} style={selStyle}>
+                      <option value="">Tous les jours</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <select value={fltResto} onChange={e => { setFltResto(e.target.value); setResaPage(1); }} style={selStyle}>
+                      <option value="">Tous les restaurants</option>
+                      {resaRestos.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                    <span style={{ fontSize: 11, color: "#999" }}>
+                      {filteredResas.length} réservation{filteredResas.length > 1 ? "s" : ""}
+                    </span>
+                    {hasResaFilter && (
+                      <button onClick={resetResaFilters}
+                        style={{ fontSize: 11, color: G, border: "none", background: "transparent",
+                          cursor: "pointer", fontWeight: 600 }}>
+                        ✕ Réinitialiser
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {filteredResas.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "#999", fontSize: 13, padding: "24px 0" }}>
+                    Aucune réservation ne correspond à ces filtres.
+                  </div>
+                ) : pagedResas.map((r, i) => (
+                  <div key={r.id || r.ref || i} style={{ background: "white", borderRadius: 14,
                     border: "0.5px solid #eee", padding: "13px 14px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: "#E1F5EE",
@@ -515,6 +585,28 @@ export default function Profil() {
                     </div>
                   </div>
                 ))}
+
+                {/* ── Pagination (10 / page) ── */}
+                {filteredResas.length > RESA_PER_PAGE && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+                    gap: 10, marginTop: 6 }}>
+                    <button onClick={() => setResaPage(p => Math.max(1, p - 1))} disabled={safeResaPage === 1}
+                      style={{ padding: "7px 12px", borderRadius: 8, border: "0.5px solid #ddd",
+                        background: "white", cursor: safeResaPage === 1 ? "default" : "pointer",
+                        opacity: safeResaPage === 1 ? 0.45 : 1, fontSize: 12 }}>
+                      Précédent
+                    </button>
+                    <span style={{ fontSize: 12, color: "#888" }}>
+                      Page {safeResaPage} / {resaPageCount}
+                    </span>
+                    <button onClick={() => setResaPage(p => Math.min(resaPageCount, p + 1))} disabled={safeResaPage === resaPageCount}
+                      style={{ padding: "7px 12px", borderRadius: 8, border: "0.5px solid #ddd",
+                        background: "white", cursor: safeResaPage === resaPageCount ? "default" : "pointer",
+                        opacity: safeResaPage === resaPageCount ? 0.45 : 1, fontSize: 12 }}>
+                      Suivant
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

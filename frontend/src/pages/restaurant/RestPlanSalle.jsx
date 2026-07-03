@@ -111,7 +111,7 @@ function Chairs({ cap, tw, th, isRound, color }) {
 }
 
 /* ── 3D Table Component ────────────────────────────────────────── */
-function Table3D({ table, selected, onClick, configMode, style }) {
+function Table3D({ table, selected, onClick, configMode, style, onPointerDown }) {
   const sc = STATUS_COLOR[table.status] || STATUS_COLOR.libre;
   const isBar = (table.zone || "interieur") === "bar";
   const isRound = isBar || (table.shape === "round");
@@ -125,11 +125,15 @@ function Table3D({ table, selected, onClick, configMode, style }) {
   return (
     <div
       onClick={onClick}
+      onPointerDown={onPointerDown}
       style={{
         position: "absolute",
         width: tw + chairPad * 2,
         height: th + chairPad * 2,
         cursor: configMode ? "move" : "pointer",
+        // En mode configuration : neutraliser le scroll tactile pour permettre
+        // le glisser-déposer au doigt (mobile/tablette)
+        touchAction: configMode ? "none" : "auto",
         ...style,
         userSelect: "none",
       }}>
@@ -186,43 +190,54 @@ function Table3D({ table, selected, onClick, configMode, style }) {
 
 /* ── Draggable wrapper ─────────────────────────────────────────── */
 function DraggableTable({ table, selected, onClick, configMode, canvasRef, onDragEnd }) {
-  const dragging  = useRef(false);
-  const startMouse = useRef({ x: 0, y: 0 });
+  const dragging   = useRef(false);
+  const moved      = useRef(false);          // a-t-on réellement glissé (vs simple tap) ?
+  const startPtr   = useRef({ x: 0, y: 0 });
   const startPos   = useRef({ x: 0, y: 0 });
+  const currentPos = useRef({ x: table.pos_x || 20, y: table.pos_y || 20 }); // vraie position finale
   const [pos, setPos] = useState({ x: table.pos_x || 20, y: table.pos_y || 20 });
 
-  const onMouseDown = (e) => {
+  // Pointer Events : unifie souris + tactile (mobile/tablette)
+  const onPointerDown = (e) => {
     if (!configMode) return;
     e.stopPropagation();
     dragging.current = true;
-    startMouse.current = { x: e.clientX, y: e.clientY };
-    startPos.current = { ...pos };
+    moved.current    = false;
+    startPtr.current = { x: e.clientX, y: e.clientY };
+    startPos.current = { ...currentPos.current };
 
     const onMove = (ev) => {
       if (!dragging.current) return;
-      const dx = ev.clientX - startMouse.current.x;
-      const dy = ev.clientY - startMouse.current.y;
+      const dx = ev.clientX - startPtr.current.x;
+      const dy = ev.clientY - startPtr.current.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved.current = true;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const nx = Math.max(0, Math.min(rect.width  - 140, startPos.current.x + dx));
       const ny = Math.max(0, Math.min(rect.height - 140, startPos.current.y + dy));
+      currentPos.current = { x: nx, y: ny }; // ref = source de vérité (pas de course avec setState)
       setPos({ x: nx, y: ny });
     };
     const onUp = () => {
       if (!dragging.current) return;
       dragging.current = false;
-      onDragEnd(table.id, pos);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      // Ne sauvegarder que si on a vraiment déplacé la table
+      if (moved.current) onDragEnd(table.id, currentPos.current);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
-  // sync pos if table.pos_x changes from outside
+  // Resync si la position change côté serveur/parent
   useEffect(() => {
-    setPos({ x: table.pos_x || 20, y: table.pos_y || 20 });
+    const p = { x: table.pos_x || 20, y: table.pos_y || 20 };
+    setPos(p);
+    currentPos.current = p;
   }, [table.pos_x, table.pos_y]);
 
   return (
@@ -230,12 +245,13 @@ function DraggableTable({ table, selected, onClick, configMode, canvasRef, onDra
       table={table}
       selected={selected}
       configMode={configMode}
-      onClick={(e) => { if (!dragging.current) onClick(e); }}
+      // Supprimer le clic uniquement après un vrai glissé (sinon un simple tap édite)
+      onClick={(e) => { if (!moved.current) onClick(e); }}
       style={{
         left: pos.x, top: pos.y,
         cursor: configMode ? "grab" : "pointer",
       }}
-      onMouseDown={onMouseDown}
+      onPointerDown={onPointerDown}
     />
   );
 }
@@ -313,10 +329,18 @@ export default function RestPlanSalle() {
   };
 
   const handleDragEnd = useCallback(async (tableId, newPos) => {
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, pos_x: newPos.x, pos_y: newPos.y } : t));
+    let previous = null;
+    setTables(prev => prev.map(t => {
+      if (t.id === tableId) { previous = { pos_x: t.pos_x, pos_y: t.pos_y }; return { ...t, pos_x: newPos.x, pos_y: newPos.y }; }
+      return t;
+    }));
     try {
       await restaurantsService.updateTable(user.resto_id, tableId, { pos_x: Math.round(newPos.x), pos_y: Math.round(newPos.y) });
-    } catch (_) {}
+    } catch (e) {
+      console.error("Échec sauvegarde position table", e);
+      // Revenir à l'ancienne position pour rester cohérent avec le serveur
+      if (previous) setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...previous } : t));
+    }
   }, [user?.resto_id]);
 
   const saveTable = async () => {

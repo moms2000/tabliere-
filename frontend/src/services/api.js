@@ -13,7 +13,9 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15_000,
+  // 30s : laisse le temps au backend Render de se réveiller (cold start) sans
+  // faire échouer la requête → évite les pages blanches qui obligent à rafraîchir
+  timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 });
 

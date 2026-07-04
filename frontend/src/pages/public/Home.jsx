@@ -491,6 +491,17 @@ export default function Home() {
     else if (user?.role === "admin")   navigate("/admin", { replace: true });
   }, [user, navigate]);
 
+  // Keep-alive : ping léger du backend pour éviter la mise en veille (cold start
+  // Render) pendant que l'utilisateur navigue. Non authentifié → simple fetch.
+  useEffect(() => {
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+    const origin  = apiBase.replace(/\/api\/v1\/?$/, "");
+    const ping = () => { fetch(origin + "/ping").catch(() => {}); };
+    ping();
+    const id = setInterval(ping, 4 * 60 * 1000); // toutes les 4 min
+    return () => clearInterval(id);
+  }, []);
+
   const { lang, t, changeLang, langs } = useLang();
   const listRef        = useRef(null);
   const experiencesRef = useRef(null);

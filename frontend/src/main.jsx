@@ -8,6 +8,7 @@ import MobileBottomNav     from "./components/mobile/MobileBottomNav.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ToastProvider }    from "./components/ui/Toast.jsx";
 import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
+import LogoSplash           from "./components/LogoSplash.jsx";
 
 // ── Lazy imports : chaque page est chargée à la demande ──────────────────────
 const AdminLayout       = lazy(() => import("./components/layout/AdminLayout"));
@@ -142,6 +143,7 @@ if ("serviceWorker" in navigator) {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
+      <LogoSplash />
       <BrowserRouter>
         <LanguageProvider>
           <ToastProvider>

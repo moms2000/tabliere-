@@ -380,14 +380,30 @@ export default function RestCommandes() {
                       </div>
                     </div>
 
-                    {/* Items */}
-                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
-                      {(order.items || []).map((it, i) => (
-                        <span key={i}>
-                          {i > 0 && " · "}
-                          <strong style={{ color: DARK }}>{it.qty}×</strong> {it.name}
-                        </span>
-                      ))}
+                    {/* Items — avec détails (cuisson, accompagnement, note) */}
+                    <div style={{ marginBottom: 8 }}>
+                      {(order.items || []).map((it, i) => {
+                        const opts = it.options || {};
+                        const details = [opts.cuisson, opts.accompagnement].filter(Boolean);
+                        return (
+                          <div key={i} style={{ fontSize: 12, color: DARK, padding: "3px 0",
+                            borderBottom: i < (order.items.length - 1) ? "0.5px solid #f2f0eb" : "none" }}>
+                            <div>
+                              <strong>{it.qty}×</strong> {it.name}
+                            </div>
+                            {details.length > 0 && (
+                              <div style={{ fontSize: 11, color: P, marginTop: 1 }}>
+                                {details.join(" · ")}
+                              </div>
+                            )}
+                            {it.note && (
+                              <div style={{ fontSize: 11, color: MUTED, fontStyle: "italic", marginTop: 1 }}>
+                                Note : {it.note}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Actions statut */}

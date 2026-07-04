@@ -638,7 +638,8 @@ export default function RestaurantDetail() {
 
       {/* Nav */}
       <nav style={{ background: "white", borderBottom: `0.5px solid ${BORDER}`,
-        padding: "14px 28px", display: "flex", alignItems: "center", gap: 14,
+        padding: "calc(env(safe-area-inset-top, 0px) + 14px) 28px 14px",
+        display: "flex", alignItems: "center", gap: 14,
         position: "sticky", top: 0, zIndex: 20 }}>
         <button onClick={() => navigate("/")}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent",

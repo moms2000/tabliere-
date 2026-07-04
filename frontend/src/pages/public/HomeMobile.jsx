@@ -338,7 +338,8 @@ export default function HomeMobile() {
   };
 
   return (
-    <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh", paddingBottom: 80 }}>
+    <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh",
+      paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
 
       {/* Onboarding — 3 écrans, affiché une seule fois à la première ouverture */}
       <Onboarding />
@@ -346,7 +347,7 @@ export default function HomeMobile() {
       {/* ── Header sticky mobile (compact au défilement) ── */}
       <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,
         borderBottom: `0.5px solid ${BORDER}`,
-        padding: scrolled ? "7px 16px" : "12px 16px",
+        padding: `calc(env(safe-area-inset-top, 0px) + ${scrolled ? 7 : 12}px) 16px ${scrolled ? 7 : 12}px`,
         boxShadow: scrolled ? "0 2px 12px rgba(30,46,40,.08)" : "none",
         transition: "padding .22s ease, box-shadow .22s ease",
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>

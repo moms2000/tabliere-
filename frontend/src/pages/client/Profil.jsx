@@ -293,7 +293,8 @@ export default function Profil() {
 
       {/* Nav */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 20px", background: "white", borderBottom: "0.5px solid #eee",
+        padding: "calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px", background: "white",
+        borderBottom: "0.5px solid #eee",
         position: "sticky", top: 0, zIndex: 30, flexWrap: "wrap", gap: 8 }}>
         <button onClick={() => navigate("/")}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent",

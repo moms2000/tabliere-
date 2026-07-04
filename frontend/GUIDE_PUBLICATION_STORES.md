@@ -113,28 +113,29 @@ npx cap open android     # ouvre le projet dans Android Studio
 
 ---
 
-## 🔔 Notifications push (déjà intégrées — reste la config Firebase)
+## 🔔 Notifications push (code prêt — reste la config Firebase)
 
-Le code est prêt : l'app **demande la permission** et **enregistre le token**
-de l'appareil (endpoint `POST /users/me/device-token`), et le backend **envoie
-une push** à la confirmation d'une réservation (si `FCM_SERVER_KEY` est défini).
-Il reste à créer le projet **Firebase Cloud Messaging (FCM)** :
+L'app enregistre le **token FCM** de l'appareil (iOS + Android, via
+`@capacitor-firebase/messaging`) et le backend envoie une push via **FCM API
+HTTP v1** (firebase-admin) à la confirmation d'une réservation. Étapes :
 
 1. Crée un projet sur https://console.firebase.google.com
 2. **Android** : ajoute une app Android (package `net.tabliereci.app`), télécharge
-   `google-services.json` et place-le dans `android/app/`.
+   `google-services.json` → place-le dans `frontend/android/app/`.
 3. **iOS** : ajoute une app iOS (bundle `net.tabliereci.app`), télécharge
-   `GoogleService-Info.plist` et glisse-le dans le projet Xcode (`ios/App/App`).
-   Puis, dans Firebase → Cloud Messaging → **APNs** : uploade ta clé APNs `.p8`
-   (créée sur developer.apple.com) pour que les push iOS fonctionnent.
+   `GoogleService-Info.plist` → glisse-le dans Xcode sous `App/App`.
+   Puis Firebase → Cloud Messaging → **APNs** : uploade ta clé APNs `.p8`
+   (créée sur developer.apple.com → Keys) avec son Key ID + Team ID.
 4. Dans **Xcode** : cible App → **Signing & Capabilities → + Capability →
-   Push Notifications** (et **Background Modes → Remote notifications**).
-5. Récupère la **clé serveur** (Firebase → Paramètres → Cloud Messaging) et
-   définis-la côté backend sur Render : variable `FCM_SERVER_KEY`.
-6. `npx cap sync` puis reconstruire.
+   Push Notifications** ET **Background Modes → Remote notifications**.
+5. **Backend (Render)** : Firebase → Paramètres → **Comptes de service** →
+   *Générer une nouvelle clé privée* (télécharge un JSON). Colle **tout ce JSON**
+   dans la variable d'environnement `FCM_SERVICE_ACCOUNT` sur Render.
+6. `cd frontend && npm run cap:ios` (et `cap:android`) pour resynchroniser les
+   plugins natifs, puis reconstruire.
 
 > Sans cette config, l'app fonctionne normalement — seules les push ne partent
-> pas (le backend log en mode simulation). Rien ne bloque la soumission.
+> pas (le backend log en simulation). Rien ne bloque la soumission.
 
 ---
 

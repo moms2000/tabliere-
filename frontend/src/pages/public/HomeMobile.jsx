@@ -114,15 +114,13 @@ const ALL_TIMES    = [...LUNCH_SLOTS, ...DINNER_SLOTS];
 
 const timeToMin = (s) => { const [h, m] = s.replace("h", ":").split(":").map(Number); return h * 60 + (m || 0); };
 
-// Créneaux affichés sur une carte : partent de l'heure choisie dans la recherche,
-// filtrent les créneaux passés si la date est aujourd'hui.
-function dynamicSlots(selTime, selDate) {
-  const today = new Date().toISOString().split("T")[0];
-  const isToday = selDate === today;
-  const nowMin = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+// Créneaux affichés sur une carte : partent DIRECTEMENT de l'heure choisie dans
+// la recherche (déjeuner ou dîner) → ils reflètent visiblement le filtre.
+// L'étape de réservation gère le cas d'un créneau déjà passé.
+function dynamicSlots(selTime) {
   const base = timeToMin(selTime || "19h00");
-  let pool = ALL_TIMES.filter((s) => timeToMin(s) >= base && (!isToday || timeToMin(s) > nowMin));
-  if (pool.length === 0) pool = ALL_TIMES.filter((s) => !isToday || timeToMin(s) > nowMin);
+  let pool = ALL_TIMES.filter((s) => timeToMin(s) >= base);
+  if (pool.length === 0) pool = ALL_TIMES.slice(-4); // heure tardive → derniers créneaux
   return pool.slice(0, 4);
 }
 
@@ -717,7 +715,7 @@ export default function HomeMobile() {
           const imgSrc = photos ? photos[0] : r.logo_url;
           const b = cardBadge(r);
           const saved = favorites.some(f => f.slug === r.slug);
-          const slots = dynamicSlots(selTime, selDate);
+          const slots = dynamicSlots(selTime);
           return (
           <motion.div key={r.id || idx}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

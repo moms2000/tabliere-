@@ -256,11 +256,15 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
 
       {step === 3 ? (
         <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
-          <div style={{ width: 60, height: 60, borderRadius: "50%", background: PL,
-            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-            <CheckCircle size={30} color={P} />
-          </div>
-          <h3 style={{ fontSize: 19, fontWeight: 700, color: DARK, marginBottom: 8 }}>Réservation envoyée !</h3>
+          <motion.div
+            initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 16 }}
+            style={{ width: 64, height: 64, borderRadius: "50%", background: PL,
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
+            <CheckCircle size={32} color={P} />
+          </motion.div>
+          <motion.h3 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            style={{ fontSize: 19, fontWeight: 700, color: DARK, marginBottom: 8 }}>Réservation envoyée !</motion.h3>
           {resaRef && <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", marginBottom: 8 }}>Réf. {resaRef}</div>}
           <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 26 }}>
             <strong style={{ color: DARK }}>{resto.name}</strong><br />
@@ -501,6 +505,19 @@ export default function RestaurantDetail() {
     setModal(true); setStep(1); setError(""); setSpecial(""); setResaRef(null);
   }, []);
   const closeModal = () => { setModal(false); setStep(1); setError(""); };
+
+  // Pré-ouverture de la réservation depuis les créneaux cliqués sur l'accueil
+  const slotOpenedRef = useRef(false);
+  useEffect(() => {
+    if (slotOpenedRef.current || !resto) return;
+    const slot = searchParams.get("slot");
+    if (!slot) return;
+    slotOpenedRef.current = true;
+    const days = buildDays();
+    const date = (prefillDate && days.some(d => d.iso === prefillDate)) ? prefillDate : days[0].iso;
+    const p = Math.max(1, parseInt(prefillGuests, 10) || 2);
+    openModal({ date, slot, pers: p });
+  }, [resto, searchParams, prefillDate, prefillGuests, openModal]);
 
   // Verrouiller le scroll de l'arrière-plan quand la modale est ouverte
   // (sinon, sur mobile, la page derrière défilait au lieu du contenu de la modale)

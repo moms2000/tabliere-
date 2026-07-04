@@ -26,6 +26,19 @@ const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const fmt = (n) => n ? Number(n).toLocaleString("fr-FR") : "—";
 
+// Créneaux cliquables sur les cartes (style OpenTable)
+const CARD_SLOTS = ["19h00", "19h30", "20h00", "20h30"];
+function slotIsPast(slot) {
+  const [h, m] = slot.replace("h", ":").split(":").map(Number);
+  const now = new Date();
+  return h < now.getHours() || (h === now.getHours() && (m || 0) <= now.getMinutes());
+}
+function cardBadge(r) {
+  if ((r.review_count || 0) >= 5 || (r.rating || 0) >= 4.8) return { label: "Populaire", bg: "#1E2E28" };
+  if (!r.review_count) return { label: "Nouveau", bg: P };
+  return null;
+}
+
 /* ── Stars ── */
 function Stars({ rating, size = 12 }) {
   return (
@@ -568,6 +581,15 @@ export default function HomeMobile() {
                   fill={favorites.some(f => f.slug === r.slug) ? P : "none"}
                   color={favorites.some(f => f.slug === r.slug) ? P : MUTED} />
               </button>
+              {/* Badge de mise en avant */}
+              {(() => {
+                const b = cardBadge(r);
+                return b ? (
+                  <span style={{ position: "absolute", bottom: 6, left: 6, fontSize: 8.5, fontWeight: 700,
+                    color: "white", background: b.bg, padding: "2px 7px", borderRadius: 20,
+                    letterSpacing: "0.3px", fontFamily: FONT }}>{b.label}</span>
+                ) : null;
+              })()}
             </div>
               );
             })()}
@@ -611,16 +633,34 @@ export default function HomeMobile() {
                 )}
               </div>
 
-              {/* CTA */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <motion.button whileTap={{ scale: 0.96 }}
-                  onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
-                  style={{ background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
-                    borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: FONT }}>
-                  Voir les créneaux →
-                </motion.button>
-              </div>
+              {/* Créneaux cliquables (style OpenTable) */}
+              {(() => {
+                const slots = CARD_SLOTS.filter(s => !slotIsPast(s));
+                if (slots.length === 0) {
+                  return (
+                    <motion.button whileTap={{ scale: 0.96 }}
+                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
+                      style={{ background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
+                        borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600,
+                        cursor: "pointer", fontFamily: FONT }}>
+                      Voir les créneaux →
+                    </motion.button>
+                  );
+                }
+                return (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {slots.slice(0, 3).map(s => (
+                      <motion.button key={s} whileTap={{ scale: 0.93 }}
+                        onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?slot=${s}&guests=2`); }}
+                        style={{ background: P, color: "white", border: "none",
+                          borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 700,
+                          cursor: "pointer", fontFamily: FONT }}>
+                        {s}
+                      </motion.button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </motion.div>
         ))}

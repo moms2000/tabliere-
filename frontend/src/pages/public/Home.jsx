@@ -26,6 +26,46 @@ const MUTED  = "#9BA89F";
 const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
 const CARD_ACCENT = [P, S, DARK, "#B07A3A", "#5A8A6A", "#2E4A3A"];
 
+// Créneaux affichés sur les cartes (style OpenTable) — format aligné sur RestaurantDetail
+const CARD_SLOTS = ["19h00", "19h30", "20h00", "20h30"];
+function slotIsPast(dateIso, slot) {
+  const today = new Date().toISOString().split("T")[0];
+  if (dateIso !== today) return false;
+  const [h, m] = slot.replace("h", ":").split(":").map(Number);
+  const now = new Date();
+  return h < now.getHours() || (h === now.getHours() && (m || 0) <= now.getMinutes());
+}
+// Badge de mise en avant selon la popularité / nouveauté du restaurant
+function cardBadge(r) {
+  if ((r.review_count || 0) >= 5 || (r.rating || 0) >= 4.8) return { label: "Populaire", bg: "#1E2E28" };
+  if (!r.review_count) return { label: "Nouveau", bg: P };
+  return null;
+}
+
+// Squelette de carte pendant le chargement (perçu plus rapide, plus pro)
+function SkeletonCard() {
+  const bar = (w, h = 12) => ({
+    width: w, height: h, borderRadius: 5, marginBottom: 8,
+    background: "linear-gradient(90deg,#efeae2 25%,#f6f2ec 50%,#efeae2 75%)",
+    backgroundSize: "200% 100%", animation: "tci-shimmer 1.3s infinite",
+  });
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", border: `0.5px solid ${BORDER}`,
+      borderRadius: 12, overflow: "hidden", marginBottom: 10, background: WHITE }}>
+      <div style={{ minHeight: 110, background: "linear-gradient(90deg,#efeae2 25%,#f6f2ec 50%,#efeae2 75%)",
+        backgroundSize: "200% 100%", animation: "tci-shimmer 1.3s infinite" }} />
+      <div style={{ padding: "14px 16px" }}>
+        <div style={bar("40%", 9)} />
+        <div style={bar("70%", 15)} />
+        <div style={bar("50%")} />
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <div style={bar(52, 26)} /><div style={bar(52, 26)} /><div style={bar(52, 26)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DAYS_FR   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const LANG_LABELS = { fr: "Français", en: "English", ar: "العربية" };
@@ -628,6 +668,14 @@ export default function Home() {
     navigate(`/restaurants/${slug}?${qs}`);
   };
 
+  // Ouvre la fiche resto ET pré-ouvre la réservation sur le créneau choisi
+  const openRestaurantAtSlot = (slug, slot) => {
+    const qs = new URLSearchParams({
+      date: resaDate || "", guests: String(resaGuests || 2), slot,
+    }).toString();
+    navigate(`/restaurants/${slug}?${qs}`);
+  };
+
   const toggle = (setter, key) => setter(prev => ({ ...prev, [key]: !prev[key] }));
 
   const toggleFavorite = (e, r) => {
@@ -1182,8 +1230,8 @@ export default function Home() {
             </div>
 
             {loading ? (
-              <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
-                <div style={{ fontSize: 13, fontFamily: FONT }}>{t("loading")}</div>
+              <div>
+                {[0,1,2,3].map(i => <SkeletonCard key={i} />)}
               </div>
             ) : restaurants.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
@@ -1223,6 +1271,16 @@ export default function Home() {
                           <UtensilsCrossed size={30} color={CARD_ACCENT[idx % CARD_ACCENT.length]}
                             style={{ opacity: 0.3 }} />
                         );
+                      })()}
+                      {/* Badge de mise en avant */}
+                      {(() => {
+                        const b = cardBadge(r);
+                        return b ? (
+                          <span style={{ position: "absolute", top: 8, left: 8, zIndex: 3,
+                            fontSize: 9, fontWeight: 700, color: "white", background: b.bg,
+                            padding: "3px 8px", borderRadius: 20, letterSpacing: "0.4px",
+                            fontFamily: FONT }}>{b.label}</span>
+                        ) : null;
                       })()}
                     </div>
 
@@ -1265,13 +1323,34 @@ export default function Home() {
                             padding: "2px 8px", borderRadius: 10 }}>{r.price_range}</span>
                         )}
                       </div>
-                      <motion.button whileTap={{ scale: 0.96 }}
-                        style={{ fontSize: 12, fontWeight: 600, padding: "6px 14px",
-                          borderRadius: 7, border: `0.5px solid ${P}55`,
-                          background: "#FEF6EC", color: "#C47D1A",
-                          cursor: "pointer", fontFamily: FONT }}>
-                        {t("see_slots")}
-                      </motion.button>
+                      {/* Créneaux cliquables (style OpenTable) */}
+                      {(() => {
+                        const slots = CARD_SLOTS.filter(s => !slotIsPast(resaDate, s));
+                        if (slots.length === 0) {
+                          return (
+                            <motion.button whileTap={{ scale: 0.96 }}
+                              onClick={e => { e.stopPropagation(); openRestaurant(r.slug); }}
+                              style={{ fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 7,
+                                border: `0.5px solid ${P}55`, background: "#FEF6EC", color: "#C47D1A",
+                                cursor: "pointer", fontFamily: FONT }}>
+                              {t("see_slots")}
+                            </motion.button>
+                          );
+                        }
+                        return (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            {slots.slice(0, 4).map(s => (
+                              <motion.button key={s} whileTap={{ scale: 0.94 }}
+                                onClick={e => { e.stopPropagation(); openRestaurantAtSlot(r.slug, s); }}
+                                style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 7,
+                                  border: "none", background: P, color: "white",
+                                  cursor: "pointer", fontFamily: FONT }}>
+                                {s}
+                              </motion.button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </motion.div>
                 ))}

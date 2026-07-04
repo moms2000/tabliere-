@@ -1,0 +1,22 @@
+{
+  "appId": "net.tabliereci.app",
+  "appName": "TablièreCI",
+  "webDir": "dist",
+  "backgroundColor": "#F8F5EF",
+  "ios": {
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1400,
+      "launchAutoHide": true,
+      "backgroundColor": "#F8F5EF",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#F8F5EF"
+    }
+  }
+}

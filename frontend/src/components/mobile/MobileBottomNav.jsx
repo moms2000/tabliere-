@@ -45,12 +45,16 @@ export default function MobileBottomNav() {
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 90,
-      background: "rgba(255,255,255,0.96)",
+      // Fond OPAQUE (pas de backdrop-filter) : sur iOS/WKWebView, un élément
+      // position:fixed avec backdrop-filter se décale pendant le scroll inertiel.
+      background: "#FFFFFF",
       borderTop: "0.5px solid #E4DFD8",
       display: "flex",
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
       fontFamily: FONT,
-      backdropFilter: "blur(10px)",
+      transform: "translateZ(0)",        // force une couche de composition dédiée
+      WebkitTransform: "translateZ(0)",
+      boxShadow: "0 -1px 10px rgba(30,46,40,.05)",
     }}>
       {NAV.map((item) => {
         const active = isActive(item);

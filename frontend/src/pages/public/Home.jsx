@@ -1311,116 +1311,97 @@ export default function Home() {
                 )}
               </div>
             ) : (
-              <motion.div variants={stagger} initial="hidden" animate="show">
-                {restaurants.map((r, idx) => (
+              <motion.div variants={stagger} initial="hidden" animate="show"
+                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+                {restaurants.map((r) => {
+                  const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+                  const imgSrc = photos ? photos[0] : r.logo_url;
+                  const b = cardBadge(r);
+                  const saved = isFav(r.slug);
+                  const slots = dynamicSlots(resaTime);
+                  return (
                   <motion.div key={r.id} variants={fadeUp}
-                    whileHover={{ y: -2, boxShadow: "0 4px 18px rgba(30,46,40,.07)" }}
+                    whileHover={{ y: -3, boxShadow: "0 8px 26px rgba(30,46,40,.10)" }}
                     onClick={() => openRestaurant(r.slug)}
-                    style={{ display: "grid", gridTemplateColumns: "120px 1fr",
-                      border: `0.5px solid ${BORDER}`, borderRadius: 12,
-                      overflow: "hidden", marginBottom: 10, background: WHITE,
-                      cursor: "pointer", position: "relative", transition: "box-shadow .2s" }}>
+                    style={{ background: WHITE, borderRadius: 16, border: `0.5px solid ${BORDER}`,
+                      overflow: "hidden", cursor: "pointer", transition: "box-shadow .2s",
+                      boxShadow: "0 2px 12px rgba(30,46,40,.05)", fontFamily: FONT }}>
 
-                    <div style={{ position: "relative", background: BG,
-                      display: "flex", alignItems: "center", justifyContent: "center", minHeight: 110,
-                      overflow: "hidden" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4,
-                        background: CARD_ACCENT[idx % CARD_ACCENT.length], zIndex: 2 }} />
-                      {(() => {
-                        const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-                        const imgSrc = photos ? photos[0] : r.logo_url;
-                        return imgSrc ? (
-                          <img src={imgSrc} alt={r.name}
-                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
-                              objectFit: "cover" }}
-                            onError={e => { e.target.style.display = "none"; }} />
-                        ) : (
-                          <UtensilsCrossed size={30} color={CARD_ACCENT[idx % CARD_ACCENT.length]}
-                            style={{ opacity: 0.3 }} />
-                        );
-                      })()}
-                      {/* Badge de mise en avant */}
-                      {(() => {
-                        const b = cardBadge(r);
-                        return b ? (
-                          <span style={{ position: "absolute", top: 8, left: 8, zIndex: 3,
-                            fontSize: 9, fontWeight: 700, color: "white", background: b.bg,
-                            padding: "3px 8px", borderRadius: 20, letterSpacing: "0.4px",
-                            fontFamily: FONT }}>{b.label}</span>
-                        ) : null;
-                      })()}
+                    {/* Photo plein cadre + dégradé + infos en surimpression */}
+                    <div style={{ position: "relative", width: "100%", height: 178, background: BG,
+                      display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {imgSrc ? (
+                        <img src={imgSrc} alt={r.name}
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                          onError={e => { e.target.style.display = "none"; }} />
+                      ) : (
+                        <UtensilsCrossed size={42} color={P} style={{ opacity: 0.35 }} />
+                      )}
+                      <div style={{ position: "absolute", inset: 0,
+                        background: "linear-gradient(to top, rgba(20,28,24,.82) 0%, rgba(20,28,24,.25) 42%, rgba(20,28,24,0) 66%)" }} />
+                      {b && (
+                        <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10, fontWeight: 700,
+                          color: "white", background: b.bg, padding: "4px 10px", borderRadius: 20,
+                          letterSpacing: "0.4px" }}>{b.label}</span>
+                      )}
+                      <button onClick={e => toggleFavorite(e, r)}
+                        title={saved ? "Retirer des enregistrés" : "Enregistrer"}
+                        style={{ position: "absolute", top: 10, right: 10, background: "rgba(255,255,255,.92)",
+                          border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Bookmark size={15} fill={saved ? P : "none"} color={saved ? P : MUTED} />
+                      </button>
+                      <div style={{ position: "absolute", left: 14, right: 14, bottom: 12 }}>
+                        {r.cuisine_type && (
+                          <div style={{ fontSize: 9.5, letterSpacing: "1.5px", textTransform: "uppercase",
+                            color: "rgba(255,255,255,.85)", fontWeight: 700, marginBottom: 4 }}>{r.cuisine_type}</div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+                          <div style={{ fontSize: 19, fontWeight: 700, color: "white", letterSpacing: "-0.3px",
+                            textShadow: "0 1px 8px rgba(0,0,0,.3)" }}>{r.name}</div>
+                          {r.rating > 0 && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(255,255,255,.95)",
+                              borderRadius: 8, padding: "2px 7px", flexShrink: 0 }}>
+                              <Star size={11} fill={P} color={P} />
+                              <span style={{ fontSize: 12, fontWeight: 700, color: DARK }}>{Number(r.rating).toFixed(1)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <button onClick={e => toggleFavorite(e, r)}
-                      title={isFav(r.slug) ? "Retirer des enregistrés" : "Enregistrer"}
-                      style={{ position: "absolute", top: 8, right: 8, background: WHITE,
-                        border: `0.5px solid ${isFav(r.slug) ? P : BORDER}`, borderRadius: "50%", width: 28, height: 28,
-                        display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                      <Bookmark size={13}
-                        fill={isFav(r.slug) ? P : "none"}
-                        color={isFav(r.slug) ? P : MUTED} />
-                    </button>
-
-                    <div style={{ padding: "14px 16px", fontFamily: FONT }}>
-                      <div style={{ fontSize: 9, letterSpacing: "1.5px", textTransform: "uppercase",
-                        color: CARD_ACCENT[idx % CARD_ACCENT.length], marginBottom: 6, fontWeight: 700 }}>
-                        {r.cuisine_type}
+                    {/* Infos + créneaux */}
+                    <div style={{ padding: "11px 14px 14px" }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 11 }}>
+                        {r.quartier && <span style={{ fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 3 }}><MapPin size={11} />{r.quartier}</span>}
+                        {r.price_range && <><span style={{ fontSize: 11, color: BORDER }}>·</span><span style={{ fontSize: 12, color: MUTED }}>{r.price_range}</span></>}
+                        {r.rating > 0 && <><span style={{ fontSize: 11, color: BORDER }}>·</span><span style={{ fontSize: 12, color: MUTED }}>{r.review_count || 0} avis</span></>}
                       </div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: DARK, marginBottom: 5 }}>
-                        {r.name}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <Stars rating={r.rating} />
-                        <span style={{ fontSize: 11, color: MUTED }}>
-                          {r.rating
-                            ? `${r.rating} (${r.review_count || 0} ${t("reviews")})`
-                            : t("new_resto")}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                        {r.quartier && (
-                          <span style={{ fontSize: 10, background: BG, color: MUTED,
-                            padding: "2px 8px", borderRadius: 10,
-                            display: "flex", alignItems: "center", gap: 3 }}>
-                            <MapPin size={9} />{r.quartier}
-                          </span>
-                        )}
-                        {r.price_range && (
-                          <span style={{ fontSize: 10, background: BG, color: MUTED,
-                            padding: "2px 8px", borderRadius: 10 }}>{r.price_range}</span>
-                        )}
-                      </div>
-                      {/* Créneaux cliquables (style OpenTable) */}
-                      {(() => {
-                        const slots = dynamicSlots(resaTime);
-                        if (slots.length === 0) {
-                          return (
-                            <motion.button whileTap={{ scale: 0.96 }}
-                              onClick={e => { e.stopPropagation(); openRestaurant(r.slug); }}
-                              style={{ fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 7,
-                                border: `0.5px solid ${P}55`, background: "#FEF6EC", color: "#C47D1A",
+                      {slots.length === 0 ? (
+                        <motion.button whileTap={{ scale: 0.96 }}
+                          onClick={e => { e.stopPropagation(); openRestaurant(r.slug); }}
+                          style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 10,
+                            border: `0.5px solid ${P}55`, background: "#FEF6EC", color: "#C47D1A",
+                            cursor: "pointer", fontFamily: FONT }}>
+                          {t("see_slots")}
+                        </motion.button>
+                      ) : (
+                        <div style={{ display: "flex", gap: 7 }}>
+                          {slots.slice(0, 4).map(s => (
+                            <motion.button key={s} whileTap={{ scale: 0.94 }}
+                              onClick={e => { e.stopPropagation(); openRestaurantAtSlot(r.slug, s); }}
+                              style={{ flex: 1, fontSize: 13, fontWeight: 700, padding: "9px 4px", borderRadius: 9,
+                                border: "none", background: P, color: "white",
                                 cursor: "pointer", fontFamily: FONT }}>
-                              {t("see_slots")}
+                              {s}
                             </motion.button>
-                          );
-                        }
-                        return (
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                            {slots.slice(0, 4).map(s => (
-                              <motion.button key={s} whileTap={{ scale: 0.94 }}
-                                onClick={e => { e.stopPropagation(); openRestaurantAtSlot(r.slug, s); }}
-                                style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 7,
-                                  border: "none", background: P, color: "white",
-                                  cursor: "pointer", fontFamily: FONT }}>
-                                {s}
-                              </motion.button>
-                            ))}
-                          </div>
-                        );
-                      })()}
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </motion.div>
             )}
           </div>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { usersService } from "../../services/users.service.js";
 import { useLang } from "../../context/LanguageContext.jsx";
 import api from "../../services/api.js";
 import Onboarding from "../../components/Onboarding.jsx";
@@ -207,14 +208,35 @@ export default function HomeMobile() {
     }
   }, [user]);
 
+  // Charger les favoris du compte (source de vérité serveur) à la connexion
+  useEffect(() => {
+    if (!user) return;
+    usersService.listFavorites()
+      .then(rows => {
+        if (!Array.isArray(rows)) return;
+        const mapped = rows.map(f => ({
+          slug: f.slug, name: f.name, ville: f.ville,
+          cuisine_type: f.cuisine_type, restaurant_id: f.restaurant_id,
+        }));
+        setFavorites(mapped);
+        try { localStorage.setItem("tci_favorites", JSON.stringify(mapped)); } catch {}
+      })
+      .catch(() => {});
+  }, [user]);
+
   const toggleFav = (e, r) => {
     e.stopPropagation();
-    const arr = JSON.parse(localStorage.getItem("tci_favorites") || "[]");
+    const arr = favorites;
     const exists = arr.some(f => f.slug === r.slug);
     const next = exists ? arr.filter(f => f.slug !== r.slug)
-      : [...arr, { slug: r.slug, name: r.name, ville: r.ville, cuisine_type: r.cuisine_type }];
+      : [...arr, { slug: r.slug, name: r.name, ville: r.ville, cuisine_type: r.cuisine_type, restaurant_id: r.id }];
     setFavorites(next);
     localStorage.setItem("tci_favorites", JSON.stringify(next));
+    // Synchro serveur si connecté (sinon le backend écrasait le favori local)
+    if (user) {
+      if (exists) usersService.removeFavorite(r.id).catch(() => {});
+      else        usersService.addFavorite({ slug: r.slug }).catch(() => {});
+    }
   };
 
   // Réinitialiser la recherche quand critères changent

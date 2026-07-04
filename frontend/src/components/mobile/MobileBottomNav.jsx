@@ -1,20 +1,22 @@
 /**
  * MobileBottomNav — Navigation bas de page style OpenTable
+ * 5 onglets : Accueil · Recherche · Récompenses · Réservations · Profil
  * Visible uniquement sur mobile (< 768px)
  */
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, CalendarCheck, User } from "lucide-react";
+import { Home, Search, Award, CalendarCheck, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-const P    = "#E8A045";
-const DARK = "#1E2E28";
+const P     = "#E8A045";
 const MUTED = "#9BA89F";
-const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
+const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const NAV = [
-  { icon: Home,          label: "Accueil",      path: "/"            },
-  { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations" },
-  { icon: User,          label: "Mon compte",   path: "/profil"      },
+  { icon: Home,          label: "Accueil",      path: "/",                        auth: false },
+  { icon: Search,        label: "Recherche",    path: "/?focus=search",           auth: false },
+  { icon: Award,         label: "Récompenses",  path: "/profil?tab=rewards",       auth: true  },
+  { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations",  auth: true  },
+  { icon: User,          label: "Profil",       path: "/profil",                   auth: true  },
 ];
 
 export default function MobileBottomNav() {
@@ -22,24 +24,28 @@ export default function MobileBottomNav() {
   const location  = useLocation();
   const { user }  = useAuth();
 
-  const isActive = (path) => {
-    if (path === "/") return location.pathname === "/" && !location.search.includes("explore");
-    if (path.includes("profil")) return location.pathname.includes("profil");
-    return location.pathname === path;
+  const params   = new URLSearchParams(location.search);
+  const tab      = params.get("tab");
+  const onProfil = location.pathname.startsWith("/profil");
+
+  const isActive = (item) => {
+    if (item.path === "/") return location.pathname === "/" && !location.search.includes("focus=search");
+    if (item.path.includes("focus=search"))     return location.pathname === "/" && location.search.includes("focus=search");
+    if (item.path.includes("tab=rewards"))       return onProfil && tab === "rewards";
+    if (item.path.includes("tab=reservations"))  return onProfil && tab === "reservations";
+    if (item.path === "/profil")                 return onProfil && (!tab || tab === "profile");
+    return false;
   };
 
   const handleClick = (item) => {
-    if ((item.path.includes("profil") || item.path.includes("reservations")) && !user) {
-      navigate("/connexion");
-      return;
-    }
+    if (item.auth && !user) { navigate("/connexion"); return; }
     navigate(item.path);
   };
 
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 90,
-      background: "white",
+      background: "rgba(255,255,255,0.96)",
       borderTop: "0.5px solid #E4DFD8",
       display: "flex",
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -47,22 +53,19 @@ export default function MobileBottomNav() {
       backdropFilter: "blur(10px)",
     }}>
       {NAV.map((item) => {
-        const active = isActive(item.path);
+        const active = isActive(item);
         return (
           <button key={item.label} onClick={() => handleClick(item)}
             style={{
               flex: 1, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
-              gap: 4, padding: "10px 0 12px",
+              gap: 3, padding: "9px 0 10px",
               background: "none", border: "none", cursor: "pointer",
               color: active ? P : MUTED,
               transition: "color .15s",
             }}>
-            <item.icon size={22} strokeWidth={active ? 2.5 : 1.8} />
-            <span style={{
-              fontSize: 10, fontWeight: active ? 700 : 400,
-              letterSpacing: "0.2px",
-            }}>
+            <item.icon size={21} strokeWidth={active ? 2.5 : 1.8} />
+            <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 500, letterSpacing: "0.1px" }}>
               {item.label}
             </span>
           </button>

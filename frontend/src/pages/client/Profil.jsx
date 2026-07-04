@@ -91,6 +91,12 @@ export default function Profil() {
   const urlTab = new URLSearchParams(location.search).get("tab") || "profile";
   const [tab, setTab] = useState(urlTab);
 
+  // Synchroniser l'onglet quand l'URL change (navigation via la barre du bas)
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get("tab");
+    if (t) setTab(t);
+  }, [location.search]);
+
   // Photo de profil : liée au COMPTE (user.avatar_url en DB), pas au navigateur
   const [photo,        setPhoto]        = useState(user?.avatar_url || null);
   const [form,         setForm]         = useState({ nom: user?.full_name || "", phone: user?.phone || "" });

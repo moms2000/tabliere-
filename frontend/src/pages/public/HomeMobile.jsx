@@ -2,7 +2,7 @@
  * HomeMobile — Expérience mobile style OpenTable
  * Layout dédié mobile, desktop inchangé
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -15,6 +15,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
 import api from "../../services/api.js";
 import Onboarding from "../../components/Onboarding.jsx";
+const MapView = lazy(() => import("../../components/MapView.jsx"));
 
 const P     = "#E8A045";
 const S     = "#3D6B55";
@@ -136,6 +137,7 @@ export default function HomeMobile() {
   const [restaurants, setRestaurants] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState(false);
+  const [view,        setView]        = useState("list"); // "list" | "map"
   const [search,      setSearch]      = useState("");
   const [favorites,   setFavorites]   = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
@@ -609,10 +611,38 @@ export default function HomeMobile() {
               {selDayObj.day} {selDayObj.num} {selDayObj.mon} · {selTime} · {selGuest} personne{selGuest > 1 ? "s" : ""}
             </div>
           )}
+
+          {/* Bascule Liste / Carte */}
+          <div style={{ display: "inline-flex", background: "#EFEAE2", borderRadius: 10,
+            padding: 3, marginTop: 10 }}>
+            {[["list", "Liste"], ["map", "Carte"]].map(([v, label]) => (
+              <button key={v} onClick={() => setView(v)}
+                style={{ border: "none", cursor: "pointer", borderRadius: 8, padding: "6px 16px",
+                  fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
+                  background: view === v ? WHITE : "transparent",
+                  color: view === v ? DARK : MUTED,
+                  boxShadow: view === v ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                  display: "flex", alignItems: "center", gap: 5 }}>
+                {v === "map" && <MapPin size={13} />}{label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Cards restaurants */}
-        {loading ? (
+        {/* Vue Carte */}
+        {view === "map" && !loading && !loadError && (
+          <div style={{ margin: "4px 16px 12px", height: "62vh" }}>
+            <Suspense fallback={
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                background: BG, borderRadius: 12, color: MUTED, fontSize: 13 }}>Chargement de la carte…</div>
+            }>
+              <MapView restaurants={filtered} onSelect={(r) => navigate(`/restaurants/${r.slug}`)} />
+            </Suspense>
+          </div>
+        )}
+
+        {/* Cards restaurants (vue Liste) */}
+        {view === "list" && (loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} style={{ margin: "0 16px 12px",
               borderRadius: 12, border: `0.5px solid ${BORDER}`, overflow: "hidden",
@@ -740,7 +770,7 @@ export default function HomeMobile() {
             </div>
           </motion.div>
           );
-        })}
+        }))}
       </div>
 
       {/* ── Footer mobile ── */}

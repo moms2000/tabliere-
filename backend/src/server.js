@@ -122,6 +122,14 @@ async function runBusinessMigrations() {
        UNIQUE (user_id, restaurant_id)
      )`,
     `CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
+    `CREATE TABLE IF NOT EXISTS device_tokens (
+       id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       token      TEXT NOT NULL UNIQUE,
+       platform   VARCHAR(10),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id)`,
   ];
 
   for (const sql of stmts) {

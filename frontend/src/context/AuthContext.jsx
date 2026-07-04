@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { authService } from "../services/auth.service.js";
+import { initPushNotifications } from "../services/push.js";
 
 const AuthContext = createContext(null);
 
@@ -27,6 +28,11 @@ export function AuthProvider({ children }) {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Enregistrer les notifications push natives dès qu'un utilisateur est connecté
+  useEffect(() => {
+    if (user) initPushNotifications();
+  }, [user]);
 
   const login = useCallback(async (email, password, remember = true) => {
     const u = await authService.login(email, password, remember);

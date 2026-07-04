@@ -1,5 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import { whatsappService } from "../services/whatsapp.service.js";
+import { sendPushToUser }  from "../services/push.service.js";
 import { logger }          from "../utils/logger.js";
 import { query }           from "../config/db.js";
 import { env }             from "../config/env.js";
@@ -159,6 +160,13 @@ function createNotificationWorker() {
               ref:        data.reservationRef,
             }).catch(() => {});
           }
+
+          // Notification push native (si l'utilisateur a l'app)
+          await sendPushToUser(data.userId, {
+            title: isPending ? "Demande de réservation reçue" : "Réservation confirmée ✓",
+            body:  `${data.restoName} — ${fmtDate(data.reservedAt)} · ${data.partySize} pers. (${data.reservationRef})`,
+            data:  { route: "/profil?tab=reservations" },
+          }).catch(() => {});
           break;
         }
 

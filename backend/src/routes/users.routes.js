@@ -14,4 +14,7 @@ router.post  ("/me/favorites",               authenticate, ctrl.addFavorite);
 router.delete("/me/favorites/:restaurantId", authenticate, ctrl.removeFavorite);
 router.get   ("/me/loyalty",                 authenticate, ctrl.getLoyalty);
 
+// Notifications push natives
+router.post  ("/me/device-token",            authenticate, ctrl.registerDeviceToken);
+
 export default router;

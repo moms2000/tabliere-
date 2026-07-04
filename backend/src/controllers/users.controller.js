@@ -188,3 +188,18 @@ export const getLoyalty = asyncHandler(async (req, res) => {
     points_per_visit: POINTS_PER_VISIT,
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /users/me/device-token — enregistrer un token push natif (iOS/Android)
+// ---------------------------------------------------------------------------
+export const registerDeviceToken = asyncHandler(async (req, res) => {
+  const { token, platform } = req.body;
+  if (!token) throw new AppError("token requis", 400);
+  await query(
+    `INSERT INTO device_tokens (user_id, token, platform)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (token) DO UPDATE SET user_id = $1, platform = $3`,
+    [req.user.id, token, (platform || "").slice(0, 10) || null]
+  ).catch(() => {}); // table créée au boot ; ne jamais bloquer l'app
+  return ok(res, null, "Appareil enregistré pour les notifications");
+});

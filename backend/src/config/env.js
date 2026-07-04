@@ -37,6 +37,9 @@ export const env = {
   WHATSAPP_TOKEN:    optional("WHATSAPP_TOKEN", ""),
   WHATSAPP_PHONE_ID: optional("WHATSAPP_PHONE_ID", ""),
 
+  // Notifications push (Firebase Cloud Messaging — clé serveur)
+  FCM_SERVER_KEY:    optional("FCM_SERVER_KEY", ""),
+
   // Orange Money CI
   ORANGE_MONEY_API_KEY:    optional("ORANGE_MONEY_API_KEY", ""),
   ORANGE_MONEY_API_SECRET: optional("ORANGE_MONEY_API_SECRET", ""),

@@ -97,6 +97,31 @@ npx cap open android     # ouvre le projet dans Android Studio
 
 ---
 
+## 🔔 Notifications push (déjà intégrées — reste la config Firebase)
+
+Le code est prêt : l'app **demande la permission** et **enregistre le token**
+de l'appareil (endpoint `POST /users/me/device-token`), et le backend **envoie
+une push** à la confirmation d'une réservation (si `FCM_SERVER_KEY` est défini).
+Il reste à créer le projet **Firebase Cloud Messaging (FCM)** :
+
+1. Crée un projet sur https://console.firebase.google.com
+2. **Android** : ajoute une app Android (package `net.tabliereci.app`), télécharge
+   `google-services.json` et place-le dans `android/app/`.
+3. **iOS** : ajoute une app iOS (bundle `net.tabliereci.app`), télécharge
+   `GoogleService-Info.plist` et glisse-le dans le projet Xcode (`ios/App/App`).
+   Puis, dans Firebase → Cloud Messaging → **APNs** : uploade ta clé APNs `.p8`
+   (créée sur developer.apple.com) pour que les push iOS fonctionnent.
+4. Dans **Xcode** : cible App → **Signing & Capabilities → + Capability →
+   Push Notifications** (et **Background Modes → Remote notifications**).
+5. Récupère la **clé serveur** (Firebase → Paramètres → Cloud Messaging) et
+   définis-la côté backend sur Render : variable `FCM_SERVER_KEY`.
+6. `npx cap sync` puis reconstruire.
+
+> Sans cette config, l'app fonctionne normalement — seules les push ne partent
+> pas (le backend log en mode simulation). Rien ne bloque la soumission.
+
+---
+
 ## 🔁 Mettre à jour l'app après une modif du site
 ```bash
 cd frontend

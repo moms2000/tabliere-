@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Store, MapPin, Clock, Phone, Globe, DollarSign, Palette, Check, Camera, X, Images } from "lucide-react";
+import { Save, Store, MapPin, Clock, Phone, Globe, DollarSign, Palette, Check, Camera, X, Images, Copy, Share2, Link2 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { Card, SectionHeader, PageTitle, Btn, FormField, Input, PhotoUpload } from "../../components/ui";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -74,6 +75,25 @@ export default function RestProfil() {
   }, [user?.resto_id]);
 
   const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target?.value ?? e }));
+
+  // Lien public de réservation (à partager)
+  const bookingUrl = resto?.slug ? `https://tabliereci.net/restaurants/${resto.slug}` : "";
+  const [copied, setCopied] = useState(false);
+  const copyLink = () => {
+    if (!bookingUrl) return;
+    navigator.clipboard?.writeText(bookingUrl)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => {});
+  };
+  const shareLink = () => {
+    if (!bookingUrl) return;
+    const text = `Réservez votre table chez ${resto?.name || "nous"} sur TablièreCI : ${bookingUrl}`;
+    if (navigator.share) {
+      navigator.share({ title: resto?.name || "TablièreCI", text, url: bookingUrl }).catch(() => {});
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    }
+  };
 
   // Récupérer la position GPS de l'appareil (à faire sur place, au restaurant)
   const [geoMsg, setGeoMsg] = useState("");
@@ -550,14 +570,60 @@ export default function RestProfil() {
             </Card>
           </motion.div>
 
-          {/* Slug */}
+          {/* Lien de réservation partageable */}
           <motion.div variants={fadeUp}>
             <Card>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>URL publique</div>
-              <div style={{ fontSize: 12, fontFamily: "monospace", color: DARK,
-                background: BG, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all" }}>
-                {resto?.slug ? `tabliereci.net/restaurants/${resto.slug}` : "URL disponible après activation"}
+              <SectionHeader title="Votre lien de réservation" icon={Link2} />
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 12, lineHeight: 1.5 }}>
+                Partagez ce lien dans votre bio Instagram/Facebook, votre statut WhatsApp ou avec vos
+                clients : il ouvre directement votre page de réservation.
               </div>
+
+              {resto?.slug ? (
+                <>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 200, fontSize: 13, fontFamily: "monospace", color: DARK,
+                      background: BG, border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px",
+                      wordBreak: "break-all" }}>
+                      {bookingUrl}
+                    </div>
+                    <button type="button" onClick={copyLink}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6,
+                        background: copied ? "#E8F5EE" : DARK, color: copied ? "#1D9E75" : "white",
+                        border: "none", borderRadius: 9, padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                        cursor: "pointer", fontFamily: FONT }}>
+                      {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copié !" : "Copier"}
+                    </button>
+                    <button type="button" onClick={shareLink}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6,
+                        background: "#FEF6EC", color: "#C47D1A", border: `0.5px solid ${P}55`,
+                        borderRadius: 9, padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                        cursor: "pointer", fontFamily: FONT }}>
+                      <Share2 size={15} /> Partager
+                    </button>
+                  </div>
+
+                  {/* QR à imprimer / afficher */}
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", background: BG,
+                    borderRadius: 12, padding: 14, flexWrap: "wrap" }}>
+                    <div style={{ background: "white", padding: 8, borderRadius: 8 }}>
+                      <QRCode value={bookingUrl} size={96} fgColor={DARK} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: DARK, marginBottom: 3 }}>
+                        QR code de réservation
+                      </div>
+                      <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5 }}>
+                        Imprimez-le sur vos flyers, cartes ou à l'entrée : vos clients scannent et réservent.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: MUTED }}>
+                  Le lien sera disponible dès l'activation de votre restaurant.
+                </div>
+              )}
             </Card>
           </motion.div>
         </div>

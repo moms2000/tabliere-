@@ -9,8 +9,24 @@ backend de production (`.env.production`).
 - **Catégorie conseillée** : Food & Drink / Alimentation
 - **URL politique de confidentialité** : https://tabliereci.net/confidentialite
 
-> À chaque modification du site : `npm run build` puis `npx cap sync`, puis
-> reconstruire dans Xcode / Android Studio.
+## ⚡ Mises à jour automatiques (important)
+
+L'app native est configurée pour **charger le site en ligne** (`server.url` →
+`https://tabliereci.net`). Conséquence :
+
+- **Toute modification du site (front) est INSTANTANÉMENT dans l'app** après le
+  déploiement Vercel — **aucune re-soumission** aux stores nécessaire. 🎉
+- Il ne faut re-soumettre l'app QUE pour un changement **natif** (icône, splash,
+  nouveau plugin, permission, version). Dans ce cas :
+  ```bash
+  cd frontend
+  npm run cap:ios       # ou cap:android — build + sync + ouvre le projet
+  ```
+  puis Archive (Xcode) / Generate Signed Bundle (Android Studio).
+
+> Compromis assumé : l'app nécessite une connexion Internet (elle affiche le
+> site live). Pour Apple, les fonctions natives (splash, notifications push,
+> barre de statut) renforcent la conformité à la règle 4.2.
 
 ---
 

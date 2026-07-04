@@ -3,6 +3,10 @@
   "appName": "TablièreCI",
   "webDir": "dist",
   "backgroundColor": "#F8F5EF",
+  "server": {
+    "url": "https://tabliereci.net",
+    "cleartext": false
+  },
   "ios": {
     "contentInset": "always"
   },

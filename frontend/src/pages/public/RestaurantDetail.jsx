@@ -269,6 +269,19 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
           <p style={{ fontSize: 12, color: MUTED, marginBottom: 24, lineHeight: 1.5 }}>
             Le restaurant confirmera votre réservation par SMS ou email.
           </p>
+          {/* Message de dépôt / arrhes configuré par le restaurant, affiché si le
+              nombre de personnes atteint le seuil défini par l'établissement */}
+          {resto.deposit_enabled && pers >= (resto.deposit_min_party || 6) && resto.deposit_message && (
+            <div style={{ textAlign: "left", background: PL, border: `1px solid ${P}`,
+              borderRadius: 12, padding: "14px 16px", marginBottom: 24 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: P, marginBottom: 6 }}>
+                Dépôt requis pour cette réservation
+              </div>
+              <div style={{ fontSize: 13, color: DARK, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {resto.deposit_message}
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={() => { closeModal(); navigate("/profil"); }}
               style={{ background: PL, color: P, border: `0.5px solid ${P}`, borderRadius: 9,

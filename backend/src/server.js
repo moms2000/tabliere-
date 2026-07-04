@@ -165,9 +165,12 @@ async function runCodesMigration() {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    // Dépôt sur restaurants
+    // Dépôt sur restaurants (config restaurateur : activé / seuil couverts / message)
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_min_guests INTEGER DEFAULT 0`);
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_amount INTEGER DEFAULT 0`);
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_enabled   BOOLEAN DEFAULT FALSE`);
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_min_party INTEGER DEFAULT 6`);
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_message   TEXT`);
     logger.info("Table restaurateur_codes + dépôt prêts");
   } catch (_) {}
 }

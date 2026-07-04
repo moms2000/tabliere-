@@ -97,6 +97,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.price_range, r.capacity, r.rating, r.review_count,
             r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
+            r.deposit_enabled, r.deposit_min_party, r.deposit_message,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -152,6 +153,8 @@ export const update = asyncHandler(async (req, res) => {
     "lunch_hours","dinner_hours","tables_2","tables_4","tables_6","tables_8",
     // Confirmation automatique ou manuelle des réservations
     "auto_confirm",
+    // Dépôt / arrhes configurable par le restaurateur
+    "deposit_enabled","deposit_min_party","deposit_message",
   ];
   const updates = [];
   const values  = [];
@@ -181,8 +184,12 @@ export const update = asyncHandler(async (req, res) => {
     if (["tables_2","tables_4","tables_6","tables_8","capacity"].includes(field)) {
       val = (val === "" || val === null) ? 0 : (parseInt(val, 10) || 0);
     }
+    // deposit_min_party : entier >= 1 (défaut 6 si vide/invalide)
+    if (field === "deposit_min_party") {
+      val = Math.max(1, parseInt(val, 10) || 6);
+    }
     // Booléens stricts
-    if (field === "qr_active" || field === "auto_confirm") {
+    if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled") {
       val = (val === true || val === "true" || val === 1);
     }
     values.push(val);
@@ -257,6 +264,9 @@ async function ensureRestaurantColumns() {
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_6      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_8      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS auto_confirm  BOOLEAN DEFAULT TRUE;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_enabled   BOOLEAN DEFAULT FALSE;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_min_party INTEGER DEFAULT 6;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_message   TEXT;
     `);
   } catch (_) {}
   restaurantMigrated = true;

@@ -62,6 +62,9 @@ export default function RestProfil() {
           logo_url:      r.logo_url      || "",
           photos:        Array.isArray(r.photos) ? r.photos : [],
           auto_confirm:  r.auto_confirm !== false, // défaut true
+          deposit_enabled:   r.deposit_enabled === true,
+          deposit_min_party: r.deposit_min_party || 6,
+          deposit_message:   r.deposit_message || "",
         });
       })
       .catch(console.error)
@@ -252,6 +255,52 @@ export default function RestProfil() {
                     transition: "left .2s" }} />
                 </button>
               </div>
+
+              {/* Dépôt / arrhes requis à partir d'un certain nombre de personnes */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                gap: 12, padding: "12px 14px", background: form.deposit_enabled ? "#FEF6EC" : "#F7F7F5",
+                border: `0.5px solid ${form.deposit_enabled ? "#E8A04533" : "#E4DFD8"}`,
+                borderRadius: 10, marginBottom: form.deposit_enabled ? 12 : 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28" }}>
+                    Dépôt / arrhes {form.deposit_enabled ? "activé" : "désactivé"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 3, lineHeight: 1.5 }}>
+                    {form.deposit_enabled
+                      ? "Un message demandant un dépôt s'affichera au client après confirmation, à partir du nombre de personnes indiqué."
+                      : "Activez si vous demandez un dépôt pour les grandes tablées."}
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, deposit_enabled: !p.deposit_enabled }))}
+                  style={{ position: "relative", width: 46, height: 26, borderRadius: 13,
+                    border: "none", cursor: "pointer", flexShrink: 0, transition: "background .2s",
+                    background: form.deposit_enabled ? "#E8A045" : "#ccc" }}>
+                  <span style={{ position: "absolute", top: 3, left: form.deposit_enabled ? 23 : 3,
+                    width: 20, height: 20, borderRadius: "50%", background: "white",
+                    transition: "left .2s" }} />
+                </button>
+              </div>
+
+              {form.deposit_enabled && (
+                <div style={{ marginBottom: 16 }}>
+                  <FormField label="À partir de combien de personnes ?">
+                    <Input type="number" min={1} value={form.deposit_min_party || 6}
+                      onChange={e => setForm(p => ({ ...p, deposit_min_party: parseInt(e.target.value, 10) || 1 }))}
+                      placeholder="6" />
+                  </FormField>
+                  <FormField label="Message affiché au client (montant + instructions de dépôt)">
+                    <textarea
+                      value={form.deposit_message || ""}
+                      onChange={e => setForm(p => ({ ...p, deposit_message: e.target.value }))}
+                      placeholder="Ex : Pour confirmer, merci de verser 10 000 F sur le compte Wave +225 07 00 00 00 00, puis envoyez la capture au restaurant."
+                      rows={3}
+                      style={{ width: "100%", border: "0.5px solid #E4DFD8", borderRadius: 9,
+                        padding: "9px 12px", fontSize: 13, color: "#1E2E28", background: "#F8F5EF",
+                        outline: "none", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+                  </FormField>
+                </div>
+              )}
 
               <div style={{ fontSize: 12, color: "#888", marginBottom: 12, lineHeight: 1.6 }}>
                 Indiquez les horaires de service et le nombre de tables disponibles par taille de groupe.

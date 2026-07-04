@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, Music, Sunrise, Gift, UtensilsCrossed,
-  Heart, User, LogOut, Globe, CheckCircle, ChevronDown, BookOpen, Sparkles,
+  Bookmark, User, LogOut, Globe, CheckCircle, ChevronDown, BookOpen, Sparkles,
   Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus, Bell,
   TrendingUp, Shield, Smartphone,
 } from "lucide-react";
@@ -1081,8 +1081,8 @@ export default function Home() {
                   fontSize: 12, color: MUTED, fontFamily: FONT, padding: 0 }}>
                 <MapPin size={13} color={locating ? BORDER : S} />
                 {locating ? "Localisation en cours…"
-                  : locCity ? `📍 Position détectée : ${locCity}`
-                  : "📍 Utiliser ma position (facultatif)"}
+                  : locCity ? `Position détectée : ${locCity}`
+                  : "Utiliser ma position (facultatif)"}
               </button>
             </motion.div>
           </div>
@@ -1227,12 +1227,13 @@ export default function Home() {
                     </div>
 
                     <button onClick={e => toggleFavorite(e, r)}
+                      title={isFav(r.slug) ? "Retirer des enregistrés" : "Enregistrer"}
                       style={{ position: "absolute", top: 8, right: 8, background: WHITE,
-                        border: `0.5px solid ${BORDER}`, borderRadius: "50%", width: 28, height: 28,
+                        border: `0.5px solid ${isFav(r.slug) ? P : BORDER}`, borderRadius: "50%", width: 28, height: 28,
                         display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                      <Heart size={12}
-                        fill={isFav(r.slug) ? "#DC2626" : "none"}
-                        color={isFav(r.slug) ? "#DC2626" : MUTED} />
+                      <Bookmark size={13}
+                        fill={isFav(r.slug) ? P : "none"}
+                        color={isFav(r.slug) ? P : MUTED} />
                     </button>
 
                     <div style={{ padding: "14px 16px", fontFamily: FONT }}>

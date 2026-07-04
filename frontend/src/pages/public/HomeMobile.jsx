@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Search, MapPin, Star, UtensilsCrossed, Heart, Bell,
+  Search, MapPin, Star, UtensilsCrossed, Bookmark, Bell,
   ChevronDown, ChevronRight, User, Calendar, Clock, Users, Navigation,
   Mail, Phone, X,
 } from "lucide-react";
@@ -564,9 +564,9 @@ export default function HomeMobile() {
                 style={{ position: "absolute", top: 6, left: 6, background: "rgba(255,255,255,.85)",
                   border: "none", borderRadius: "50%", width: 26, height: 26, cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
-                <Heart size={12}
-                  fill={favorites.some(f => f.slug === r.slug) ? "#DC2626" : "none"}
-                  color={favorites.some(f => f.slug === r.slug) ? "#DC2626" : MUTED} />
+                <Bookmark size={13}
+                  fill={favorites.some(f => f.slug === r.slug) ? P : "none"}
+                  color={favorites.some(f => f.slug === r.slug) ? P : MUTED} />
               </button>
             </div>
               );

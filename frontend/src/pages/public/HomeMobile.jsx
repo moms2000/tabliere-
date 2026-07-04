@@ -40,6 +40,57 @@ function cardBadge(r) {
   return null;
 }
 
+// Compteur animé (count-up) déclenché quand l'élément devient visible
+function useCountUp(target, duration, start) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let raf, t0 = null;
+    const tick = (t) => {
+      if (t0 === null) t0 = t;
+      const p = Math.min(1, (t - t0) / duration);
+      setN(Math.floor(p * target));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, start]);
+  return n;
+}
+
+// Bande de statistiques mobile (confiance) — chiffres animés
+function MobileStatsBand() {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  const restos = useCountUp(200, 1500, visible);
+  const resa   = useCountUp(15000, 1700, visible);
+  const cities = useCountUp(12, 1100, visible);
+  const rating = useCountUp(48, 1300, visible);
+  const items = [
+    { v: `${restos}+`, l: "Restaurants" },
+    { v: `${resa.toLocaleString("fr-FR")}+`, l: "Réservations" },
+    { v: `${cities}`, l: "Villes" },
+    { v: `${(rating / 10).toFixed(1)}/5`, l: "Note" },
+  ];
+  return (
+    <div ref={ref} style={{ margin: "6px 16px 4px", background: DARK, borderRadius: 16,
+      padding: "16px 10px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
+      {items.map((s, i) => (
+        <div key={i} style={{ textAlign: "center", borderLeft: i > 0 ? "0.5px solid rgba(255,255,255,.1)" : "none" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "white", fontFamily: FONT, letterSpacing: "-0.5px" }}>{s.v}</div>
+          <div style={{ fontSize: 8.5, color: "rgba(255,255,255,.55)", marginTop: 3,
+            textTransform: "uppercase", letterSpacing: "0.5px" }}>{s.l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Stars ── */
 function Stars({ rating, size = 12 }) {
   return (
@@ -503,6 +554,9 @@ export default function HomeMobile() {
           );
         })}
       </div>
+
+      {/* ── Bande de confiance (stats animées) ── */}
+      <MobileStatsBand />
 
       {/* ── Restaurant list style OpenTable ── */}
       <div ref={listRef} id="tci-restaurant-list" style={{ padding: "8px 0" }}>

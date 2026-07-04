@@ -241,6 +241,20 @@ function BookingWidget({ onBook, initialDate, initialGuests }) {
   );
 }
 
+// Lien "Ajouter à Google Agenda" à partir de la réservation
+function calendarUrl(resto, dateIso, slot, pers) {
+  if (!dateIso || !slot) return null;
+  const [h, m] = slot.replace("h", ":").split(":").map(Number);
+  const day = dateIso.replace(/-/g, "");
+  const pad = (n) => String(n).padStart(2, "0");
+  const start = `${day}T${pad(h)}${pad(m || 0)}00`;
+  const end   = `${day}T${pad((h + 2) % 24)}${pad(m || 0)}00`;
+  const text    = encodeURIComponent(`Réservation — ${resto?.name || "Restaurant"}`);
+  const details = encodeURIComponent(`Table pour ${pers} personne(s) — réservé via TablièreCI (tabliereci.net)`);
+  const loc     = encodeURIComponent(resto?.address || resto?.quartier || "");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${start}/${end}&details=${details}&location=${loc}`;
+}
+
 /* Contenu des étapes partagé mobile/desktop */
 function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers, resto,
   special, setSpecial, user, error, booking, handleBook, closeModal, navigate,
@@ -285,6 +299,16 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
                 {resto.deposit_message}
               </div>
             </div>
+          )}
+          {/* Ajouter au calendrier (Google Agenda) */}
+          {calendarUrl(resto, selDate, selSlot, pers) && (
+            <a href={calendarUrl(resto, selDate, selSlot, pers)} target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 16,
+                background: "white", color: DARK, border: `0.5px solid ${BORDER}`, borderRadius: 9,
+                padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                fontFamily: FONT, textDecoration: "none" }}>
+              <CalendarCheck size={15} color={P} /> Ajouter au calendrier
+            </a>
           )}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={() => { closeModal(); navigate("/profil"); }}

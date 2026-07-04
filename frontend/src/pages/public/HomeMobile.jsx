@@ -14,6 +14,7 @@ import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
 import api from "../../services/api.js";
+import Onboarding from "../../components/Onboarding.jsx";
 
 const P     = "#E8A045";
 const S     = "#3D6B55";
@@ -222,6 +223,9 @@ export default function HomeMobile() {
 
   return (
     <div style={{ fontFamily: FONT, background: BG, minHeight: "100vh", paddingBottom: 80 }}>
+
+      {/* Onboarding — 3 écrans, affiché une seule fois à la première ouverture */}
+      <Onboarding />
 
       {/* ── Header sticky mobile ── */}
       <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,

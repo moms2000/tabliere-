@@ -13,7 +13,7 @@ const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 export default function LogoSplash() {
   const [gone, setGone] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setGone(true), 1850);
+    const t = setTimeout(() => setGone(true), 3400);
     return () => clearTimeout(t);
   }, []);
   if (gone) return null;
@@ -22,48 +22,48 @@ export default function LogoSplash() {
     <motion.div
       initial={{ opacity: 1 }}
       animate={{ opacity: [1, 1, 0] }}
-      transition={{ duration: 1.85, times: [0, 0.72, 1] }}
+      transition={{ duration: 3.4, times: [0, 0.82, 1] }}
       style={{ position: "fixed", inset: 0, zIndex: 9000, background: CREAM,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        gap: 20, fontFamily: FONT }}>
+        gap: 22, fontFamily: FONT }}>
 
       {/* Marque animée */}
-      <motion.svg width="104" height="104" viewBox="0 0 40 40"
-        initial={{ scale: 0.6, opacity: 0 }}
+      <motion.svg width="120" height="120" viewBox="0 0 40 40"
+        initial={{ scale: 0.7, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 15 }}>
+        transition={{ type: "spring", stiffness: 160, damping: 16 }}>
         {/* Fond orange arrondi */}
         <motion.rect width="40" height="40" rx="10" fill={P}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} />
-        {/* Barre haute du T (se dessine de gauche à droite) */}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} />
+        {/* Barre haute du T (se dessine de gauche à droite, lentement) */}
         <motion.rect x="9" y="12" width="22" height="2.6" rx="1.3" fill="white"
           style={{ transformOrigin: "9px 13px" }}
           initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-          transition={{ duration: 0.45, delay: 0.35, ease: "easeInOut" }} />
+          transition={{ duration: 0.9, delay: 0.6, ease: "easeInOut" }} />
         {/* Tige du T (se dessine de haut en bas) */}
         <motion.rect x="17" y="14.5" width="6" height="13" rx="1.6" fill="white"
           style={{ transformOrigin: "20px 14.5px" }}
           initial={{ scaleY: 0 }} animate={{ scaleY: 1 }}
-          transition={{ duration: 0.45, delay: 0.6, ease: "easeInOut" }} />
+          transition={{ duration: 0.9, delay: 1.35, ease: "easeInOut" }} />
         {/* Vague (se trace) */}
         <motion.path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
-          stroke="rgba(255,255,255,0.55)" strokeWidth="1.4" fill="none" strokeLinecap="round"
+          stroke="rgba(255,255,255,0.6)" strokeWidth="1.4" fill="none" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-          transition={{ duration: 0.6, delay: 0.85, ease: "easeInOut" }} />
+          transition={{ duration: 1.1, delay: 2.05, ease: "easeInOut" }} />
       </motion.svg>
 
       {/* Nom */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 1.05 }}
-        style={{ fontSize: 26, fontWeight: 700, color: DARK, letterSpacing: "-0.5px" }}>
+        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 2.5 }}
+        style={{ fontSize: 28, fontWeight: 700, color: DARK, letterSpacing: "-0.5px" }}>
         Tablière<span style={{ color: P }}>CI</span>
       </motion.div>
 
       {/* Fine barre de progression sous le nom */}
       <motion.div
-        initial={{ width: 0, opacity: 0 }} animate={{ width: 90, opacity: 1 }}
-        transition={{ duration: 1.2, delay: 0.4 }}
+        initial={{ width: 0, opacity: 0 }} animate={{ width: 100, opacity: 1 }}
+        transition={{ duration: 2.6, delay: 0.6 }}
         style={{ height: 3, borderRadius: 3, background: `linear-gradient(90deg, ${P}, ${P}55)` }} />
     </motion.div>
   );

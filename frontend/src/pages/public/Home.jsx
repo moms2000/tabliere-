@@ -498,7 +498,6 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
             {[
               { label: "Confidentialité",  href: "/confidentialite" },
               { label: "CGU",              href: "/cgu" },
-              { label: "Mentions légales", href: "/mentions-legales" },
             ].map(({ label, href }, i) => (
               <a key={i} href={href}
                 style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", cursor: "pointer",

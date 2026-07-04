@@ -34,7 +34,7 @@ export default function Confidentialite() {
           },
           {
             title: "2. Données collectées",
-            content: `Nous collectons les données suivantes :\n\n• Informations d'identification : nom complet, adresse e-mail, numéro de téléphone WhatsApp\n• Données de réservation : restaurant choisi, date, heure, nombre de convives, demandes spéciales\n• Données de navigation : adresse IP, type d'appareil, navigateur, pages visitées\n• Données de paiement : méthode de paiement (Orange Money, MTN MoMo, Wave, Stripe) — nous ne stockons pas les numéros de cartes bancaires\n• Photo de profil (optionnelle)\n\nNous ne collectons pas de données sensibles (origines raciales, données biométriques, convictions religieuses).`
+            content: `Nous collectons les données suivantes :\n\n• Informations d'identification : nom complet, adresse e-mail, numéro de téléphone WhatsApp\n• Données de réservation : restaurant choisi, date, heure, nombre de convives, demandes spéciales\n• Données de navigation : adresse IP, type d'appareil, navigateur, pages visitées\n• Photo de profil (optionnelle)\n\nAucun paiement n'est traité sur la plateforme : nous ne collectons ni ne stockons de données bancaires.\n\nNous ne collectons pas de données sensibles (origines raciales, données biométriques, convictions religieuses).`
           },
           {
             title: "3. Pourquoi utilisons-nous vos données ?",
@@ -46,11 +46,11 @@ export default function Confidentialite() {
           },
           {
             title: "5. Partage des données",
-            content: `Nous ne vendons jamais vos données. Nous les partageons uniquement avec :\n\n• Les restaurateurs partenaires : pour traiter votre réservation (nom, téléphone, date, nombre de personnes)\n• Prestataires de paiement : Orange Money, MTN MoMo, Wave, Stripe — pour traiter vos paiements\n• Prestataire de messagerie : Meta (WhatsApp Business API) — pour les confirmations\n• Hébergeur : Render.com (États-Unis) — avec garanties contractuelles adequates\n\nTout transfert hors de Côte d'Ivoire est effectué avec les garanties appropriées.`
+            content: `Nous ne vendons jamais vos données. Nous les partageons uniquement avec :\n\n• Les restaurateurs partenaires : pour traiter votre réservation (nom, téléphone, date, nombre de personnes)\n• Prestataire de messagerie : Meta (WhatsApp Business API) — pour les confirmations\n• Hébergeur : Render.com (États-Unis) — avec garanties contractuelles adéquates\n\nTout transfert hors de Côte d'Ivoire est effectué avec les garanties appropriées.`
           },
           {
             title: "6. Conservation des données",
-            content: `• Données de compte : conservées tant que votre compte est actif + 3 ans après suppression\n• Données de réservation : 5 ans (obligations légales et comptables)\n• Données de navigation : 13 mois maximum\n• Données de paiement : 5 ans (obligations fiscales)\n\nAprès expiration, vos données sont supprimées ou anonymisées.`
+            content: `• Données de compte : conservées tant que votre compte est actif + 3 ans après suppression\n• Données de réservation : 5 ans (obligations légales et comptables)\n• Données de navigation : 13 mois maximum\n\nAprès expiration, vos données sont supprimées ou anonymisées.`
           },
           {
             title: "7. Vos droits",

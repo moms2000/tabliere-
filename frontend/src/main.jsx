@@ -46,7 +46,6 @@ const VerifyEmail       = lazy(() => import("./pages/public/VerifyEmail"));
 const MotDePasseOublie  = lazy(() => import("./pages/public/MotDePasseOublie"));
 const ResetPassword     = lazy(() => import("./pages/public/ResetPassword"));
 const CGU              = lazy(() => import("./pages/public/CGU"));
-const MentionsLegales  = lazy(() => import("./pages/public/MentionsLegales"));
 import NotFound         from "./pages/public/NotFound";
 
 // ── Fallback de chargement ────────────────────────────────────────────────────
@@ -162,7 +161,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/reset-password"       element={<ResetPassword />} />
                   <Route path="/confidentialite"   element={<Confidentialite />} />
                   <Route path="/cgu"               element={<CGU />} />
-                  <Route path="/mentions-legales"  element={<MentionsLegales />} />
+                  {/* Mentions légales retirées pour le lancement */}
 
                   {/* ── Client — profil personnel (clients uniquement, pas admin ni restaurateur) ── */}
                   <Route path="/profil" element={

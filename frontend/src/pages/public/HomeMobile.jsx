@@ -3,7 +3,7 @@
  * Layout dédié mobile, desktop inchangé
  */
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MapPin, Star, UtensilsCrossed, Bookmark, Bell,
@@ -145,6 +145,7 @@ function buildDays() {
 
 export default function HomeMobile() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
 
   const [restaurants, setRestaurants] = useState([]);
@@ -192,6 +193,14 @@ export default function HomeMobile() {
   const selDayObj = days.find(d => d.iso === selDate) || days[0];
 
   const listRef = useRef(null);
+
+  // Onglet "Recherche" de la barre du bas → ouvre la vue Carte (comme OpenTable)
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("view") === "map") {
+      setView("map");
+      setTimeout(() => document.getElementById("tci-restaurant-list")?.scrollIntoView({ behavior: "smooth" }), 120);
+    }
+  }, [location.search]);
 
   // Header qui se compacte au défilement (style OpenTable)
   const [scrolled, setScrolled] = useState(false);

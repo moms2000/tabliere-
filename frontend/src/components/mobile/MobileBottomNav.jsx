@@ -13,7 +13,7 @@ const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 const NAV = [
   { icon: Home,          label: "Accueil",      path: "/",                        auth: false },
-  { icon: Search,        label: "Recherche",    path: "/?focus=search",           auth: false },
+  { icon: Search,        label: "Recherche",    path: "/?view=map",               auth: false },
   { icon: Award,         label: "Récompenses",  path: "/profil?tab=rewards",       auth: true  },
   { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations",  auth: true  },
   { icon: User,          label: "Profil",       path: "/profil",                   auth: true  },
@@ -29,8 +29,8 @@ export default function MobileBottomNav() {
   const onProfil = location.pathname.startsWith("/profil");
 
   const isActive = (item) => {
-    if (item.path === "/") return location.pathname === "/" && !location.search.includes("focus=search");
-    if (item.path.includes("focus=search"))     return location.pathname === "/" && location.search.includes("focus=search");
+    if (item.path === "/") return location.pathname === "/" && !location.search.includes("view=map");
+    if (item.path.includes("view=map"))          return location.pathname === "/" && location.search.includes("view=map");
     if (item.path.includes("tab=rewards"))       return onProfil && tab === "rewards";
     if (item.path.includes("tab=reservations"))  return onProfil && tab === "reservations";
     if (item.path === "/profil")                 return onProfil && (!tab || tab === "profile");

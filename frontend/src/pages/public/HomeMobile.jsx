@@ -178,6 +178,15 @@ export default function HomeMobile() {
 
   const listRef = useRef(null);
 
+  // Header qui se compacte au défilement (style OpenTable)
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const loadRestaurants = useCallback(() => {
     setLoading(true); setLoadError(false);
     restaurantsService.list({ limit: 50, sort: "rating" })
@@ -284,21 +293,26 @@ export default function HomeMobile() {
       {/* Onboarding — 3 écrans, affiché une seule fois à la première ouverture */}
       <Onboarding />
 
-      {/* ── Header sticky mobile ── */}
+      {/* ── Header sticky mobile (compact au défilement) ── */}
       <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,
-        borderBottom: `0.5px solid ${BORDER}`, padding: "12px 16px",
+        borderBottom: `0.5px solid ${BORDER}`,
+        padding: scrolled ? "7px 16px" : "12px 16px",
+        boxShadow: scrolled ? "0 2px 12px rgba(30,46,40,.08)" : "none",
+        transition: "padding .22s ease, box-shadow .22s ease",
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
 
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+          <svg width={scrolled ? 24 : 28} height={scrolled ? 24 : 28} viewBox="0 0 40 40" fill="none"
+            style={{ transition: "width .22s ease, height .22s ease" }}>
             <rect width="40" height="40" rx="9" fill={P} />
             <rect x="9" y="12" width="22" height="2.5" rx="1.25" fill="white" />
             <rect x="17" y="14.5" width="6" height="13" rx="1.5" fill="white" />
             <path d="M9 24.5 Q15.5 28.5 20 24.5 Q24.5 20.5 31 24.5"
               stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" fill="none" />
           </svg>
-          <span style={{ fontSize: 18, fontWeight: 700, color: DARK, letterSpacing: "-0.5px" }}>
+          <span style={{ fontSize: scrolled ? 16 : 18, fontWeight: 700, color: DARK,
+            letterSpacing: "-0.5px", transition: "font-size .22s ease" }}>
             Tablière<span style={{ color: P }}>CI</span>
           </span>
         </div>

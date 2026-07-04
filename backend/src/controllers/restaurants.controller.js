@@ -50,7 +50,7 @@ export const list = asyncHandler(async (req, res) => {
       `SELECT r.id, r.name, r.slug, r.cuisine_type, r.address, r.ville, r.quartier,
               r.price_range, r.rating, r.review_count, r.capacity,
               r.opening_hours, r.phone, r.theme_color, r.qr_active,
-              r.logo_url, r.photos, r.options
+              r.logo_url, r.photos, r.options, r.latitude, r.longitude
        FROM restaurants r
        ${where}
        ORDER BY ${orderBy}
@@ -98,6 +98,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
             r.deposit_enabled, r.deposit_min_party, r.deposit_message,
+            r.latitude, r.longitude,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -155,6 +156,8 @@ export const update = asyncHandler(async (req, res) => {
     "auto_confirm",
     // Dépôt / arrhes configurable par le restaurateur
     "deposit_enabled","deposit_min_party","deposit_message",
+    // Localisation précise (carte)
+    "latitude","longitude",
   ];
   const updates = [];
   const values  = [];
@@ -187,6 +190,15 @@ export const update = asyncHandler(async (req, res) => {
     // deposit_min_party : entier >= 1 (défaut 6 si vide/invalide)
     if (field === "deposit_min_party") {
       val = Math.max(1, parseInt(val, 10) || 6);
+    }
+    // Coordonnées GPS : nombre valide dans les bornes, sinon NULL
+    if (field === "latitude") {
+      const n = parseFloat(val);
+      val = (Number.isFinite(n) && n >= -90 && n <= 90) ? n : null;
+    }
+    if (field === "longitude") {
+      const n = parseFloat(val);
+      val = (Number.isFinite(n) && n >= -180 && n <= 180) ? n : null;
     }
     // Booléens stricts
     if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled") {

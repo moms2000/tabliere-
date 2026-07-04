@@ -65,6 +65,8 @@ export default function RestProfil() {
           deposit_enabled:   r.deposit_enabled === true,
           deposit_min_party: r.deposit_min_party || 6,
           deposit_message:   r.deposit_message || "",
+          latitude:          r.latitude ?? "",
+          longitude:         r.longitude ?? "",
         });
       })
       .catch(console.error)
@@ -72,6 +74,23 @@ export default function RestProfil() {
   }, [user?.resto_id]);
 
   const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target?.value ?? e }));
+
+  // Récupérer la position GPS de l'appareil (à faire sur place, au restaurant)
+  const [geoMsg, setGeoMsg] = useState("");
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setGeoMsg("Géolocalisation non disponible sur cet appareil."); return; }
+    setGeoMsg("Localisation en cours…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(p => ({ ...p,
+          latitude:  pos.coords.latitude.toFixed(6),
+          longitude: pos.coords.longitude.toFixed(6) }));
+        setGeoMsg("Position récupérée ✓ — cliquez sur Enregistrer pour valider.");
+      },
+      () => setGeoMsg("Impossible d'obtenir la position (autorisation refusée ?)."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const handleSave = async () => {
     if (!user?.resto_id) return;
@@ -182,6 +201,37 @@ export default function RestProfil() {
                 <FormField label="Ville">
                   <Input value={form.ville} onChange={set("ville")} placeholder="Abidjan" />
                 </FormField>
+              </div>
+
+              {/* Position précise (carte) */}
+              <div style={{ marginTop: 8, borderTop: `0.5px solid ${BORDER}`, paddingTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>
+                  Position précise sur la carte
+                </div>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 12, lineHeight: 1.5 }}>
+                  Depuis votre restaurant, cliquez sur « Utiliser ma position actuelle ».
+                  Sinon, saisissez les coordonnées (repérez-les sur Google Maps : clic droit → les chiffres).
+                </div>
+                <button type="button" onClick={useMyLocation}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 12,
+                    background: "#FEF6EC", color: "#C47D1A", border: `0.5px solid ${P}55`,
+                    borderRadius: 9, padding: "9px 14px", fontSize: 13, fontWeight: 600,
+                    cursor: "pointer", fontFamily: FONT }}>
+                  <MapPin size={14} /> Utiliser ma position actuelle
+                </button>
+                {geoMsg && (
+                  <div style={{ fontSize: 11, color: geoMsg.includes("✓") ? "#1D9E75" : "#888", marginBottom: 10 }}>
+                    {geoMsg}
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <FormField label="Latitude">
+                    <Input value={form.latitude} onChange={set("latitude")} placeholder="5.359000" />
+                  </FormField>
+                  <FormField label="Longitude">
+                    <Input value={form.longitude} onChange={set("longitude")} placeholder="-3.996000" />
+                  </FormField>
+                </div>
               </div>
             </Card>
           </motion.div>

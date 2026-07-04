@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,6 +10,7 @@ import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { usePageMeta } from "../../hooks/usePageMeta.js";
+const MapView = lazy(() => import("../../components/MapView.jsx"));
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -793,6 +794,30 @@ export default function RestaurantDetail() {
         {/* Sidebar — desktop seulement */}
         {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
       </div>
+
+      {/* ── Où nous trouver (carte) — si coordonnées précises ── */}
+      {resto.latitude && resto.longitude && (
+        <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 8px" }}>
+          <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 28 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: DARK, margin: "0 0 4px" }}>Où nous trouver</h2>
+            {resto.address && (
+              <div style={{ fontSize: 13, color: MUTED, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                <MapPin size={13} color={P} /> {resto.address}{resto.quartier ? `, ${resto.quartier}` : ""}
+              </div>
+            )}
+            <div style={{ height: 300, borderRadius: 14, overflow: "hidden", border: `0.5px solid ${BORDER}` }}>
+              <Suspense fallback={<div style={{ height: "100%", background: BG }} />}>
+                <MapView restaurants={[resto]} onSelect={() => {}} />
+              </Suspense>
+            </div>
+            <a href={`https://www.google.com/maps/search/?api=1&query=${resto.latitude},${resto.longitude}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-block", marginTop: 12, fontSize: 13, fontWeight: 600, color: P, textDecoration: "none" }}>
+              Ouvrir dans Google Maps →
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ── Section Avis ── */}
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 60px" }}>

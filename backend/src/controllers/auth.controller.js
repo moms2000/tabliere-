@@ -216,7 +216,7 @@ export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const { rows } = await query(
-    `SELECT id, email, full_name, role, status, password_hash, restaurant_id
+    `SELECT id, email, full_name, role, status, password_hash, restaurant_id, avatar_url
      FROM users WHERE email = $1`, [email]
   );
   const user = rows[0];
@@ -288,7 +288,7 @@ export const refresh = asyncHandler(async (req, res) => {
 
 export const me = asyncHandler(async (req, res) => {
   const { rows: [user] } = await query(
-    `SELECT id, email, full_name, phone, role, status,
+    `SELECT id, email, full_name, phone, role, status, avatar_url,
             restaurant_id, last_login_at, created_at
      FROM users WHERE id = $1`, [req.user.id]
   );

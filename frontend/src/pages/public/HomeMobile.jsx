@@ -657,22 +657,6 @@ export default function HomeMobile() {
             ))}
           </div>
 
-          {/* Paiements */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)",
-              textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>
-              Paiements acceptés
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["Orange Money", "MTN MoMo", "Wave", "Carte"].map((p, i) => (
-                <span key={i} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 5,
-                  background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.5)",
-                  border: "0.5px solid rgba(255,255,255,0.1)" }}>
-                  {p}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Séparateur */}

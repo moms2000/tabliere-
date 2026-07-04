@@ -432,18 +432,6 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
             ].map((l, i) => (
               <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>{l}</div>
             ))}
-            {/* Paiements acceptés */}
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Paiements acceptés</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {["Orange Money", "MTN MoMo", "Wave", "Carte"].map((p, i) => (
-                  <span key={i} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4,
-                    background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.45)" }}>
-                    {p}
-                  </span>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -495,6 +483,14 @@ export default function Home() {
   usePageMeta(null, "Réservez les meilleures tables d'Abidjan et de Côte d'Ivoire — confirmation immédiate, annulation gratuite.");
   const navigate  = useNavigate();
   const { user, logout } = useAuth();
+
+  // Cloisonnement des rôles : un restaurateur ou un admin n'a pas sa place sur
+  // l'accueil client → on le renvoie immédiatement vers son espace dédié.
+  useEffect(() => {
+    if (user?.role === "restaurateur") navigate("/restaurant", { replace: true });
+    else if (user?.role === "admin")   navigate("/admin", { replace: true });
+  }, [user, navigate]);
+
   const { lang, t, changeLang, langs } = useLang();
   const listRef        = useRef(null);
   const experiencesRef = useRef(null);

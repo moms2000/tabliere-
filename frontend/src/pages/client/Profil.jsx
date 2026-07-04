@@ -781,16 +781,16 @@ export default function Profil() {
                 </div>
                 <div style={{ fontSize: 12, color: "#666", lineHeight: 1.5 }}>
                   {i === 0 && "Accès à la plateforme · Réservations en ligne"}
-                  {i === 1 && "Priorité de réservation · -5% sur les arrhes"}
-                  {i === 2 && "Accès aux offres exclusives · -10% sur les arrhes · Support prioritaire"}
-                  {i === 3 && "Accès VIP · Réservations sans arrhes · Concierge dédié"}
+                  {i === 1 && "Priorité de réservation"}
+                  {i === 2 && "Accès aux offres exclusives · Support prioritaire"}
+                  {i === 3 && "Accès VIP · Concierge dédié"}
                 </div>
               </div>
             ))}
 
             <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "10px 12px",
               fontSize: 12, color: "#999", textAlign: "center" }}>
-              🎯 Vous gagnez <strong>50 points</strong> par réservation confirmée
+              Vous gagnez <strong>50 points</strong> par réservation confirmée
             </div>
           </motion.div>
         )}

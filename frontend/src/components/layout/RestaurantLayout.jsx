@@ -97,9 +97,11 @@ function SidebarContent({ navigate, user, logout, onClose }) {
       <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
         display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ width: 28, height: 28, borderRadius: "50%", background: P + "33",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
           fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
-          {(user?.full_name || "RR").slice(0,2).toUpperCase()}
+          {user?.avatar_url
+            ? <img src={user.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : (user?.full_name || "RR").slice(0,2).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: "white",

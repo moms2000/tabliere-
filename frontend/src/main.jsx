@@ -177,7 +177,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="restaurateurs" element={<Restaurateurs />} />
                     <Route path="utilisateurs"  element={<Utilisateurs />} />
                     <Route path="reservations"  element={<Reservations />} />
-                    <Route path="finances"      element={<Finances />} />
+                    {/* Paiements retirés du lancement (soumission App/Play Store) :
+                        route Finances désactivée, réactivable plus tard. */}
                     <Route path="systeme"       element={<Systeme />} />
                     <Route path="parametres"    element={<Parametres />} />
                     <Route path="qr-themes"     element={<QRThemes />} />

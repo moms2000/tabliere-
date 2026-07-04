@@ -154,12 +154,6 @@ export default function Parametres() {
             <Row label="Alertes réservations" desc="Notification à chaque nouvelle réservation">
               <Toggle value={notifRes} onChange={toggleAndSave(setNotifRes, "notif_reservations")} />
             </Row>
-            <Row label="Nouveaux abonnements" desc="Alerte lors d'un paiement d'abonnement">
-              <Toggle value={notifAbo} onChange={toggleAndSave(setNotifAbo, "notif_abonnements")} />
-            </Row>
-            <Row label="Erreurs de paiement" desc="Notification en cas d'échec transaction">
-              <Toggle value={notifPay} onChange={toggleAndSave(setNotifPay, "notif_paiements")} />
-            </Row>
             <Row label="WhatsApp Business" desc="Canal principal de communication clients">
               <Toggle value={whatsapp} onChange={toggleAndSave(setWhatsapp, "notif_whatsapp")} />
             </Row>

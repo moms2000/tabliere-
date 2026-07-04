@@ -37,7 +37,6 @@ const NAV = [
   { to: "/admin/restaurateurs", label: "Restaurateurs",   icon: Utensils },
   { to: "/admin/utilisateurs",  label: "Utilisateurs",    icon: Users },
   { to: "/admin/reservations",  label: "Réservations",    icon: CalendarCheck },
-  { to: "/admin/finances",      label: "Finances",        icon: CreditCard },
   { to: "/admin/qr-themes",     label: "QR & Thèmes",     icon: QrCode },
   { to: "/admin/codes",         label: "Codes accès",     icon: KeyRound },
   { to: "/admin/site",          label: "Site & Contenu",  icon: Globe },
@@ -113,10 +112,12 @@ function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
       {/* User + logout */}
       <div style={{ padding: "10px 10px", borderTop: "0.5px solid rgba(255,255,255,.07)",
         display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%",
+        <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden",
           background: P + "33", display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 10, fontWeight: 700, color: P, flexShrink: 0 }}>
-          {(user?.full_name || "AD").slice(0,2).toUpperCase()}
+          {user?.avatar_url
+            ? <img src={user.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : (user?.full_name || "AD").slice(0,2).toUpperCase()}
         </div>
         <AnimatePresence>
           {!collapsed && (

@@ -45,5 +45,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TablièreCI utilise votre position pour vous proposer les restaurants proches de vous.</string>
 </dict>
 </plist>

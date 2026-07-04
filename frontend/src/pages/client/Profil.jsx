@@ -405,7 +405,8 @@ export default function Profil() {
       </div>
 
       {/* Contenu */}
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 16px 40px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto",
+        padding: "16px 16px calc(100px + env(safe-area-inset-bottom, 0px))" }}>
 
         {/* ── PROFIL ─────────────────────────────────────────────────────── */}
         {tab === "profile" && (

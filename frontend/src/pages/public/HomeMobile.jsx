@@ -194,11 +194,16 @@ export default function HomeMobile() {
 
   const listRef = useRef(null);
 
-  // Onglet "Recherche" de la barre du bas → ouvre la vue Carte (comme OpenTable)
+  // Onglet "Recherche" → vue Carte ; onglet "Accueil" (sans ?view=map) → vue Liste
+  const [mapResto, setMapResto] = useState(null); // resto sélectionné sur la carte (fiche flottante)
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("view") === "map") {
-      setView("map");
+    const isMap = new URLSearchParams(location.search).get("view") === "map";
+    setView(isMap ? "map" : "list");
+    setMapResto(null);
+    if (isMap) {
       setTimeout(() => document.getElementById("tci-restaurant-list")?.scrollIntoView({ behavior: "smooth" }), 120);
+    } else {
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 60);
     }
   }, [location.search]);
 
@@ -338,14 +343,8 @@ export default function HomeMobile() {
       {/* Onboarding — 3 écrans, affiché une seule fois à la première ouverture */}
       <Onboarding />
 
-      {/* Bande opaque sous l'encoche / barre de statut : empêche le contenu
-          de défiler par-dessus le header (bug iOS WKWebView). */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0,
-        height: "env(safe-area-inset-top, 0px)", background: WHITE, zIndex: 60,
-        pointerEvents: "none" }} />
-
       {/* ── Header sticky mobile (compact au défilement) ── */}
-      <div style={{ position: "sticky", top: "env(safe-area-inset-top, 0px)", zIndex: 50, background: WHITE,
+      <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,
         borderBottom: `0.5px solid ${BORDER}`,
         padding: scrolled ? "7px 16px" : "12px 16px",
         boxShadow: scrolled ? "0 2px 12px rgba(30,46,40,.08)" : "none",
@@ -568,15 +567,20 @@ export default function HomeMobile() {
       {/* ── Géolocalisation ── */}
       <div style={{ padding: "8px 16px" }}>
         <button onClick={() => {
-          if (!navigator.geolocation) return;
+          if (!navigator.geolocation) {
+            alert("La géolocalisation n'est pas disponible sur cet appareil.");
+            return;
+          }
           navigator.geolocation.getCurrentPosition(pos => {
             const { latitude } = pos.coords;
             const city = latitude >= 4.8 && latitude <= 6.2 ? "Abidjan" : "Abidjan";
             setSearch(city);
-            // handleSearch est passé via callback pour éviter de lire le stale state
-            // On scroll vers la liste sans re-déclencher la recherche de dispo
             listRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, () => {});
+          }, (err) => {
+            alert(err && err.code === 1
+              ? "Autorisez l'accès à votre position (Réglages) pour utiliser cette fonction."
+              : "Impossible de récupérer votre position. Réessayez.");
+          }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
         }}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
             border: "none", cursor: "pointer", fontSize: 13, color: S, fontFamily: FONT }}>
@@ -680,13 +684,56 @@ export default function HomeMobile() {
 
         {/* Vue Carte */}
         {view === "map" && !loading && !loadError && (
-          <div style={{ margin: "4px 16px 20px", height: "calc(100vh - 240px)", minHeight: 440 }}>
+          <div style={{ position: "relative", margin: "4px 16px 20px", height: "calc(100vh - 240px)", minHeight: 440 }}>
             <Suspense fallback={
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
                 background: BG, borderRadius: 12, color: MUTED, fontSize: 13 }}>Chargement de la carte…</div>
             }>
-              <MapView restaurants={filtered} onSelect={(r) => navigate(`/restaurants/${r.slug}`)} />
+              <MapView restaurants={filtered} onSelect={(r) => setMapResto(r)} />
             </Suspense>
+
+            {/* Fiche resto flottante (au clic sur un pin) */}
+            {mapResto && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                style={{ position: "absolute", left: 10, right: 10, bottom: 10, zIndex: 500,
+                  background: WHITE, borderRadius: 16, padding: 12, display: "flex", gap: 12,
+                  boxShadow: "0 12px 30px rgba(30,46,40,.25)" }}>
+                <div style={{ width: 76, height: 76, borderRadius: 12, overflow: "hidden",
+                  flexShrink: 0, background: "#EFEAE2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {((Array.isArray(mapResto.photos) && mapResto.photos[0]) || mapResto.logo_url)
+                    ? <img src={(Array.isArray(mapResto.photos) && mapResto.photos[0]) || mapResto.logo_url} alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <UtensilsCrossed size={26} color={MUTED} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: DARK, whiteSpace: "nowrap",
+                    overflow: "hidden", textOverflow: "ellipsis", paddingRight: 22 }}>{mapResto.name}</div>
+                  {mapResto.rating > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                      <Star size={13} color={P} fill={P} />
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: DARK }}>{Number(mapResto.rating).toFixed(1)}</span>
+                      <span style={{ fontSize: 11.5, color: MUTED }}>({mapResto.review_count || 0})</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 3, whiteSpace: "nowrap",
+                    overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {[mapResto.cuisine_type, mapResto.quartier].filter(Boolean).join(" · ")}
+                  </div>
+                  <button onClick={() => navigate(`/restaurants/${mapResto.slug}`)}
+                    style={{ marginTop: 9, background: P, color: "#1A1000", border: "none", borderRadius: 10,
+                      padding: "8px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: FONT }}>
+                    Réserver
+                  </button>
+                </div>
+                <button onClick={() => setMapResto(null)}
+                  style={{ position: "absolute", top: 8, right: 8, background: "#F0EADF", border: "none",
+                    borderRadius: "50%", width: 26, height: 26, display: "flex", alignItems: "center",
+                    justifyContent: "center", cursor: "pointer" }}>
+                  <X size={14} color={MUTED} />
+                </button>
+              </motion.div>
+            )}
           </div>
         )}
 

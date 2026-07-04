@@ -82,6 +82,7 @@ const TRANSLATIONS = {
 
     // ── Profil tabs ───────────────────────────────────────────────────────────
     tab_profile:      "Mon profil",
+    tab_reservations: "Réservations",
     tab_bookings:     "Réservations",
     tab_rewards:      "Rewards",
     tab_saved:        "Favoris",
@@ -247,6 +248,7 @@ const TRANSLATIONS = {
     how_3_desc:  "Earn loyalty points with every booking and unlock exclusive offers.",
 
     tab_profile:  "My profile",
+    tab_reservations: "Bookings",
     tab_bookings: "Bookings",
     tab_rewards:  "Rewards",
     tab_saved:    "Saved",
@@ -404,6 +406,7 @@ const TRANSLATIONS = {
     how_3_desc:  "اكسب نقاط ولاء مع كل حجز وانتفع بعروض حصرية.",
 
     tab_profile:  "ملفي الشخصي",
+    tab_reservations: "الحجوزات",
     tab_bookings: "الحجوزات",
     tab_rewards:  "المكافآت",
     tab_saved:    "المحفوظة",

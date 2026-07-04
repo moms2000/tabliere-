@@ -258,15 +258,36 @@ function DraggableTable({ table, selected, onClick, configMode, canvasRef, onDra
 
 /* ── QR download ───────────────────────────────────────────────── */
 function TableQR({ url, label }) {
+  // Télécharge le QR en IMAGE (PNG) : on dessine le SVG affiché sur un canvas
+  // haute résolution puis on exporte en PNG.
   const download = () => {
     const svg = document.getElementById(`qr-tbl-${label}`);
     if (!svg) return;
     const data = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([data], { type: "image/svg+xml" });
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(blob), download: `qr-table-${label}.svg`
-    });
-    a.click();
+    const svgBlob = new Blob([data], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 720; // marge blanche incluse
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      const pad = 48;
+      ctx.drawImage(img, pad, pad, SIZE - pad * 2, SIZE - pad * 2);
+      URL.revokeObjectURL(svgUrl);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = Object.assign(document.createElement("a"), {
+          href: URL.createObjectURL(blob), download: `qr-table-${label}.png`,
+        });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, "image/png");
+    };
+    img.onerror = () => URL.revokeObjectURL(svgUrl);
+    img.src = svgUrl;
   };
   return (
     <div style={{ textAlign: "center" }}>
@@ -278,7 +299,7 @@ function TableQR({ url, label }) {
       <div style={{ fontSize: 10, color: MUTED, fontFamily: "monospace",
         marginBottom: 10, wordBreak: "break-all", padding: "0 8px" }}>{url}</div>
       <Btn icon={Download} onClick={download} style={{ margin: "0 auto", fontSize: 11 }}>
-        Télécharger SVG
+        Télécharger le QR (PNG)
       </Btn>
     </div>
   );

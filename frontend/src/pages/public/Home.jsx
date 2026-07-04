@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { usePageMeta } from "../../hooks/usePageMeta.js";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,6 +13,7 @@ import { restaurantsService } from "../../services/restaurants.service.js";
 import { usersService } from "../../services/users.service.js";
 import api from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+const MapView = lazy(() => import("../../components/MapView.jsx"));
 import { useLang } from "../../context/LanguageContext.jsx";
 
 /* ── Design tokens ──────────────────────────────────────────────────────────── */
@@ -558,6 +559,7 @@ export default function Home() {
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState(false);
+  const [view,        setView]        = useState("list"); // "list" | "map"
   const [search,      setSearch]      = useState("");
   const [activeTab,   setActiveTab]   = useState(0);
   const [sort,        setSort]        = useState("rating");
@@ -1222,17 +1224,41 @@ export default function Home() {
             <div style={{ display: "flex", justifyContent: "space-between",
               alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontSize: 13, color: MUTED, fontWeight: 500 }}>{resultsText}</span>
-              <select value={sort} onChange={e => setSort(e.target.value)}
-                style={{ fontSize: 12, border: `0.5px solid ${BORDER}`, borderRadius: 8,
-                  padding: "5px 10px", background: WHITE, color: DARK,
-                  cursor: "pointer", fontFamily: FONT }}>
-                <option value="rating">{t("sort_rating")}</option>
-                <option value="reviews">{t("sort_reviews")}</option>
-                <option value="recent">{t("sort_recent")}</option>
-              </select>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Bascule Liste / Carte */}
+                <div style={{ display: "inline-flex", background: "#EFEAE2", borderRadius: 9, padding: 3 }}>
+                  {[["list", "Liste"], ["map", "Carte"]].map(([v, label]) => (
+                    <button key={v} onClick={() => setView(v)}
+                      style={{ border: "none", cursor: "pointer", borderRadius: 7, padding: "5px 13px",
+                        fontSize: 12, fontWeight: 700, fontFamily: FONT,
+                        background: view === v ? WHITE : "transparent", color: view === v ? DARK : MUTED,
+                        boxShadow: view === v ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                        display: "flex", alignItems: "center", gap: 5 }}>
+                      {v === "map" && <MapPin size={12} />}{label}
+                    </button>
+                  ))}
+                </div>
+                <select value={sort} onChange={e => setSort(e.target.value)}
+                  style={{ fontSize: 12, border: `0.5px solid ${BORDER}`, borderRadius: 8,
+                    padding: "5px 10px", background: WHITE, color: DARK,
+                    cursor: "pointer", fontFamily: FONT }}>
+                  <option value="rating">{t("sort_rating")}</option>
+                  <option value="reviews">{t("sort_reviews")}</option>
+                  <option value="recent">{t("sort_recent")}</option>
+                </select>
+              </div>
             </div>
 
-            {loading ? (
+            {view === "map" && !loading && !loadError ? (
+              <div style={{ height: "60vh", minHeight: 380 }}>
+                <Suspense fallback={
+                  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: BG, borderRadius: 12, color: MUTED, fontSize: 13 }}>Chargement de la carte…</div>
+                }>
+                  <MapView restaurants={restaurants} onSelect={(r) => openRestaurant(r.slug)} />
+                </Suspense>
+              </div>
+            ) : loading ? (
               <div>
                 {[0,1,2,3].map(i => <SkeletonCard key={i} />)}
               </div>

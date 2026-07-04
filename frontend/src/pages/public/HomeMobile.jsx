@@ -338,8 +338,14 @@ export default function HomeMobile() {
       {/* Onboarding — 3 écrans, affiché une seule fois à la première ouverture */}
       <Onboarding />
 
+      {/* Bande opaque sous l'encoche / barre de statut : empêche le contenu
+          de défiler par-dessus le header (bug iOS WKWebView). */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0,
+        height: "env(safe-area-inset-top, 0px)", background: WHITE, zIndex: 60,
+        pointerEvents: "none" }} />
+
       {/* ── Header sticky mobile (compact au défilement) ── */}
-      <div style={{ position: "sticky", top: 0, zIndex: 50, background: WHITE,
+      <div style={{ position: "sticky", top: "env(safe-area-inset-top, 0px)", zIndex: 50, background: WHITE,
         borderBottom: `0.5px solid ${BORDER}`,
         padding: scrolled ? "7px 16px" : "12px 16px",
         boxShadow: scrolled ? "0 2px 12px rgba(30,46,40,.08)" : "none",
@@ -674,7 +680,7 @@ export default function HomeMobile() {
 
         {/* Vue Carte */}
         {view === "map" && !loading && !loadError && (
-          <div style={{ margin: "4px 16px 12px", height: "62vh" }}>
+          <div style={{ margin: "4px 16px 20px", height: "calc(100vh - 240px)", minHeight: 440 }}>
             <Suspense fallback={
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
                 background: BG, borderRadius: 12, color: MUTED, fontSize: 13 }}>Chargement de la carte…</div>

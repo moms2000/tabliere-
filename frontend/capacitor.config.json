@@ -4,8 +4,13 @@
   "webDir": "dist",
   "backgroundColor": "#F8F5EF",
   "server": {
-    "url": "https://tabliereci.net",
-    "cleartext": false
+    "url": "https://www.tabliereci.net",
+    "cleartext": false,
+    "allowNavigation": [
+      "tabliereci.net",
+      "www.tabliereci.net",
+      "*.tabliereci.net"
+    ]
   },
   "ios": {
     "contentInset": "always"

@@ -547,28 +547,40 @@ export default function Profil() {
                 ) : pagedResas.map((r, i) => (
                   <div key={r.id || r.ref || i} style={{ background: "white", borderRadius: 14,
                     border: "0.5px solid #eee", padding: "13px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: "#E1F5EE",
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <UtensilsCrossed size={18} color={G} />
+                    <div style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
+                      {/* Vignette photo du restaurant (ou icône par défaut) */}
+                      <div style={{ width: 78, height: 78, borderRadius: 14, overflow: "hidden",
+                        background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0 }}>
+                        {(r.restaurant_photo || r.cover_url || r.logo_url || r.photo_url)
+                          ? <img src={r.restaurant_photo || r.cover_url || r.logo_url || r.photo_url} alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <UtensilsCrossed size={26} color={G} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: "#1E2E28" }}>
                           {r.restaurant_name || r.resto_name || "—"}
                         </div>
-                        <div style={{ fontSize: 12, color: "#888", marginTop: 1 }}>
-                          {fmtDateTime(r.reserved_at)} · {r.party_size} pers.
+                        {/* Badge statut avec icône */}
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 5,
+                          background: STATUS_BG[r.status] || "#f5f5f5",
+                          color: STATUS_COLOR[r.status] || "#666",
+                          borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 700,
+                          marginTop: 5 }}>
+                          {["confirme", "confirmé"].includes(r.status)
+                            ? <CheckCircle size={13} /> : <Clock size={13} />}
+                          {STATUS_LABEL[r.status] || r.status}
                         </div>
-                        {r.ref && (
-                          <div style={{ fontSize: 11, color: "#bbb", marginTop: 2, fontFamily: "monospace" }}>
-                            Réf. {r.ref}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ background: STATUS_BG[r.status] || "#f5f5f5",
-                        color: STATUS_COLOR[r.status] || "#666",
-                        borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 500, flexShrink: 0 }}>
-                        {STATUS_LABEL[r.status] || r.status}
+                        {/* Date */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8,
+                          fontSize: 12.5, color: "#5c574f" }}>
+                          <CalendarCheck size={14} color="#b6b1a8" /> {fmtDateTime(r.reserved_at)}
+                        </div>
+                        {/* Convives */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4,
+                          fontSize: 12.5, color: "#5c574f" }}>
+                          <User size={14} color="#b6b1a8" /> {r.party_size} personne{r.party_size > 1 ? "s" : ""}
+                        </div>
                       </div>
                     </div>
 

@@ -29,6 +29,18 @@ const CARD_ACCENT = [P, S, DARK, "#B07A3A", "#5A8A6A", "#2E4A3A"];
 
 // Créneaux affichés sur les cartes (style OpenTable) — format aligné sur RestaurantDetail
 const CARD_SLOTS = ["19h00", "19h30", "20h00", "20h30"];
+const DESKTOP_TIMES = ["12h00","12h30","13h00","13h30","14h00","19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
+const timeToMin = (s) => { const [h, m] = String(s).replace("h", ":").split(":").map(Number); return h * 60 + (m || 0); };
+// Créneaux d'une carte : partent de l'heure choisie dans la barre de recherche
+function dynamicSlots(selTime, dateIso) {
+  const today = new Date().toISOString().split("T")[0];
+  const isToday = dateIso === today;
+  const nowMin = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  const base = timeToMin(selTime || "19:00");
+  let pool = DESKTOP_TIMES.filter((s) => timeToMin(s) >= base && (!isToday || timeToMin(s) > nowMin));
+  if (pool.length === 0) pool = DESKTOP_TIMES.filter((s) => !isToday || timeToMin(s) > nowMin);
+  return pool.slice(0, 4);
+}
 function slotIsPast(dateIso, slot) {
   const today = new Date().toISOString().split("T")[0];
   if (dateIso !== today) return false;
@@ -1383,7 +1395,7 @@ export default function Home() {
                       </div>
                       {/* Créneaux cliquables (style OpenTable) */}
                       {(() => {
-                        const slots = CARD_SLOTS.filter(s => !slotIsPast(resaDate, s));
+                        const slots = dynamicSlots(resaTime, resaDate);
                         if (slots.length === 0) {
                           return (
                             <motion.button whileTap={{ scale: 0.96 }}

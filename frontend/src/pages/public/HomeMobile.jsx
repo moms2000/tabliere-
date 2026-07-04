@@ -112,6 +112,20 @@ const LUNCH_SLOTS  = ["12h00","12h30","13h00","13h30","14h00","14h30"];
 const DINNER_SLOTS = ["19h00","19h30","20h00","20h30","21h00","21h30","22h00"];
 const ALL_TIMES    = [...LUNCH_SLOTS, ...DINNER_SLOTS];
 
+const timeToMin = (s) => { const [h, m] = s.replace("h", ":").split(":").map(Number); return h * 60 + (m || 0); };
+
+// Créneaux affichés sur une carte : partent de l'heure choisie dans la recherche,
+// filtrent les créneaux passés si la date est aujourd'hui.
+function dynamicSlots(selTime, selDate) {
+  const today = new Date().toISOString().split("T")[0];
+  const isToday = selDate === today;
+  const nowMin = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  const base = timeToMin(selTime || "19h00");
+  let pool = ALL_TIMES.filter((s) => timeToMin(s) >= base && (!isToday || timeToMin(s) > nowMin));
+  if (pool.length === 0) pool = ALL_TIMES.filter((s) => !isToday || timeToMin(s) > nowMin);
+  return pool.slice(0, 4);
+}
+
 const padZ = n => String(n).padStart(2, "0");
 
 function buildDays() {
@@ -703,7 +717,7 @@ export default function HomeMobile() {
           const imgSrc = photos ? photos[0] : r.logo_url;
           const b = cardBadge(r);
           const saved = favorites.some(f => f.slug === r.slug);
-          const slots = CARD_SLOTS.filter(s => !slotIsPast(s));
+          const slots = dynamicSlots(selTime, selDate);
           return (
           <motion.div key={r.id || idx}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -780,7 +794,7 @@ export default function HomeMobile() {
                 <div style={{ display: "flex", gap: 7 }}>
                   {slots.slice(0, 4).map(s => (
                     <motion.button key={s} whileTap={{ scale: 0.93 }}
-                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?slot=${s}&guests=2`); }}
+                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?date=${selDate}&guests=${selGuest}&slot=${s}`); }}
                       style={{ flex: 1, background: P, color: "white", border: "none",
                         borderRadius: 9, padding: "9px 4px", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: FONT }}>

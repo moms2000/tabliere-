@@ -646,122 +646,101 @@ export default function HomeMobile() {
             <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Aucun restaurant trouvé</div>
             <div style={{ fontSize: 13, marginTop: 6 }}>Essayez une autre recherche</div>
           </div>
-        ) : filtered.map((r, idx) => (
+        ) : filtered.map((r, idx) => {
+          const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+          const imgSrc = photos ? photos[0] : r.logo_url;
+          const b = cardBadge(r);
+          const saved = favorites.some(f => f.slug === r.slug);
+          const slots = CARD_SLOTS.filter(s => !slotIsPast(s));
+          return (
           <motion.div key={r.id || idx}
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.04 }}
             onClick={() => navigate(`/restaurants/${r.slug}`)}
-            style={{ margin: "0 16px 10px", background: WHITE, borderRadius: 14,
-              border: `0.5px solid ${BORDER}`, overflow: "hidden",
-              cursor: "pointer", display: "flex", gap: 0 }}>
+            style={{ margin: "0 16px 14px", background: WHITE, borderRadius: 18,
+              border: `0.5px solid ${BORDER}`, overflow: "hidden", cursor: "pointer",
+              boxShadow: "0 2px 14px rgba(30,46,40,.05)" }}>
 
-            {/* Photo restaurant — première de photos[] ou logo_url */}
-            {(() => {
-              const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-              const imgSrc = photos ? photos[0] : r.logo_url;
-              return (
-              <div style={{ width: 100, minHeight: 110, background: BG, flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                position: "relative", overflow: "hidden" }}>
+            {/* Photo plein cadre + dégradé + infos en surimpression */}
+            <div style={{ position: "relative", width: "100%", height: 168, background: BG,
+              display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {imgSrc ? (
                 <img src={imgSrc} alt={r.name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   onError={e => { e.target.style.display = "none"; }} />
               ) : (
-                <UtensilsCrossed size={28} color={P} style={{ opacity: 0.4 }} />
+                <UtensilsCrossed size={40} color={P} style={{ opacity: 0.35 }} />
               )}
-              {/* Favori */}
+              {/* Dégradé bas pour lisibilité du texte */}
+              <div style={{ position: "absolute", inset: 0,
+                background: "linear-gradient(to top, rgba(20,28,24,.82) 0%, rgba(20,28,24,.25) 42%, rgba(20,28,24,0) 68%)" }} />
+
+              {/* Badge */}
+              {b && (
+                <span style={{ position: "absolute", top: 10, left: 10, fontSize: 10, fontWeight: 700,
+                  color: "white", background: b.bg, padding: "4px 10px", borderRadius: 20,
+                  letterSpacing: "0.4px", fontFamily: FONT }}>{b.label}</span>
+              )}
+              {/* Enregistrer */}
               <button onClick={e => toggleFav(e, r)}
-                style={{ position: "absolute", top: 6, left: 6, background: "rgba(255,255,255,.85)",
-                  border: "none", borderRadius: "50%", width: 26, height: 26, cursor: "pointer",
+                style={{ position: "absolute", top: 10, right: 10, background: "rgba(255,255,255,.9)",
+                  border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
-                <Bookmark size={13}
-                  fill={favorites.some(f => f.slug === r.slug) ? P : "none"}
-                  color={favorites.some(f => f.slug === r.slug) ? P : MUTED} />
+                <Bookmark size={15} fill={saved ? P : "none"} color={saved ? P : MUTED} />
               </button>
-              {/* Badge de mise en avant */}
-              {(() => {
-                const b = cardBadge(r);
-                return b ? (
-                  <span style={{ position: "absolute", bottom: 6, left: 6, fontSize: 8.5, fontWeight: 700,
-                    color: "white", background: b.bg, padding: "2px 7px", borderRadius: 20,
-                    letterSpacing: "0.3px", fontFamily: FONT }}>{b.label}</span>
-                ) : null;
-              })()}
-            </div>
-              );
-            })()}
 
-            {/* Infos */}
-            <div style={{ flex: 1, padding: "12px 12px 10px" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: DARK, marginBottom: 3 }}>
-                {r.name}
-              </div>
-
-              {/* Rating */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                {r.rating > 0 ? (
-                  <>
-                    <Stars rating={r.rating} />
-                    <span style={{ fontSize: 11, color: MUTED }}>
-                      {Number(r.rating).toFixed(1)} ({r.review_count || 0})
-                    </span>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 11, color: MUTED }}>Nouveau restaurant</span>
-                )}
-              </div>
-
-              {/* Métadonnées */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              {/* Nom + note en surimpression */}
+              <div style={{ position: "absolute", left: 14, right: 14, bottom: 12 }}>
                 {r.cuisine_type && (
-                  <span style={{ fontSize: 11, color: MUTED }}>{r.cuisine_type}</span>
+                  <div style={{ fontSize: 9.5, letterSpacing: "1.5px", textTransform: "uppercase",
+                    color: "rgba(255,255,255,.85)", fontWeight: 700, marginBottom: 4 }}>{r.cuisine_type}</div>
                 )}
-                {r.quartier && (
-                  <>
-                    <span style={{ fontSize: 11, color: BORDER }}>·</span>
-                    <span style={{ fontSize: 11, color: MUTED }}>{r.quartier}</span>
-                  </>
-                )}
-                {r.price_range && (
-                  <>
-                    <span style={{ fontSize: 11, color: BORDER }}>·</span>
-                    <span style={{ fontSize: 11, color: MUTED }}>{r.price_range}</span>
-                  </>
-                )}
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ fontSize: 19, fontWeight: 700, color: "white", letterSpacing: "-0.3px",
+                    textShadow: "0 1px 8px rgba(0,0,0,.3)" }}>{r.name}</div>
+                  {r.rating > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(255,255,255,.95)",
+                      borderRadius: 8, padding: "2px 7px", flexShrink: 0 }}>
+                      <Star size={11} fill="#E8A045" color="#E8A045" />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: DARK }}>{Number(r.rating).toFixed(1)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
 
-              {/* Créneaux cliquables (style OpenTable) */}
-              {(() => {
-                const slots = CARD_SLOTS.filter(s => !slotIsPast(s));
-                if (slots.length === 0) {
-                  return (
-                    <motion.button whileTap={{ scale: 0.96 }}
-                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
-                      style={{ background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
-                        borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600,
+            {/* Infos + créneaux */}
+            <div style={{ padding: "11px 14px 13px" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 11 }}>
+                {r.quartier && <span style={{ fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 3 }}><MapPin size={11} />{r.quartier}</span>}
+                {r.price_range && <><span style={{ fontSize: 11, color: BORDER }}>·</span><span style={{ fontSize: 12, color: MUTED }}>{r.price_range}</span></>}
+                {r.rating > 0 && <><span style={{ fontSize: 11, color: BORDER }}>·</span><span style={{ fontSize: 12, color: MUTED }}>{r.review_count || 0} avis</span></>}
+              </div>
+              {slots.length === 0 ? (
+                <motion.button whileTap={{ scale: 0.96 }}
+                  onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
+                  style={{ width: "100%", background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
+                    borderRadius: 10, padding: "9px 12px", fontSize: 13, fontWeight: 600,
+                    cursor: "pointer", fontFamily: FONT }}>
+                  Voir les créneaux →
+                </motion.button>
+              ) : (
+                <div style={{ display: "flex", gap: 7 }}>
+                  {slots.slice(0, 4).map(s => (
+                    <motion.button key={s} whileTap={{ scale: 0.93 }}
+                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?slot=${s}&guests=2`); }}
+                      style={{ flex: 1, background: P, color: "white", border: "none",
+                        borderRadius: 9, padding: "9px 4px", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: FONT }}>
-                      Voir les créneaux →
+                      {s}
                     </motion.button>
-                  );
-                }
-                return (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {slots.slice(0, 3).map(s => (
-                      <motion.button key={s} whileTap={{ scale: 0.93 }}
-                        onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?slot=${s}&guests=2`); }}
-                        style={{ background: P, color: "white", border: "none",
-                          borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 700,
-                          cursor: "pointer", fontFamily: FONT }}>
-                        {s}
-                      </motion.button>
-                    ))}
-                  </div>
-                );
-              })()}
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Footer mobile ── */}

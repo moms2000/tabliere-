@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MapPin, Star, UtensilsCrossed, Bookmark, Bell,
   ChevronDown, ChevronRight, User, Calendar, Clock, Users, Navigation,
-  Mail, Phone, X,
+  Mail, Phone, X, WifiOff, RefreshCw,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -135,6 +135,7 @@ export default function HomeMobile() {
 
   const [restaurants, setRestaurants] = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [loadError,   setLoadError]   = useState(false);
   const [search,      setSearch]      = useState("");
   const [favorites,   setFavorites]   = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
@@ -177,11 +178,16 @@ export default function HomeMobile() {
 
   const listRef = useRef(null);
 
-  useEffect(() => {
+  const loadRestaurants = useCallback(() => {
+    setLoading(true); setLoadError(false);
     restaurantsService.list({ limit: 50, sort: "rating" })
       .then(res => setRestaurants(res.data || []))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadRestaurants();
     if (user) {
       api.get("/notifications").then(r => {
         const notifs = r.data?.data?.notifications || r.data?.data || [];
@@ -594,16 +600,36 @@ export default function HomeMobile() {
         {/* Cards restaurants */}
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ margin: "0 16px 12px", background: WHITE,
+            <div key={i} style={{ margin: "0 16px 12px",
               borderRadius: 12, border: `0.5px solid ${BORDER}`, overflow: "hidden",
               animation: "skeleton-shimmer 1.4s infinite",
               background: "linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)",
               backgroundSize: "200% 100%", height: 110 }} />
           ))
+        ) : loadError ? (
+          <div style={{ textAlign: "center", padding: "44px 24px" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FEF2F2",
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <WifiOff size={28} color="#DC2626" />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Connexion interrompue</div>
+            <div style={{ fontSize: 13, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+              Impossible de charger les restaurants. Vérifiez votre connexion.
+            </div>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={loadRestaurants}
+              style={{ marginTop: 16, display: "inline-flex", alignItems: "center", gap: 7,
+                background: DARK, color: "white", border: "none", borderRadius: 10,
+                padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+              <RefreshCw size={15} /> Réessayer
+            </motion.button>
+          </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: MUTED }}>
-            <UtensilsCrossed size={40} style={{ opacity: 0.2, marginBottom: 12 }} />
-            <div style={{ fontSize: 15, fontWeight: 600, color: DARK }}>Aucun restaurant trouvé</div>
+          <div style={{ textAlign: "center", padding: "40px 24px", color: MUTED }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: BG,
+              display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <Search size={26} color={MUTED} style={{ opacity: 0.7 }} />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Aucun restaurant trouvé</div>
             <div style={{ fontSize: 13, marginTop: 6 }}>Essayez une autre recherche</div>
           </div>
         ) : filtered.map((r, idx) => (

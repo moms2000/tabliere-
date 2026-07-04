@@ -6,7 +6,7 @@ import {
   Search, Star, MapPin, Music, Sunrise, Gift, UtensilsCrossed,
   Bookmark, User, LogOut, Globe, CheckCircle, ChevronDown, BookOpen, Sparkles,
   Calendar, Clock, Users, ChevronLeft, ChevronRight, Plus, Minus, Bell,
-  TrendingUp, Shield, Smartphone,
+  TrendingUp, Shield, Smartphone, WifiOff, RefreshCw,
 } from "lucide-react";
 import HomeMobile from "./HomeMobile.jsx";
 import { restaurantsService } from "../../services/restaurants.service.js";
@@ -557,6 +557,7 @@ export default function Home() {
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
+  const [loadError,   setLoadError]   = useState(false);
   const [search,      setSearch]      = useState("");
   const [activeTab,   setActiveTab]   = useState(0);
   const [sort,        setSort]        = useState("rating");
@@ -644,7 +645,7 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  useEffect(() => {
+  const loadRestaurants = useCallback(() => {
     const params = { ...TABS[activeTab].params };
     if (search) params.search = search;
     if (sort !== "rating") params.sort = sort;
@@ -652,12 +653,14 @@ export default function Home() {
     if (ck.length === 1) params.cuisine_type = ck[0];
     // Le sélecteur "personnes" filtre les restaurants pouvant accueillir la table
     if (resaGuests > 1) params.min_capacity = resaGuests;
-    setLoading(true);
+    setLoading(true); setLoadError(false);
     restaurantsService.list(params)
       .then(res => { setRestaurants(res.data || []); setTotal(res.pagination?.total || 0); })
-      .catch(() => setRestaurants([]))
+      .catch(() => { setRestaurants([]); setLoadError(true); }) // distinguer panne vs 0 résultat
       .finally(() => setLoading(false));
   }, [search, sort, checkedC, activeTab, resaGuests]);
+
+  useEffect(() => { loadRestaurants(); }, [loadRestaurants]);
 
   // Ouvre une fiche restaurant en transmettant le contexte de réservation
   // (date/heure/couverts) pour pré-remplir le formulaire de réservation.
@@ -1233,15 +1236,44 @@ export default function Home() {
               <div>
                 {[0,1,2,3].map(i => <SkeletonCard key={i} />)}
               </div>
+            ) : loadError ? (
+              <div style={{ textAlign: "center", padding: "52px 20px", fontFamily: FONT }}>
+                <div style={{ width: 68, height: 68, borderRadius: "50%", background: "#FEF2F2",
+                  display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <WifiOff size={30} color="#DC2626" />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Connexion interrompue</div>
+                <div style={{ fontSize: 13, color: MUTED, marginTop: 6, maxWidth: 300, marginInline: "auto", lineHeight: 1.5 }}>
+                  Impossible de charger les restaurants pour le moment. Vérifiez votre connexion et réessayez.
+                </div>
+                <motion.button whileTap={{ scale: 0.96 }} onClick={loadRestaurants}
+                  style={{ marginTop: 18, display: "inline-flex", alignItems: "center", gap: 7,
+                    background: DARK, color: "white", border: "none", borderRadius: 10,
+                    padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                  <RefreshCw size={15} /> Réessayer
+                </motion.button>
+              </div>
             ) : restaurants.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
-                <UtensilsCrossed size={38} style={{ opacity: 0.25, marginBottom: 12 }} />
-                <div style={{ fontSize: 15, fontWeight: 600, color: DARK, fontFamily: FONT }}>
+              <div style={{ textAlign: "center", padding: "56px 20px", fontFamily: FONT }}>
+                <div style={{ width: 68, height: 68, borderRadius: "50%", background: BG,
+                  display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <Search size={28} color={MUTED} style={{ opacity: 0.7 }} />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>
                   {t("no_resto_title")}
                 </div>
-                <div style={{ fontSize: 13, marginTop: 6, fontFamily: FONT }}>
+                <div style={{ fontSize: 13, color: MUTED, marginTop: 6, maxWidth: 300, marginInline: "auto", lineHeight: 1.5 }}>
                   {search ? t("no_resto_search") : t("no_resto_empty")}
                 </div>
+                {(search || Object.values(checkedC).some(Boolean)) && (
+                  <motion.button whileTap={{ scale: 0.96 }}
+                    onClick={() => { setSearch(""); setCheckedC({}); }}
+                    style={{ marginTop: 18, background: "#FEF6EC", color: "#C47D1A",
+                      border: `0.5px solid ${P}55`, borderRadius: 10, padding: "9px 20px",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                    Réinitialiser la recherche
+                  </motion.button>
+                )}
               </div>
             ) : (
               <motion.div variants={stagger} initial="hidden" animate="show">

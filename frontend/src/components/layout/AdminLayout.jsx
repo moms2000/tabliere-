@@ -280,7 +280,8 @@ export default function AdminLayout() {
 
         {/* Topbar */}
         <div style={{ background: "white", borderBottom: `0.5px solid ${BORDER}`,
-          padding: "0 18px", height: 50, display: "flex", alignItems: "center",
+          padding: "calc(env(safe-area-inset-top, 0px) + 0px) 18px 0", minHeight: 50,
+          display: "flex", alignItems: "center",
           justifyContent: "space-between", flexShrink: 0 }}>
           <motion.button whileTap={{ scale: 0.9 }}
             onClick={() => isMobile ? setMobileOpen(p => !p) : setCollapsed(p => !p)}

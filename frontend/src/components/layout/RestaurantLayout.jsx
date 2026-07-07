@@ -220,8 +220,8 @@ export default function RestaurantLayout() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Topbar mobile */}
         {isMobile && (
-          <div style={{ background: DARK, height: 50, display: "flex", alignItems: "center",
-            padding: "0 16px", gap: 12, flexShrink: 0 }}>
+          <div style={{ background: DARK, minHeight: 50, display: "flex", alignItems: "center",
+            padding: "calc(env(safe-area-inset-top, 0px) + 6px) 16px 6px", gap: 12, flexShrink: 0 }}>
             <button onClick={() => setMobileOpen(true)}
               style={{ border: "none", background: "transparent", cursor: "pointer",
                 color: "rgba(255,255,255,.7)", display: "flex" }}>

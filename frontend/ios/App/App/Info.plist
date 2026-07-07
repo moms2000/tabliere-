@@ -47,5 +47,11 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TablièreCI utilise votre position pour vous proposer les restaurants proches de vous.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TablièreCI utilise l'appareil photo pour vous permettre d'ajouter une photo de profil.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TablièreCI accède à vos photos pour définir votre photo de profil.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>TablièreCI enregistre des images (par exemple un QR code) dans votre galerie.</string>
 </dict>
 </plist>

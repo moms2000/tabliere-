@@ -492,15 +492,14 @@ export default function Inscription() {
               value={form.email} onChange={v => set("email", v)}
               placeholder="vous@exemple.com" required />
 
-            {/* Date de naissance */}
+            {/* Date de naissance (facultatif) */}
             <div>
-              <label style={lbl}>Date de naissance</label>
+              <label style={lbl}>Date de naissance <span style={{ color: MUTED, fontWeight: 400 }}>(facultatif)</span></label>
               <div style={wrap}>
                 <Calendar size={14} color={MUTED} />
                 <input type="date" value={form.date_naissance}
                   onChange={e => set("date_naissance", e.target.value)}
                   max={new Date(Date.now() - 14 * 365.25 * 86400000).toISOString().split("T")[0]}
-                  required
                   style={{ border: "none", background: "transparent", fontSize: 13,
                     outline: "none", flex: 1, color: form.date_naissance ? DARK : MUTED, fontFamily: "inherit" }} />
               </div>

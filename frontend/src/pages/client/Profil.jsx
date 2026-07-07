@@ -108,6 +108,10 @@ export default function Profil() {
   }, [user?.id, user?.avatar_url, user?.full_name, user?.phone]);
   const [saved,        setSaved]        = useState(true);
   const [showLang,     setShowLang]     = useState(false);
+  const [showDelete,   setShowDelete]   = useState(false);
+  const [delPwd,       setDelPwd]       = useState("");
+  const [deleting,     setDeleting]     = useState(false);
+  const [delError,     setDelError]     = useState("");
   const [reservations, setReservations] = useState([]);
   const [loadingR,     setLoadingR]     = useState(true);
   const [favorites,    setFavorites]    = useState(() => {
@@ -488,8 +492,81 @@ export default function Profil() {
                 ))}
               </div>
             </div>
+
+            {/* ── Zone de danger : suppression du compte ── */}
+            <div style={{ background: "white", borderRadius: 14, border: "0.5px solid #f0d9d9",
+              padding: "16px 18px", marginTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: "#b3261e" }}>
+                Supprimer mon compte
+              </div>
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 12, lineHeight: 1.5 }}>
+                La suppression retire définitivement vos données personnelles (nom, e-mail, téléphone)
+                et vous déconnecte. Cette action est irréversible.
+              </div>
+              <button onClick={() => { setDelError(""); setDelPwd(""); setShowDelete(true); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fdeceb",
+                  color: "#b3261e", border: "1px solid #f0c9c6", borderRadius: 9, padding: "9px 16px",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <X size={14} /> Supprimer mon compte
+              </button>
+            </div>
           </motion.div>
         )}
+
+        {/* ── Modale de confirmation de suppression ── */}
+        <AnimatePresence>
+          {showDelete && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => !deleting && setShowDelete(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(30,46,40,.5)", zIndex: 1000,
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+              <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                style={{ background: "white", borderRadius: 16, padding: 22, maxWidth: 380, width: "100%",
+                  boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "#b3261e", marginBottom: 8 }}>
+                  Supprimer définitivement le compte ?
+                </div>
+                <div style={{ fontSize: 13.5, color: "#666", lineHeight: 1.55, marginBottom: 16 }}>
+                  Vos données personnelles seront supprimées et vous serez déconnecté immédiatement.
+                  Saisissez votre mot de passe pour confirmer.
+                </div>
+                <input type="password" value={delPwd} onChange={e => setDelPwd(e.target.value)}
+                  placeholder="Votre mot de passe" autoFocus
+                  style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid #ddd",
+                    fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+                {delError && (
+                  <div style={{ fontSize: 12.5, color: "#b3261e", marginTop: 8 }}>{delError}</div>
+                )}
+                <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                  <button onClick={() => setShowDelete(false)} disabled={deleting}
+                    style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1px solid #ddd",
+                      background: "white", color: "#555", fontSize: 14, fontWeight: 600,
+                      cursor: deleting ? "default" : "pointer" }}>
+                    Annuler
+                  </button>
+                  <button disabled={deleting || !delPwd}
+                    onClick={async () => {
+                      setDeleting(true); setDelError("");
+                      try {
+                        await api.delete("/users/me", { data: { password: delPwd } });
+                        await logout();
+                        navigate("/");
+                      } catch (e) {
+                        setDelError(e.response?.data?.message || "Mot de passe incorrect ou erreur.");
+                        setDeleting(false);
+                      }
+                    }}
+                    style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "none",
+                      background: "#b3261e", color: "white", fontSize: 14, fontWeight: 700,
+                      cursor: (deleting || !delPwd) ? "default" : "pointer", opacity: (deleting || !delPwd) ? 0.6 : 1 }}>
+                    {deleting ? "Suppression…" : "Supprimer"}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── RÉSERVATIONS ───────────────────────────────────────────────── */}
         {tab === "reservations" && (

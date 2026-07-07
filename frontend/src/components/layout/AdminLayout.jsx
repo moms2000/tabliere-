@@ -59,7 +59,7 @@ function SidebarContent({ collapsed, navigate, user, logout, onClose }) {
     <>
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 10,
-        padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)", minHeight: 54 }}>
+        padding: "calc(env(safe-area-inset-top, 0px) + 13px) 14px 13px", borderBottom: "0.5px solid rgba(255,255,255,.07)", minHeight: 54 }}>
         <div onClick={() => { navigate("/admin"); onClose?.(); }} style={{ flexShrink: 0, cursor: "pointer" }}>
           <Logo size={28} />
         </div>
@@ -241,7 +241,7 @@ export default function AdminLayout() {
               transform: translateX(0);
             }
             .tci-admin-close {
-              position: fixed; top: 11px; left: 172px; z-index: 10000;
+              position: fixed; top: calc(env(safe-area-inset-top, 0px) + 11px); left: 172px; z-index: 10000;
               background: rgba(255,255,255,.15); border: none; border-radius: 50%;
               width: 36px; height: 36px; display: flex; align-items: center;
               justify-content: center; cursor: pointer; touch-action: manipulation;

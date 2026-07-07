@@ -51,7 +51,8 @@ function SidebarContent({ navigate, user, logout, onClose }) {
   return (
     <>
       {/* Logo */}
-      <div style={{ padding: "13px 14px", borderBottom: "0.5px solid rgba(255,255,255,.07)",
+      <div style={{ padding: "calc(env(safe-area-inset-top, 0px) + 13px) 14px 13px",
+        borderBottom: "0.5px solid rgba(255,255,255,.07)",
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
           onClick={() => { navigate("/restaurant"); onClose?.(); }}>
@@ -182,7 +183,7 @@ export default function RestaurantLayout() {
               transform: translateX(0);
             }
             .tci-drawer-close {
-              position: fixed; top: 11px; left: 162px; z-index: 10000;
+              position: fixed; top: calc(env(safe-area-inset-top, 0px) + 11px); left: 162px; z-index: 10000;
               background: rgba(255,255,255,.15); border: none; border-radius: 50%;
               width: 36px; height: 36px; display: flex; align-items: center;
               justify-content: center; cursor: pointer; touch-action: manipulation;

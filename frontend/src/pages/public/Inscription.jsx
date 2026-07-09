@@ -132,11 +132,10 @@ export default function Inscription() {
 
   const validate = () => {
     if (!form.prenom || !form.nom) return t("err_bad_data");
+    // Date de naissance facultative : validée seulement si renseignée
     if (form.date_naissance) {
       const age = (Date.now() - new Date(form.date_naissance).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
       if (age < 14) return t("err_age");
-    } else {
-      return t("err_bad_data");
     }
     if (form.localPhone) {
       if (!country.pattern.test(form.localPhone.replace(/\s/g, ""))) return t("err_phone_format");

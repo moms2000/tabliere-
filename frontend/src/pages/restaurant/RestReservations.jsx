@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarCheck, CheckCircle, XCircle, AlertTriangle,
@@ -861,7 +862,7 @@ export default function RestReservations() {
           const modal = confirmModal || assignModal;
           const isConfirm = !!confirmModal;
           const closeModal = () => { setConfirmModal(null); setAssignModal(null); setModalError(""); setSelectedTable(""); };
-          return (
+          return createPortal(
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 onClick={closeModal}
@@ -961,7 +962,8 @@ export default function RestReservations() {
                   </button>
                 </div>
               </motion.div>
-            </>
+            </>,
+            document.body
           );
         })()}
       </AnimatePresence>

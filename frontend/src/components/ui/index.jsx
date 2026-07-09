@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 
 /* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
@@ -182,7 +183,7 @@ export function DateFilter({ value, onChange }) {
 // uniquement pour l'animation — évite le conflit framer-motion / translate CSS.
 export function Modal({ open, onClose, title, children, width = 480 }) {
   if (!open) return null;
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -215,7 +216,8 @@ export function Modal({ open, onClose, title, children, width = 480 }) {
           {children}
         </motion.div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

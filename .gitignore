@@ -1,2 +1,12 @@
 node_modules/
 .env
+
+# OS
+.DS_Store
+**/.DS_Store
+
+# Vercel (lien de projet local)
+.vercel/
+
+# workflow (à ajouter via l’interface GitHub — le token local n’a pas le scope workflow)
+.github/workflows/

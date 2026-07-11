@@ -121,7 +121,7 @@ async function sendResetEmail(email, fullName, token) {
 }
 
 export const register = asyncHandler(async (req, res) => {
-  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur } = req.body;
+  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur, code_organisateur } = req.body;
 
   // ── Validation code restaurateur ──────────────────────────────────────────
   if (role === "restaurateur") {
@@ -142,6 +142,26 @@ export const register = asyncHandler(async (req, res) => {
       if (e instanceof AppError) throw e; // re-throw AppErrors
       logger.warn("[Register] Vérification code échouée", { error: e.message });
       // Si la table n'existe pas encore, on laisse passer (sera recréée)
+    }
+  }
+
+  // ── Validation code organisateur ──────────────────────────────────────────
+  if (role === "organisateur") {
+    const codeVal = (code_organisateur || "").trim().toUpperCase();
+    if (!codeVal) throw new AppError("Le code d'accès organisateur est obligatoire", 400);
+    try {
+      const { rows: [codeRow] } = await query(
+        "SELECT id, is_used, expires_at FROM organisateur_codes WHERE code = $1",
+        [codeVal]
+      );
+      if (!codeRow) throw new AppError(`Code organisateur invalide : "${codeVal}"`, 400);
+      if (codeRow.is_used) throw new AppError("Ce code a déjà été utilisé.", 400);
+      if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+        throw new AppError("Ce code d'accès a expiré.", 400);
+      }
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      logger.warn("[Register] Vérification code organisateur échouée", { error: e.message });
     }
   }
 
@@ -204,6 +224,13 @@ export const register = asyncHandler(async (req, res) => {
        WHERE code = $2`,
       [result.id, code_restaurateur.trim().toUpperCase()]
     ).catch(e => logger.warn("Marquage code échoué", { error: e.message }));
+  }
+  if (role === "organisateur" && code_organisateur) {
+    await query(
+      `UPDATE organisateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
+       WHERE code = $2`,
+      [result.id, code_organisateur.trim().toUpperCase()]
+    ).catch(e => logger.warn("Marquage code organisateur échoué", { error: e.message }));
   }
 
   // ── Générer token de vérification + envoyer l'email ─────────────────────────

@@ -238,6 +238,97 @@ async function runStoriesMigration() {
   }
 }
 
+// ── Espace Événements (organisateurs) ───────────────────────────────────────
+// Statuts en VARCHAR (pas d'ENUM Postgres) pour éviter le piège d'injection de
+// valeur d'enum. Chaque statement isolé + logué. Idempotent.
+async function runEventsMigration() {
+  const stmts = [
+    // Rôle organisateur (enum user_role existant → ajout de valeur, idempotent)
+    `ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'organisateur'`,
+    // Codes d'accès organisateur (générés par l'admin, comme les restaurateurs)
+    `CREATE TABLE IF NOT EXISTS organisateur_codes (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       code        VARCHAR(20) UNIQUE NOT NULL,
+       is_used     BOOLEAN NOT NULL DEFAULT FALSE,
+       used_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+       used_at     TIMESTAMPTZ,
+       created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+       expires_at  TIMESTAMPTZ,
+       notes       TEXT,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Événements (un organisateur peut en avoir plusieurs)
+    `CREATE TABLE IF NOT EXISTS events (
+       id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       owner_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       name         VARCHAR(160) NOT NULL,
+       slug         VARCHAR(200) UNIQUE NOT NULL,
+       description  TEXT,
+       venue_name   VARCHAR(160),
+       address      TEXT,
+       ville        VARCHAR(80),
+       quartier     VARCHAR(80),
+       starts_at    TIMESTAMPTZ NOT NULL,
+       ends_at      TIMESTAMPTZ,
+       cover_url    TEXT,
+       theme_color  VARCHAR(9) DEFAULT '#E8A045',
+       is_public    BOOLEAN NOT NULL DEFAULT TRUE,
+       status       VARCHAR(20) NOT NULL DEFAULT 'brouillon', -- brouillon|publie|annule|termine
+       created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Plan de salle de l'événement : tables simples + packs VIP
+    `CREATE TABLE IF NOT EXISTS event_tables (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       label       VARCHAR(40) NOT NULL,
+       kind        VARCHAR(10) NOT NULL DEFAULT 'simple', -- simple|vip
+       capacity    INTEGER NOT NULL DEFAULT 2,
+       price       INTEGER NOT NULL DEFAULT 0,            -- FCFA (packs VIP), 0 = gratuit
+       description TEXT,
+       zone        VARCHAR(50) DEFAULT 'general',
+       pos_x       INTEGER DEFAULT 20,
+       pos_y       INTEGER DEFAULT 20,
+       status      VARCHAR(10) NOT NULL DEFAULT 'libre',  -- libre|reserve|occupe
+       is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Séquence pour les références de réservation (EVT-1000, EVT-1001, …)
+    `CREATE SEQUENCE IF NOT EXISTS event_resa_ref_seq START 1000`,
+    // Réservations d'événement (tables / packs VIP) — cash sur place, pas de paiement in-app
+    `CREATE TABLE IF NOT EXISTS event_reservations (
+       id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       ref             VARCHAR(20) UNIQUE NOT NULL,
+       event_id        UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       client_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       table_id        UUID REFERENCES event_tables(id) ON DELETE SET NULL,
+       party_size      INTEGER NOT NULL DEFAULT 1,
+       guest_name      VARCHAR(120),
+       guest_phone     VARCHAR(30),
+       special_request TEXT,
+       status          VARCHAR(20) NOT NULL DEFAULT 'en_attente', -- en_attente|confirme|annule|termine
+       confirmed_at    TIMESTAMPTZ,
+       cancelled_at    TIMESTAMPTZ,
+       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_events_owner   ON events(owner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_events_public  ON events(status, is_public, starts_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_tables_evt ON event_tables(event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_resa_evt   ON event_reservations(event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_resa_client ON event_reservations(client_id)`,
+  ];
+  let okc = 0, failc = 0;
+  for (const sql of stmts) {
+    try { await query(sql); okc++; } catch (e) {
+      failc++;
+      logger.warn("Migration Événements — statement ignoré", { error: e?.message, code: e?.code });
+    }
+  }
+  logger.info(`Migration Événements : ${okc} ok, ${failc} ignoré(s)`);
+}
+
 async function runProspectsMigration() {
   try {
     await query(`
@@ -322,6 +413,7 @@ async function start() {
     await runProspectsMigration();
     await runCodesMigration();
     await runStoriesMigration();  // ← Instants (isolée + logguée)
+    await runEventsMigration();   // ← Espace Événements (organisateurs)
     await runPerfIndexes();       // ← Indexes de performance
     await activateTestRestaurants();
 

@@ -12,12 +12,17 @@ import { sendPushToUser }   from "../services/push.service.js";
 // (permet de vérifier que les push fonctionnent sur son appareil)
 // ---------------------------------------------------------------------------
 export const testPush = asyncHandler(async (req, res) => {
-  await sendPushToUser(req.user.id, {
-    title: "TablièreCI",
-    body: "🎉 Vos notifications sont bien activées !",
-    data: { route: "/profil" },
-  });
-  return ok(res, {}, "Notification test envoyée. Vérifiez votre appareil.");
+  const uid = req.user.id;
+  // Envoi différé de 5 s : laisse le temps de mettre l'app en arrière-plan
+  // (sur Android, une notif reçue app au premier plan ne s'affiche pas dans la barre).
+  setTimeout(() => {
+    sendPushToUser(uid, {
+      title: "TablièreCI",
+      body: "🎉 Vos notifications sont bien activées !",
+      data: { route: "/profil" },
+    }).catch(() => {});
+  }, 5000);
+  return ok(res, {}, "Notification envoyée dans 5 s. Mettez l'app en arrière-plan pour la voir.");
 });
 
 // ---------------------------------------------------------------------------

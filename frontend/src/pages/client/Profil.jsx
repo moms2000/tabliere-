@@ -503,7 +503,7 @@ export default function Profil() {
               <button onClick={async () => {
                 try {
                   await api.post("/users/me/test-push");
-                  setShareToast("Notification test envoyée 🔔");
+                  setShareToast("🔔 Envoyée dans 5s — mettez l'app en arrière-plan !");
                 } catch {
                   setShareToast("Erreur lors de l'envoi");
                 }

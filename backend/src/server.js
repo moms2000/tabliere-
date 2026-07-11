@@ -196,7 +196,16 @@ async function runCodesMigration() {
       )
     `);
 
-    // ── Instants (stories éphémères 24h) ──────────────────────────────────
+    logger.info("Table restaurateur_codes + dépôt + signalements prêts");
+  } catch (_) {}
+}
+
+// ── Instants (stories éphémères 24h) ────────────────────────────────────────
+// Migration ISOLÉE et LOGGUÉE : indépendante des autres migrations pour éviter
+// qu'une erreur en amont (ou une base pas encore prête au boot) ne l'empêche
+// silencieusement de créer les colonnes/tables → cause de 500 sur /stories.
+async function runStoriesMigration() {
+  try {
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS stories_enabled BOOLEAN DEFAULT TRUE`);
     await query(`
       CREATE TABLE IF NOT EXISTS stories (
@@ -223,9 +232,10 @@ async function runCodesMigration() {
     `);
     await query(`CREATE INDEX IF NOT EXISTS idx_stories_resto ON stories(restaurant_id, expires_at)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_stories_expires ON stories(expires_at)`);
-
-    logger.info("Table restaurateur_codes + dépôt + signalements + instants prêts");
-  } catch (_) {}
+    logger.info("Migration Instants OK (colonne stories_enabled + tables stories/story_reactions)");
+  } catch (err) {
+    logger.error("Migration Instants ÉCHOUÉE", { error: err?.message || String(err), code: err?.code });
+  }
 }
 
 async function runProspectsMigration() {
@@ -311,6 +321,7 @@ async function start() {
     await runBusinessMigrations();
     await runProspectsMigration();
     await runCodesMigration();
+    await runStoriesMigration();  // ← Instants (isolée + logguée)
     await runPerfIndexes();       // ← Indexes de performance
     await activateTestRestaurants();
 

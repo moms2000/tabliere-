@@ -9,6 +9,7 @@ import {
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { menuService } from "../../services/menu.service.js";
+import Stories from "../../components/Stories.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { usePageMeta } from "../../hooks/usePageMeta.js";
 const MapView = lazy(() => import("../../components/MapView.jsx"));
@@ -822,6 +823,11 @@ export default function RestaurantDetail() {
 
         {/* Sidebar — desktop seulement */}
         {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
+      </div>
+
+      {/* ── Instants (stories éphémères 24h) ── */}
+      <div style={{ padding: "16px 0 8px" }}>
+        <Stories slug={slug} />
       </div>
 
       {/* ── Menu du restaurant (si activé par le restaurateur) ── */}

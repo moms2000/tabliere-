@@ -3,6 +3,7 @@ import { env }       from "./config/env.js";
 import { connectDB, query } from "./config/db.js";
 import { redis, connectRedis } from "./config/redis.js";
 import { initQueues, closeQueues } from "./queues/index.js";
+import { purgeExpiredStories } from "./controllers/stories.controller.js";
 import { logger }    from "./utils/logger.js";
 
 /**
@@ -194,7 +195,36 @@ async function runCodesMigration() {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    logger.info("Table restaurateur_codes + dépôt + signalements prêts");
+
+    // ── Instants (stories éphémères 24h) ──────────────────────────────────
+    await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS stories_enabled BOOLEAN DEFAULT TRUE`);
+    await query(`
+      CREATE TABLE IF NOT EXISTS stories (
+        id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+        client_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reservation_id UUID REFERENCES reservations(id) ON DELETE SET NULL,
+        photo_url      TEXT NOT NULL,
+        public_id      VARCHAR(300),
+        status         VARCHAR(20) NOT NULL DEFAULT 'active', -- active | hidden | removed
+        hidden_by_resto BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at     TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await query(`
+      CREATE TABLE IF NOT EXISTS story_reactions (
+        story_id   UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+        user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji      VARCHAR(8) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (story_id, user_id)
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_stories_resto ON stories(restaurant_id, expires_at)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_stories_expires ON stories(expires_at)`);
+
+    logger.info("Table restaurateur_codes + dépôt + signalements + instants prêts");
   } catch (_) {}
 }
 
@@ -290,6 +320,12 @@ async function start() {
     } catch (err) {
       logger.warn("BullMQ non initialisé", { error: err?.message || String(err) });
     }
+
+    // Purge des Instants expirés (suppression totale après 24h) — au démarrage + toutes les 30 min
+    purgeExpiredStories().then(n => { if (n) logger.info(`[Instants] ${n} instant(s) expiré(s) purgé(s)`); });
+    setInterval(() => {
+      purgeExpiredStories().then(n => { if (n) logger.info(`[Instants] ${n} instant(s) expiré(s) purgé(s)`); });
+    }, 30 * 60 * 1000);
 
     server = app.listen(env.PORT, () => {
       logger.info("TablièreCI API démarrée", {

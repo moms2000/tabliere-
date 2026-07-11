@@ -25,6 +25,8 @@ import reviewsRoutes       from "./routes/reviews.routes.js";
 import reportsRoutes       from "./routes/reports.routes.js";
 import uploadRoutes        from "./routes/upload.routes.js";
 import storiesRoutes       from "./routes/stories.routes.js";
+import eventsRoutes        from "./routes/events.routes.js";
+import eventReservationsRoutes from "./routes/eventReservations.routes.js";
 
 const app = express();
 
@@ -101,6 +103,8 @@ app.use(`${v1}/restaurants`,   reviewsRoutes);
 app.use(`${v1}/reports`,       reportsRoutes);
 app.use(`${v1}/upload`,        uploadRoutes);
 app.use(`${v1}/stories`,       storiesRoutes);
+app.use(`${v1}/events`,        eventsRoutes);
+app.use(`${v1}/event-reservations`, eventReservationsRoutes);
 
 // ── Ping keep-alive (ultra-léger, empêche le cold start Render) ─────────────
 app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));

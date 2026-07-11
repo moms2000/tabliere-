@@ -14,7 +14,7 @@ const registerSchema = Joi.object({
   email:             Joi.string().email().lowercase().required(),
   phone:             Joi.string().pattern(/^\+?[0-9]{8,15}$/).optional().allow("", null),
   password:          Joi.string().min(8).required(),
-  role:              Joi.string().valid("client", "restaurateur").default("client"),
+  role:              Joi.string().valid("client", "restaurateur", "organisateur").default("client"),
   restaurant_name:   Joi.when("role", {
     is:        "restaurateur",
     then:      Joi.string().min(2).max(150).required(),
@@ -23,6 +23,12 @@ const registerSchema = Joi.object({
   // ← CODE OBLIGATOIRE POUR LES RESTAURATEURS (Joi ne doit PAS le stripper)
   code_restaurateur: Joi.when("role", {
     is:        "restaurateur",
+    then:      Joi.string().min(5).max(20).required(),
+    otherwise: Joi.optional().allow("", null),
+  }),
+  // ← CODE OBLIGATOIRE POUR LES ORGANISATEURS
+  code_organisateur: Joi.when("role", {
+    is:        "organisateur",
     then:      Joi.string().min(5).max(20).required(),
     otherwise: Joi.optional().allow("", null),
   }),

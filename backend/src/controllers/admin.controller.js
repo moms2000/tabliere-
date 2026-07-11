@@ -603,6 +603,91 @@ export const deleteCode = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Codes ORGANISATEURS (espace Événements) — mêmes règles que restaurateurs
+// ---------------------------------------------------------------------------
+export const generateOrganisateurCodes = asyncHandler(async (req, res) => {
+  const { count = 1, notes, expires_days } = req.body;
+  await query(`
+    CREATE TABLE IF NOT EXISTS organisateur_codes (
+      id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      code        VARCHAR(20) UNIQUE NOT NULL,
+      is_used     BOOLEAN NOT NULL DEFAULT FALSE,
+      used_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+      used_at     TIMESTAMPTZ,
+      created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+      expires_at  TIMESTAMPTZ,
+      notes       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `).catch(() => {});
+  if (count < 1 || count > 50) throw new AppError("count doit être entre 1 et 50", 400);
+
+  const generateCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let c = "ORG-";
+    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    c += "-";
+    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    return c;
+  };
+
+  const expires_at = expires_days
+    ? new Date(Date.now() + expires_days * 86400000).toISOString()
+    : null;
+
+  const codes = [];
+  for (let i = 0; i < count; i++) {
+    let code, exists = true;
+    while (exists) {
+      code = generateCode();
+      const { rows: [r] } = await query("SELECT id FROM organisateur_codes WHERE code = $1", [code]);
+      exists = !!r;
+    }
+    const { rows: [row] } = await query(
+      `INSERT INTO organisateur_codes (code, notes, expires_at, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [code, notes || null, expires_at, req.user.id]
+    );
+    codes.push(row);
+  }
+  logger.info("Codes organisateurs générés", { count: codes.length, adminId: req.user.id });
+  return created(res, { codes }, `${codes.length} code(s) généré(s)`);
+});
+
+export const listOrganisateurCodes = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50, used } = req.query;
+  const offset = (page - 1) * limit;
+  const conditions = [];
+  if (used === "true")  conditions.push("c.is_used = TRUE");
+  if (used === "false") conditions.push("c.is_used = FALSE");
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const { rows } = await query(
+    `SELECT c.*, u.full_name AS used_by_name, u.email AS used_by_email
+     FROM organisateur_codes c
+     LEFT JOIN users u ON u.id = c.used_by
+     ${where}
+     ORDER BY c.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  ).catch(() => ({ rows: [] }));
+  const { rows: [{ count } = { count: 0 }] } = await query(
+    `SELECT COUNT(*) FROM organisateur_codes c ${where}`
+  ).catch(() => ({ rows: [{ count: 0 }] }));
+  return paginated(res, rows, +count, +page, +limit);
+});
+
+export const deleteOrganisateurCode = asyncHandler(async (req, res) => {
+  const { rows: [code] } = await query(
+    "SELECT id, is_used FROM organisateur_codes WHERE id = $1", [req.params.id]
+  );
+  if (!code) return notFound(res, "Code introuvable");
+  if (code.is_used) throw new AppError("Ce code a déjà été utilisé", 400);
+  await query("DELETE FROM organisateur_codes WHERE id = $1", [req.params.id]);
+  return ok(res, null, "Code supprimé");
+});
+
+// ---------------------------------------------------------------------------
 // GET /admin/prospects — liste des prospects (invités sans compte)
 // ---------------------------------------------------------------------------
 export const listProspects = asyncHandler(async (req, res) => {

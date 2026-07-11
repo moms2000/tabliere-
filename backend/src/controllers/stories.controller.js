@@ -14,6 +14,60 @@ import { uploadImage, deleteImage } from "../services/upload.service.js";
 const MAX_PER_RESERVATION = 5;
 const MODERATION = process.env.STORY_MODERATION || null; // ex: "aws_rek"
 
+// ── Auto-réparation du schéma (idempotent, mémoïsé) ──────────────────────────
+// La migration au démarrage peut être ignorée si la base n'est pas prête au boot
+// (Render). On garantit ici que la colonne + les tables existent à la 1ʳᵉ requête,
+// moment où la connexion DB est forcément établie. Évite les 500 sur /stories.
+let _schemaReady = false;
+export async function ensureStoriesSchema() {
+  if (_schemaReady) return;
+  await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS stories_enabled BOOLEAN DEFAULT TRUE`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS stories (
+      id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      client_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reservation_id UUID REFERENCES reservations(id) ON DELETE SET NULL,
+      photo_url      TEXT NOT NULL,
+      public_id      VARCHAR(300),
+      status         VARCHAR(20) NOT NULL DEFAULT 'active',
+      hidden_by_resto BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at     TIMESTAMPTZ NOT NULL
+    )
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_reactions (
+      story_id   UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      emoji      VARCHAR(8) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (story_id, user_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_stories_resto ON stories(restaurant_id, expires_at)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_stories_expires ON stories(expires_at)`);
+  _schemaReady = true;
+}
+
+// ── Diagnostic temporaire (à retirer) — état réel du schéma en prod ───────────
+export const diagStories = asyncHandler(async (req, res) => {
+  const out = { column_exists: null, stories_table: null, reactions_table: null, migration_error: null };
+  try {
+    const c = await query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name='restaurants' AND column_name='stories_enabled'`
+    );
+    out.column_exists = c.rowCount > 0;
+    const t1 = await query(`SELECT to_regclass('public.stories') AS t`);
+    out.stories_table = t1.rows[0].t;
+    const t2 = await query(`SELECT to_regclass('public.story_reactions') AS t`);
+    out.reactions_table = t2.rows[0].t;
+  } catch (e) { out.read_error = e.message; }
+  try { _schemaReady = false; await ensureStoriesSchema(); out.migration = "ok"; }
+  catch (e) { out.migration_error = e.message; out.migration_code = e.code; }
+  return ok(res, out, "diag");
+});
+
 // Retourne la réservation éligible (confirmée, fenêtre heure_résa → +24h) pour ce resto.
 async function eligibleReservation(userId, restaurantId) {
   const { rows } = await query(
@@ -39,6 +93,7 @@ async function restoBySlug(slug) {
 
 // ── POST /stories — créer un instant ─────────────────────────────────────────
 export const createStory = asyncHandler(async (req, res) => {
+  await ensureStoriesSchema();
   const { slug, photo } = req.body || {};
   if (!slug || !photo) throw new AppError("Restaurant et photo requis", 400);
   if (!/^data:image\//.test(photo)) throw new AppError("Format de photo invalide", 400);
@@ -83,6 +138,7 @@ export const createStory = asyncHandler(async (req, res) => {
 
 // ── GET /stories/:slug — liste (connecté uniquement) ─────────────────────────
 export const listStories = asyncHandler(async (req, res) => {
+  await ensureStoriesSchema();
   const resto = await restoBySlug(req.params.slug);
   if (!resto) return notFound(res, "Restaurant introuvable");
 

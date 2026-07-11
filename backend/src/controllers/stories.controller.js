@@ -20,8 +20,10 @@ async function eligibleReservation(userId, restaurantId) {
     `SELECT id, reserved_at FROM reservations
      WHERE client_id = $1 AND restaurant_id = $2
        AND status IN ('confirme','confirmé')
-       AND reserved_at <= NOW()
-       AND reserved_at + interval '24 hours' >= NOW()
+       AND (
+         reserved_at::date = CURRENT_DATE                                   -- le jour de la visite
+         OR (reserved_at <= NOW() AND reserved_at + interval '24 hours' >= NOW())  -- ou dans les 24h après
+       )
      ORDER BY reserved_at DESC LIMIT 1`,
     [userId, restaurantId]
   );

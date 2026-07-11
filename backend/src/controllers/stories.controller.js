@@ -50,64 +50,13 @@ export async function ensureStoriesSchema() {
   _schemaReady = true;
 }
 
-// ── Diagnostic temporaire (à retirer) — état réel du schéma en prod ───────────
-export const diagStories = asyncHandler(async (req, res) => {
-  const out = { column_exists: null, stories_table: null, reactions_table: null, migration_error: null };
-  try {
-    const c = await query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name='restaurants' AND column_name='stories_enabled'`
-    );
-    out.column_exists = c.rowCount > 0;
-    const t1 = await query(`SELECT to_regclass('public.stories') AS t`);
-    out.stories_table = t1.rows[0].t;
-    const t2 = await query(`SELECT to_regclass('public.story_reactions') AS t`);
-    out.reactions_table = t2.rows[0].t;
-  } catch (e) { out.read_error = e.message; }
-  try { _schemaReady = false; await ensureStoriesSchema(); out.migration = "ok"; }
-  catch (e) { out.migration_error = e.message; out.migration_code = e.code; }
-
-  // Reproduit chaque étape de listStories pour isoler la requête fautive
-  const slug = req.query.slug || "marbl";
-  const uid  = req.query.uid  || "00000000-0000-0000-0000-000000000000";
-  out.steps = {};
-  let resto = null;
-  try {
-    const r = await query("SELECT id, owner_id, stories_enabled FROM restaurants WHERE slug = $1", [slug]);
-    resto = r.rows[0] || null;
-    out.steps.restoBySlug = resto ? "ok" : "not_found";
-  } catch (e) { out.steps.restoBySlug = "ERR: " + e.message; }
-  if (resto) {
-    try {
-      await query(
-        `SELECT s.id, s.photo_url, s.created_at, s.expires_at, s.client_id,
-                u.full_name AS author_name, u.avatar_url AS author_avatar,
-                COALESCE(r.cnt, 0)::int AS reactions, mine.emoji AS my_reaction
-         FROM stories s
-         JOIN users u ON u.id = s.client_id
-         LEFT JOIN (SELECT story_id, COUNT(*) cnt FROM story_reactions GROUP BY story_id) r ON r.story_id = s.id
-         LEFT JOIN story_reactions mine ON mine.story_id = s.id AND mine.user_id = $2
-         WHERE s.restaurant_id = $1 AND s.status = 'active' AND s.hidden_by_resto = FALSE AND s.expires_at > NOW()
-         ORDER BY s.created_at DESC`, [resto.id, uid]);
-      out.steps.listSelect = "ok";
-    } catch (e) { out.steps.listSelect = "ERR: " + e.message; }
-    try {
-      await query(
-        `SELECT id, reserved_at FROM reservations
-         WHERE client_id = $1 AND restaurant_id = $2 AND status IN ('confirme','confirmé')
-           AND (reserved_at::date = CURRENT_DATE OR (reserved_at <= NOW() AND reserved_at + interval '24 hours' >= NOW()))
-         ORDER BY reserved_at DESC LIMIT 1`, [uid, resto.id]);
-      out.steps.eligible = "ok";
-    } catch (e) { out.steps.eligible = "ERR: " + e.message; }
-  }
-  return ok(res, out, "diag");
-});
 
 // Retourne la réservation éligible (confirmée, fenêtre heure_résa → +24h) pour ce resto.
 async function eligibleReservation(userId, restaurantId) {
   const { rows } = await query(
     `SELECT id, reserved_at FROM reservations
      WHERE client_id = $1 AND restaurant_id = $2
-       AND status IN ('confirme','confirmé')
+       AND status = 'confirme'
        AND (
          reserved_at::date = CURRENT_DATE                                   -- le jour de la visite
          OR (reserved_at <= NOW() AND reserved_at + interval '24 hours' >= NOW())  -- ou dans les 24h après

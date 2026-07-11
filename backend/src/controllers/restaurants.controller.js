@@ -98,7 +98,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
             r.deposit_enabled, r.deposit_min_party, r.deposit_message,
-            r.latitude, r.longitude,
+            r.latitude, r.longitude, r.menu_public,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -158,6 +158,8 @@ export const update = asyncHandler(async (req, res) => {
     "deposit_enabled","deposit_min_party","deposit_message",
     // Localisation précise (carte)
     "latitude","longitude",
+    // Menu visible sur la page publique
+    "menu_public",
   ];
   const updates = [];
   const values  = [];

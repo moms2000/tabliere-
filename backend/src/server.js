@@ -59,6 +59,9 @@ async function runBusinessMigrations() {
     // Photos restaurant (jusqu'à 4, stockées en JSON)
     `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`,
 
+    // Menu visible sur la page publique du restaurant (opt-in du restaurateur)
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS menu_public BOOLEAN DEFAULT FALSE`,
+
     // Email vérification (TRUE par défaut pour les comptes existants)
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified     BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token        VARCHAR(64)`,

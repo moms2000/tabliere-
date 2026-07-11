@@ -85,6 +85,8 @@ export default function RestMenu() {
   const [categories, setCategories] = useState([]);
   const [activeTab,  setActiveTab]  = useState(null);
   const [qrActive,   setQrActive]   = useState(false);
+  const [menuPublic, setMenuPublic] = useState(false);
+  const [savingMenuPublic, setSavingMenuPublic] = useState(false);
   const [loading,    setLoading]    = useState(true);
   const [copied,     setCopied]     = useState(false);
   const [modalCat,   setModalCat]   = useState(false);
@@ -107,6 +109,7 @@ export default function RestMenu() {
         setCategories(cats);
         if (cats.length > 0) setActiveTab(cats[0].id);
         setQrActive(restoData.restaurant?.qr_active || false);
+        setMenuPublic(restoData.restaurant?.menu_public || false);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -131,6 +134,19 @@ export default function RestMenu() {
       }
       setQrActive(val);
     } catch (e) { console.error(e); }
+  };
+
+  const handleMenuPublicToggle = async (val) => {
+    setSavingMenuPublic(true);
+    setMenuPublic(val); // optimiste
+    try {
+      await restaurantsService.update(user.resto_id, { menu_public: val });
+    } catch (e) {
+      console.error(e);
+      setMenuPublic(!val); // rollback si échec
+    } finally {
+      setSavingMenuPublic(false);
+    }
   };
 
   const copyLink = () => {
@@ -262,6 +278,30 @@ export default function RestMenu() {
             </div>
           )}
           <Toggle value={qrActive} onChange={handleQrToggle} />
+        </div>
+      </motion.div>
+
+      {/* ── Menu visible sur la page publique du restaurant ── */}
+      <motion.div variants={fadeUp} style={{ marginBottom: 14 }}>
+        <div style={{ background: menuPublic ? DARK : BG,
+          border: `0.5px solid ${menuPublic ? "transparent" : BORDER}`,
+          borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, flexShrink: 0,
+            background: menuPublic ? P + "33" : BORDER,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Notebook size={22} color={menuPublic ? P : MUTED} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: menuPublic ? "white" : DARK, marginBottom: 2 }}>
+              Menu sur ma page {menuPublic ? "— Visible" : "— Masqué"}
+            </div>
+            <div style={{ fontSize: 12, color: menuPublic ? "rgba(255,255,255,.45)" : MUTED }}>
+              {menuPublic
+                ? "Vos clients voient votre menu sur votre page de réservation"
+                : "Activez pour afficher votre menu aux clients sur votre page"}
+            </div>
+          </div>
+          <Toggle value={menuPublic} onChange={handleMenuPublicToggle} />
         </div>
       </motion.div>
 
@@ -463,8 +503,9 @@ export default function RestMenu() {
           </FormField>
           <PhotoUpload
             label="Photo du plat"
+            type="menu"
             value={formItem.image_url}
-            onChange={b64 => setFormItem(p => ({ ...p, image_url: b64 }))}
+            onChange={url => setFormItem(p => ({ ...p, image_url: url }))}
             height={110}
           />
           <FormField label="">

@@ -23,6 +23,7 @@ import notificationsRoutes from "./routes/notifications.routes.js";
 import ordersRoutes        from "./routes/orders.routes.js";
 import reviewsRoutes       from "./routes/reviews.routes.js";
 import reportsRoutes       from "./routes/reports.routes.js";
+import uploadRoutes        from "./routes/upload.routes.js";
 
 const app = express();
 
@@ -72,7 +73,7 @@ app.use(cors({
 }));
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "8mb" })); // 8mb : autorise l'envoi d'images (data URI base64)
 app.use(express.urlencoded({ extended: true }));
 
 // ── Logs HTTP ───────────────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ app.use(`${v1}/notifications`, notificationsRoutes);
 app.use(`${v1}/orders`,        ordersRoutes);
 app.use(`${v1}/restaurants`,   reviewsRoutes);
 app.use(`${v1}/reports`,       reportsRoutes);
+app.use(`${v1}/upload`,        uploadRoutes);
 
 // ── Ping keep-alive (ultra-léger, empêche le cold start Render) ─────────────
 app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));

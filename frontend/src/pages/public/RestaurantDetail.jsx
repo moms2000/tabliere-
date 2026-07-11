@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
+import { menuService } from "../../services/menu.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { usePageMeta } from "../../hooks/usePageMeta.js";
 const MapView = lazy(() => import("../../components/MapView.jsx"));
@@ -456,6 +457,7 @@ export default function RestaurantDetail() {
   const prefillGuests = searchParams.get("guests") || undefined;
 
   const [resto,   setResto]   = useState(null);
+  const [menu,    setMenu]    = useState(null); // catégories du menu si menu_public
   usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
   const [loading,  setLoading]  = useState(true);
   const [modal,    setModal]    = useState(false);
@@ -519,7 +521,16 @@ export default function RestaurantDetail() {
 
   useEffect(() => {
     restaurantsService.getBySlug(slug)
-      .then(d => setResto(d.restaurant || d))
+      .then(d => {
+        const r = d.restaurant || d;
+        setResto(r);
+        // Menu public : on le charge si le restaurant l'a activé
+        if (r?.menu_public && r?.slug) {
+          menuService.getPublicMenu(r.slug)
+            .then(m => setMenu((m.categories || []).filter(c => (c.items || []).length > 0)))
+            .catch(() => {});
+        }
+      })
       .catch(() => setResto(null))
       .finally(() => setLoading(false));
 
@@ -812,6 +823,48 @@ export default function RestaurantDetail() {
         {/* Sidebar — desktop seulement */}
         {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
       </div>
+
+      {/* ── Menu du restaurant (si activé par le restaurateur) ── */}
+      {menu && menu.length > 0 && (
+        <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 8px" }}>
+          <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 28 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: DARK, margin: "0 0 18px" }}>Menu</h2>
+            {menu.map((cat) => (
+              <div key={cat.id} style={{ marginBottom: 26 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: P, textTransform: "uppercase",
+                  letterSpacing: "0.6px", marginBottom: 12 }}>{cat.name}</div>
+                <div style={{ display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+                  {(cat.items || []).map((it) => (
+                    <div key={it.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
+                      borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
+                      {it.image_url && (
+                        <img src={it.image_url} alt={it.name} loading="lazy"
+                          style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
+                      )}
+                      <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
+                          {it.price != null && (
+                            <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
+                              {Number(it.price).toLocaleString("fr-FR")} F
+                            </span>
+                          )}
+                        </div>
+                        {it.description && (
+                          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+                            {it.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Où nous trouver (carte) — si coordonnées précises ── */}
       {resto.latitude && resto.longitude && (

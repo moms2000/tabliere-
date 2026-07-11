@@ -1,6 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+import api from "../../services/api.js";
 
 /* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
 const P    = "#E8A045";   // or pêche — primaire
@@ -261,8 +262,9 @@ export function Select({ value, onChange, options, style = {} }) {
 
 // ── PhotoUpload — sélecteur de photo depuis l'appareil ────────────────────────
 // Usage: <PhotoUpload value={url} onChange={base64orUrl => ...} label="Photo" />
-export function PhotoUpload({ value, onChange, label = "Photo", height = 120 }) {
+export function PhotoUpload({ value, onChange, label = "Photo", height = 120, type = "restaurant" }) {
   const inputRef = React.useRef(null);
+  const [uploading, setUploading] = React.useState(false);
 
   const compress = (file) => {
     return new Promise((resolve) => {
@@ -290,9 +292,18 @@ export function PhotoUpload({ value, onChange, label = "Photo", height = 120 }) 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const b64 = await compress(file);
-    onChange(b64);
     e.target.value = "";
+    const b64 = await compress(file);
+    // Upload vers Cloudinary → on stocke l'URL (plus léger et rapide que le base64).
+    setUploading(true);
+    try {
+      const res = await api.post("/upload", { file: b64, type });
+      onChange(res.data?.data?.url || b64);
+    } catch (_) {
+      onChange(b64); // fallback : garde le base64 si l'upload échoue
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -302,11 +313,18 @@ export function PhotoUpload({ value, onChange, label = "Photo", height = 120 }) 
           textTransform: "uppercase", letterSpacing: "0.8px" }}>{label}</div>
       )}
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !uploading && inputRef.current?.click()}
         style={{ height, borderRadius: 10, border: `1.5px dashed ${BORDER}`,
-          background: value ? "transparent" : BG, cursor: "pointer", overflow: "hidden",
+          background: value ? "transparent" : BG, cursor: uploading ? "default" : "pointer", overflow: "hidden",
           display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative" }}>
+        {uploading && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "rgba(255,255,255,.8)",
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+            fontWeight: 600, color: MUTED }}>
+            Envoi de la photo…
+          </div>
+        )}
         {value ? (
           <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (

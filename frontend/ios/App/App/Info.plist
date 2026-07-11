@@ -53,5 +53,9 @@
 	<string>TablièreCI accède à vos photos pour définir votre photo de profil.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>TablièreCI enregistre des images (par exemple un QR code) dans votre galerie.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

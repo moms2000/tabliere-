@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "648353093829",
+    "project_id": "tabliereci",
+    "storage_bucket": "tabliereci.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:648353093829:android:3b5e0fd409e364e33378ac",
+        "android_client_info": {
+          "package_name": "net.tabliereci.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9LLPXe6lK96cWk90r3hrOpD_AxpfofXE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -34,6 +34,13 @@ const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"))
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
 const RestInstants      = lazy(() => import("./pages/restaurant/RestInstants"));
 
+const EventLayout       = lazy(() => import("./components/layout/EventLayout"));
+const EventList         = lazy(() => import("./pages/event/EventList"));
+const EventEditor       = lazy(() => import("./pages/event/EventEditor"));
+const CodesOrganisateurs = lazy(() => import("./pages/admin/CodesOrganisateurs"));
+const Evenements        = lazy(() => import("./pages/public/Evenements"));
+const EventDetail       = lazy(() => import("./pages/public/EventDetail"));
+
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
 
@@ -110,6 +117,7 @@ function AppWithNav({ children }) {
   const hideBottomNav =
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/restaurant") ||
+    location.pathname.startsWith("/event") ||
     location.pathname.startsWith("/menu/") ||
     location.pathname.startsWith("/connexion") ||
     location.pathname.startsWith("/inscription") ||
@@ -159,6 +167,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/connexion/admin"   element={<ConnexionAdmin />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
+                  <Route path="/evenements"        element={<Evenements />} />
+                  <Route path="/evenement/:slug"   element={<EventDetail />} />
                   <Route path="/verify-email"         element={<VerifyEmail />} />
                   <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
                   <Route path="/reset-password"       element={<ResetPassword />} />
@@ -187,6 +197,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="parametres"    element={<Parametres />} />
                     <Route path="qr-themes"     element={<QRThemes />} />
               <Route path="codes"         element={<CodesRestaurateurs />} />
+                    <Route path="codes-organisateurs" element={<CodesOrganisateurs />} />
                     <Route path="site"          element={<SiteParametres />} />
                   </Route>
 
@@ -202,6 +213,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="profil"       element={<RestProfil />} />
                     <Route path="commandes"    element={<RestCommandes />} />
                     <Route path="pos"          element={<RestPOS />} />
+                  </Route>
+
+                  {/* ── Organisateur (Événements) ────────────────────────── */}
+                  <Route path="/event" element={
+                    <ProtectedRoute roles="organisateur"><EventLayout /></ProtectedRoute>
+                  }>
+                    <Route index        element={<EventList />} />
+                    <Route path=":id"   element={<EventEditor />} />
                   </Route>
 
                   {/* ── QR Menu client ─────────────────────────────────── */}

@@ -29,9 +29,14 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Enregistrer les notifications push natives dès qu'un utilisateur est connecté
+  // Push natives : ré-enregistre le token uniquement si l'utilisateur a DÉJÀ
+  // accepté les notifications (le premier opt-in passe par NotificationPrompt,
+  // pour ne pas déclencher le dialogue système brutalement).
   useEffect(() => {
-    if (user) initPushNotifications();
+    if (!user) return;
+    try {
+      if (localStorage.getItem("tci_notif_optin") === "granted") initPushNotifications();
+    } catch {}
   }, [user]);
 
   const login = useCallback(async (email, password, remember = true) => {

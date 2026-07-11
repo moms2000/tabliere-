@@ -5,6 +5,7 @@ import "./index.css";
 
 import { AuthProvider }     from "./context/AuthContext.jsx";
 import MobileBottomNav     from "./components/mobile/MobileBottomNav.jsx";
+import NotificationPrompt  from "./components/NotificationPrompt.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ToastProvider }    from "./components/ui/Toast.jsx";
 import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
@@ -119,6 +120,7 @@ function AppWithNav({ children }) {
     <>
       {children}
       {isMobile && !hideBottomNav && <MobileBottomNav />}
+      <NotificationPrompt />
     </>
   );
 }

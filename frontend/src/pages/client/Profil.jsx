@@ -493,28 +493,6 @@ export default function Profil() {
               </div>
             </div>
 
-            {/* ── Notifications : bouton de test ── */}
-            <div style={{ background: "white", borderRadius: 14, border: "0.5px solid #eee",
-              padding: "16px 18px", marginTop: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Notifications</div>
-              <div style={{ fontSize: 13, color: "#888", marginBottom: 12, lineHeight: 1.5 }}>
-                Vérifiez que vous recevez bien les notifications sur cet appareil.
-              </div>
-              <button onClick={async () => {
-                try {
-                  await api.post("/users/me/test-push");
-                  setShareToast("🔔 Envoyée dans 5s — mettez l'app en arrière-plan !");
-                } catch {
-                  setShareToast("Erreur lors de l'envoi");
-                }
-              }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#E1F5EE",
-                  color: G, border: "none", borderRadius: 9, padding: "9px 16px",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                <Bell size={14} /> Tester les notifications
-              </button>
-            </div>
-
             {/* ── Zone de danger : suppression du compte ── */}
             <div style={{ background: "white", borderRadius: 14, border: "0.5px solid #f0d9d9",
               padding: "16px 18px", marginTop: 12 }}>

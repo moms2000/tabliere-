@@ -567,21 +567,29 @@ export default function HomeMobile() {
 
       {/* ── Géolocalisation ── */}
       <div style={{ padding: "8px 16px" }}>
-        <button onClick={() => {
-          if (!navigator.geolocation) {
-            alert("La géolocalisation n'est pas disponible sur cet appareil.");
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(pos => {
-            const { latitude } = pos.coords;
-            const city = latitude >= 4.8 && latitude <= 6.2 ? "Abidjan" : "Abidjan";
-            setSearch(city);
-            listRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, (err) => {
-            alert(err && err.code === 1
-              ? "Autorisez l'accès à votre position (Réglages) pour utiliser cette fonction."
-              : "Impossible de récupérer votre position. Réessayez.");
-          }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        <button onClick={async () => {
+          const onOk = () => { setSearch("Abidjan"); listRef.current?.scrollIntoView({ behavior: "smooth" }); };
+          const denied = "Autorisez l'accès à votre position pour utiliser cette fonction.";
+          try {
+            // Sur Android natif : plugin Capacitor (demande la permission runtime,
+            // que la simple permission du manifest ne déclenche pas dans la WebView).
+            const { Capacitor } = await import("@capacitor/core");
+            if (Capacitor.getPlatform() === "android") {
+              const { Geolocation } = await import("@capacitor/geolocation");
+              const perm = await Geolocation.requestPermissions();
+              if (perm.location !== "granted" && perm.coarseLocation !== "granted") { alert(denied); return; }
+              await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000 });
+              onOk();
+              return;
+            }
+          } catch (_) { /* retombe sur l'API web */ }
+          // iOS + Web : navigator.geolocation (fonctionne avec la clé Info.plist)
+          if (!navigator.geolocation) { alert("La géolocalisation n'est pas disponible sur cet appareil."); return; }
+          navigator.geolocation.getCurrentPosition(
+            () => onOk(),
+            (err) => alert(err && err.code === 1 ? denied : "Impossible de récupérer votre position. Réessayez."),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+          );
         }}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
             border: "none", cursor: "pointer", fontSize: 13, color: S, fontFamily: FONT }}>

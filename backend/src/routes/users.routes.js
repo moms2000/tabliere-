@@ -16,5 +16,6 @@ router.get   ("/me/loyalty",                 authenticate, ctrl.getLoyalty);
 
 // Notifications push natives
 router.post  ("/me/device-token",            authenticate, ctrl.registerDeviceToken);
+router.post  ("/me/test-push",               authenticate, ctrl.testPush);
 
 export default router;

@@ -5,6 +5,20 @@ import { ok, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { revokeToken }      from "../middleware/auth.js";
 import { logger }           from "../utils/logger.js";
+import { sendPushToUser }   from "../services/push.service.js";
+
+// ---------------------------------------------------------------------------
+// POST /users/me/test-push — envoie une notification test à l'utilisateur
+// (permet de vérifier que les push fonctionnent sur son appareil)
+// ---------------------------------------------------------------------------
+export const testPush = asyncHandler(async (req, res) => {
+  await sendPushToUser(req.user.id, {
+    title: "TablièreCI",
+    body: "🎉 Vos notifications sont bien activées !",
+    data: { route: "/profil" },
+  });
+  return ok(res, {}, "Notification test envoyée. Vérifiez votre appareil.");
+});
 
 // ---------------------------------------------------------------------------
 // GET /users/me/reservations

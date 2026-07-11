@@ -179,7 +179,19 @@ async function runCodesMigration() {
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_enabled   BOOLEAN DEFAULT FALSE`);
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_min_party INTEGER DEFAULT 6`);
     await query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_message   TEXT`);
-    logger.info("Table restaurateur_codes + dépôt prêts");
+    // Signalements de contenu (avis / chat) — conformité UGC Play/App Store
+    await query(`
+      CREATE TABLE IF NOT EXISTS content_reports (
+        id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        type        VARCHAR(20) NOT NULL,
+        target_id   VARCHAR(200) NOT NULL,
+        reason      TEXT,
+        reporter_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        status      VARCHAR(20) NOT NULL DEFAULT 'open',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    logger.info("Table restaurateur_codes + dépôt + signalements prêts");
   } catch (_) {}
 }
 

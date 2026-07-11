@@ -478,6 +478,23 @@ export default function RestaurantDetail() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMsg,        setReviewMsg]        = useState("");
 
+  // Modération UGC : masquer / signaler un avis
+  const [hiddenReviews, setHiddenReviews] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("tci_hidden_reviews") || "[]")); } catch { return new Set(); }
+  });
+  const [reportedReviews, setReportedReviews] = useState(new Set());
+  const hideReview = (id) => {
+    setHiddenReviews(prev => {
+      const n = new Set(prev); n.add(id);
+      try { localStorage.setItem("tci_hidden_reviews", JSON.stringify([...n])); } catch {}
+      return n;
+    });
+  };
+  const reportReview = (id) => {
+    setReportedReviews(prev => new Set(prev).add(id));
+    api.post("/reports", { type: "review", target_id: id }).catch(() => {});
+  };
+
   // Galerie photos avec swipe
   const [photoIdx, setPhotoIdx] = useState(0);
   const touchStartX = useRef(null);
@@ -906,13 +923,13 @@ export default function RestaurantDetail() {
           )}
 
           {/* Liste avis */}
-          {reviews.length === 0 ? (
+          {reviews.filter(rv => !hiddenReviews.has(rv.id)).length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 0", color: MUTED, fontSize: 14 }}>
               Aucun avis pour ce restaurant. Soyez le premier à partager votre expérience !
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {reviews.map((rv, i) => (
+              {reviews.filter(rv => !hiddenReviews.has(rv.id)).map((rv, i) => (
                 <motion.div key={rv.id || i}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
@@ -952,6 +969,23 @@ export default function RestaurantDetail() {
                       {rv.comment}
                     </p>
                   )}
+                  {/* Modération UGC : signaler / masquer */}
+                  <div style={{ display: "flex", gap: 16, marginTop: 12, justifyContent: "flex-end" }}>
+                    {reportedReviews.has(rv.id) ? (
+                      <span style={{ fontSize: 11, color: "#1e7d4f" }}>✓ Avis signalé</span>
+                    ) : (
+                      <button onClick={() => reportReview(rv.id)}
+                        style={{ border: "none", background: "transparent", cursor: "pointer",
+                          fontSize: 11, color: MUTED }}>
+                        Signaler
+                      </button>
+                    )}
+                    <button onClick={() => hideReview(rv.id)}
+                      style={{ border: "none", background: "transparent", cursor: "pointer",
+                        fontSize: 11, color: MUTED }}>
+                      Masquer
+                    </button>
+                  </div>
                 </motion.div>
               ))}
             </div>

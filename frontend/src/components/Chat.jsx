@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2, MessageCircle, X } from "lucide-react";
 import { chatService } from "../services/chat.service.js";
+import api from "../services/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const G = "#1D9E75";
@@ -31,6 +32,30 @@ const fmtDate = (dt) => {
  */
 export default function Chat({ reservationId, otherName = "Restaurant", onClose }) {
   const { user } = useAuth();
+
+  // Modération UGC : signaler / bloquer la conversation
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reported, setReported] = useState(false);
+  const [blocked,  setBlocked]  = useState(() => {
+    try { return JSON.parse(localStorage.getItem("tci_blocked_chats") || "[]").map(String).includes(String(reservationId)); }
+    catch { return false; }
+  });
+  const reportChat = () => {
+    setReported(true); setMenuOpen(false);
+    api.post("/reports", { type: "chat", target_id: reservationId }).catch(() => {});
+  };
+  const toggleBlock = () => {
+    setMenuOpen(false);
+    setBlocked(b => {
+      const nb = !b;
+      try {
+        const list = new Set(JSON.parse(localStorage.getItem("tci_blocked_chats") || "[]").map(String));
+        nb ? list.add(String(reservationId)) : list.delete(String(reservationId));
+        localStorage.setItem("tci_blocked_chats", JSON.stringify([...list]));
+      } catch {}
+      return nb;
+    });
+  };
   const [messages, setMessages] = useState([]);
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(true);
@@ -120,12 +145,38 @@ export default function Chat({ reservationId, otherName = "Restaurant", onClose 
             </div>
           </div>
         </div>
-        {onClose && (
-          <button onClick={onClose}
-            style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb" }}>
-            <X size={18} />
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
+          <button onClick={() => setMenuOpen(o => !o)}
+            style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb",
+              fontSize: 22, lineHeight: 1, padding: "0 6px" }}>⋮</button>
+          {menuOpen && (
+            <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, zIndex: 30,
+              background: "white", border: "0.5px solid #eee", borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,.14)", overflow: "hidden", minWidth: 190 }}>
+              {reported ? (
+                <div style={{ padding: "11px 14px", fontSize: 12.5, color: "#1e7d4f" }}>✓ Conversation signalée</div>
+              ) : (
+                <button onClick={reportChat}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px",
+                    border: "none", background: "white", cursor: "pointer", fontSize: 13, color: "#c0392b" }}>
+                  Signaler la conversation
+                </button>
+              )}
+              <button onClick={toggleBlock}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px",
+                  border: "none", borderTop: "0.5px solid #f4f4f4", background: "white",
+                  cursor: "pointer", fontSize: 13, color: "#333" }}>
+                {blocked ? "Débloquer" : "Bloquer"}
+              </button>
+            </div>
+          )}
+          {onClose && (
+            <button onClick={onClose}
+              style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb" }}>
+              <X size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -187,7 +238,16 @@ export default function Chat({ reservationId, otherName = "Restaurant", onClose 
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input (ou barre "conversation bloquée") */}
+      {blocked ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          padding: "12px 16px", borderTop: "0.5px solid #f0f0f0", background: "white" }}>
+          <span style={{ fontSize: 12.5, color: "#888" }}>Vous avez bloqué cette conversation.</span>
+          <button onClick={toggleBlock}
+            style={{ border: "none", background: "#f0eadf", color: "#333", borderRadius: 8,
+              padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Débloquer</button>
+        </div>
+      ) : (
       <div style={{ display: "flex", gap: 8, padding: "10px 12px",
         borderTop: "0.5px solid #f0f0f0", background: "white", alignItems: "flex-end" }}>
         <input
@@ -209,6 +269,7 @@ export default function Chat({ reservationId, otherName = "Restaurant", onClose 
           <Send size={15} color={input.trim() ? "white" : "#bbb"} />
         </motion.button>
       </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

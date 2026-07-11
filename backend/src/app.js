@@ -22,6 +22,7 @@ import chatRoutes         from "./routes/chat.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
 import ordersRoutes        from "./routes/orders.routes.js";
 import reviewsRoutes       from "./routes/reviews.routes.js";
+import reportsRoutes       from "./routes/reports.routes.js";
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.use(`${v1}/chat`,          chatRoutes);
 app.use(`${v1}/notifications`, notificationsRoutes);
 app.use(`${v1}/orders`,        ordersRoutes);
 app.use(`${v1}/restaurants`,   reviewsRoutes);
+app.use(`${v1}/reports`,       reportsRoutes);
 
 // ── Ping keep-alive (ultra-léger, empêche le cold start Render) ─────────────
 app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));

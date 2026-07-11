@@ -10,6 +10,7 @@ router.post  ("/:id/react",   authenticate, ctrl.reactStory);
 router.post  ("/:id/hide",    authenticate, ctrl.hideStory);
 router.delete("/:id/react",   authenticate, ctrl.unreactStory);
 router.delete("/:id",         authenticate, ctrl.deleteStory);
+router.get   ("/_diag",       ctrl.diagStories); // TEMP diagnostic (à retirer)
 router.get   ("/:slug",       authenticate, ctrl.listStories);
 
 export default router;

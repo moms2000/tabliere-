@@ -32,6 +32,7 @@ const RestPlanSalle     = lazy(() => import("./pages/restaurant/RestPlanSalle"))
 const RestProfil        = lazy(() => import("./pages/restaurant/RestProfil"));
 const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"));
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
+const RestInstants      = lazy(() => import("./pages/restaurant/RestInstants"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
@@ -195,6 +196,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   }>
                     <Route index               element={<RestDashboard />} />
                     <Route path="menu"         element={<RestMenu />} />
+                    <Route path="instants"     element={<RestInstants />} />
                     <Route path="reservations" element={<RestReservations />} />
                     <Route path="plan"         element={<RestPlanSalle />} />
                     <Route path="profil"       element={<RestProfil />} />

@@ -98,7 +98,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
             r.deposit_enabled, r.deposit_min_party, r.deposit_message,
-            r.latitude, r.longitude, r.menu_public,
+            r.latitude, r.longitude, r.menu_public, r.stories_enabled,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -160,6 +160,8 @@ export const update = asyncHandler(async (req, res) => {
     "latitude","longitude",
     // Menu visible sur la page publique
     "menu_public",
+    // Instants (stories éphémères) activés sur la page publique
+    "stories_enabled",
   ];
   const updates = [];
   const values  = [];
@@ -203,7 +205,8 @@ export const update = asyncHandler(async (req, res) => {
       val = (Number.isFinite(n) && n >= -180 && n <= 180) ? n : null;
     }
     // Booléens stricts
-    if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled") {
+    if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled"
+        || field === "menu_public" || field === "stories_enabled") {
       val = (val === true || val === "true" || val === 1);
     }
     values.push(val);

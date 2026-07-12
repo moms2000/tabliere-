@@ -1,4 +1,4 @@
-import { query }  from "../config/db.js";
+import { query, withTransaction }  from "../config/db.js";
 import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -26,7 +26,7 @@ export const getStats = asyncHandler(async (_req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'succes' AND DATE(created_at) = CURRENT_DATE) AS revenue_today,
       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'succes' AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)) AS revenue_month`),
 
-    query(`SELECT plan, COUNT(*) AS count FROM restaurants GROUP BY plan`),
+    query(`SELECT plan, COUNT(*) AS count FROM restaurants WHERE deleted_at IS NULL GROUP BY plan`),
 
     query(`SELECT
         DATE_TRUNC('day', created_at)::date AS day,
@@ -39,6 +39,7 @@ export const getStats = asyncHandler(async (_req, res) => {
       FROM reservations r
       JOIN restaurants re ON re.id = r.restaurant_id
       JOIN users u ON u.id = r.client_id
+      WHERE r.archived_at IS NULL
       ORDER BY r.created_at DESC LIMIT 10`),
   ]);
 
@@ -54,7 +55,7 @@ export const listRestaurants = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, plan, search } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
-  const conditions = [];
+  const conditions = ["r.deleted_at IS NULL"]; // masquer les restaurants de comptes supprimés
 
   // Cast ::text : un filtre ENUM invalide (status/plan) donne 0 résultat, pas un 500
   if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
@@ -262,23 +263,46 @@ export const deleteUser = asyncHandler(async (req, res) => {
   );
   if (!user) return notFound(res, "Utilisateur introuvable");
   if (user.role === "admin") throw new AppError("Impossible de supprimer un administrateur", 403);
+  const uid = req.params.id;
 
-  // Soft delete : anonymiser + suspendre
-  await query(
-    `UPDATE users SET
-       email        = 'deleted_' || id || '@tabliereci.ci',
-       full_name    = 'Compte supprimé',
-       phone        = NULL,
-       password_hash = 'DELETED',
-       status       = 'suspendu',
-       updated_at   = NOW()
-     WHERE id = $1`,
-    [req.params.id]
-  );
+  // Suppression = soft-delete RÉVERSIBLE + cascade complète (atomique).
+  //  - Restaurants du compte → masqués (status suspendu + deleted_at) : disparaissent
+  //    côté client, dans l'admin et dans QR & Thèmes (filtrés par deleted_at IS NULL).
+  //  - Réservations de ces restaurants → archivées (archived_at) : cachées de l'admin,
+  //    mais conservées (aucune donnée perdue).
+  //  - Événements de l'organisateur → annulés (disparaissent du public).
+  //  - Codes d'accès (restaurateur + organisateur) utilisés par ce compte → LIBÉRÉS
+  //    (redeviennent disponibles pour une nouvelle inscription).
+  //  - Le compte lui-même → anonymisé + suspendu.
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE restaurants SET status = 'suspendu', deleted_at = NOW(), updated_at = NOW() WHERE owner_id = $1`,
+      [uid]
+    );
+    await client.query(
+      `UPDATE reservations SET archived_at = NOW(), updated_at = NOW()
+       WHERE restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = $1)`,
+      [uid]
+    );
+    await client.query(`UPDATE events SET status = 'annule', updated_at = NOW() WHERE owner_id = $1`, [uid]);
+    await client.query(`UPDATE restaurateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
+    await client.query(`UPDATE organisateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
+    await client.query(
+      `UPDATE users SET
+         email         = 'deleted_' || id || '@tabliereci.ci',
+         full_name     = 'Compte supprimé',
+         phone         = NULL,
+         password_hash = 'DELETED',
+         status        = 'suspendu',
+         updated_at    = NOW()
+       WHERE id = $1`,
+      [uid]
+    );
+  });
 
-  await cache.del(`user:${req.params.id}`);
-  logger.info("Utilisateur supprimé (anonymisé)", { userId: req.params.id });
-  return ok(res, null, "Utilisateur supprimé");
+  await cache.del(`user:${uid}`);
+  logger.info("Compte supprimé + cascade (resto masqué, résa archivées, code libéré)", { userId: uid });
+  return ok(res, null, "Compte supprimé");
 });
 
 // ---------------------------------------------------------------------------
@@ -321,7 +345,9 @@ export const listReservations = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
-  const where = status ? (params.push(status), `WHERE r.status::text = $1`) : "";
+  const conditions = ["r.archived_at IS NULL"]; // masquer les réservations archivées (comptes supprimés)
+  if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
+  const where = `WHERE ${conditions.join(" AND ")}`;
 
   const { rows } = await query(
     `SELECT r.*, re.name AS resto_name, u.full_name AS client_name

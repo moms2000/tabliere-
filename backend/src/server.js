@@ -329,6 +329,41 @@ async function runEventsMigration() {
   logger.info(`Migration Événements : ${okc} ok, ${failc} ignoré(s)`);
 }
 
+// ── Cascade de suppression de compte (masquage réversible) ───────────────────
+// Colonnes de soft-delete + rattrapage RÉVERSIBLE de l'existant : les restaurants
+// des comptes déjà supprimés sont masqués, leurs réservations archivées, leurs
+// codes libérés. Idempotent (ne retouche jamais une ligne déjà traitée).
+const DELETED_MARK = `email LIKE 'deleted\\_%@tabliereci.ci' ESCAPE '\\'`;
+async function runDeletionCascadeMigration() {
+  const stmts = [
+    `ALTER TABLE restaurants  ADD COLUMN IF NOT EXISTS deleted_at  TIMESTAMPTZ`,
+    `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_deleted ON restaurants(deleted_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_reservations_archived ON reservations(archived_at)`,
+    // Rattrapage : libérer les codes des comptes supprimés
+    `UPDATE restaurateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL
+       WHERE used_by IN (SELECT id FROM users WHERE ${DELETED_MARK})`,
+    `UPDATE organisateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL
+       WHERE used_by IN (SELECT id FROM users WHERE ${DELETED_MARK})`,
+    // Rattrapage : masquer les restaurants des comptes supprimés (réversible)
+    `UPDATE restaurants SET status = 'suspendu', deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+       WHERE deleted_at IS NULL AND owner_id IN (SELECT id FROM users WHERE ${DELETED_MARK})`,
+    // Rattrapage : archiver les réservations des restaurants masqués
+    `UPDATE reservations SET archived_at = COALESCE(archived_at, NOW()), updated_at = NOW()
+       WHERE archived_at IS NULL AND restaurant_id IN (SELECT id FROM restaurants WHERE deleted_at IS NOT NULL)`,
+    // Rattrapage : annuler les événements des organisateurs supprimés
+    `UPDATE events SET status = 'annule', updated_at = NOW()
+       WHERE status <> 'annule' AND owner_id IN (SELECT id FROM users WHERE ${DELETED_MARK})`,
+  ];
+  let okc = 0, failc = 0;
+  for (const sql of stmts) {
+    try { const r = await query(sql); okc++;
+      if (r.rowCount) logger.info("Cascade suppression — rattrapage", { affected: r.rowCount });
+    } catch (e) { failc++; logger.warn("Cascade suppression — statement ignoré", { error: e?.message }); }
+  }
+  logger.info(`Migration Cascade suppression : ${okc} ok, ${failc} ignoré(s)`);
+}
+
 async function runProspectsMigration() {
   try {
     await query(`
@@ -414,6 +449,7 @@ async function start() {
     await runCodesMigration();
     await runStoriesMigration();  // ← Instants (isolée + logguée)
     await runEventsMigration();   // ← Espace Événements (organisateurs)
+    await runDeletionCascadeMigration(); // ← Cascade suppression compte (soft-delete + rattrapage)
     await runPerfIndexes();       // ← Indexes de performance
     await activateTestRestaurants();
 

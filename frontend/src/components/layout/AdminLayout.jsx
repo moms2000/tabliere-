@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Utensils, Users, CalendarCheck, CreditCard,
-  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe,
+  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe, BarChart3,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
@@ -34,6 +34,7 @@ function Logo({ size = 28 }) {
 
 const NAV = [
   { to: "/admin",               label: "Vue d'ensemble",  icon: LayoutDashboard, end: true },
+  { to: "/admin/analytics",     label: "Base & Analytics", icon: BarChart3 },
   { to: "/admin/restaurateurs", label: "Restaurateurs",   icon: Utensils },
   { to: "/admin/utilisateurs",  label: "Utilisateurs",    icon: Users },
   { to: "/admin/reservations",  label: "Réservations",    icon: CalendarCheck },

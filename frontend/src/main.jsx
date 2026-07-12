@@ -32,6 +32,8 @@ const RestPlanSalle     = lazy(() => import("./pages/restaurant/RestPlanSalle"))
 const RestProfil        = lazy(() => import("./pages/restaurant/RestProfil"));
 const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"));
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
+const RestClients       = lazy(() => import("./pages/restaurant/RestClients"));
+const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
@@ -177,6 +179,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <ProtectedRoute roles="admin"><AdminLayout /></ProtectedRoute>
                   }>
                     <Route index              element={<AdminOverview />} />
+                    <Route path="analytics"     element={<AdminAnalytics />} />
                     <Route path="restaurateurs" element={<Restaurateurs />} />
                     <Route path="utilisateurs"  element={<Utilisateurs />} />
                     <Route path="reservations"  element={<Reservations />} />
@@ -196,6 +199,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route index               element={<RestDashboard />} />
                     <Route path="menu"         element={<RestMenu />} />
                     <Route path="reservations" element={<RestReservations />} />
+                    <Route path="clients"      element={<RestClients />} />
                     <Route path="plan"         element={<RestPlanSalle />} />
                     <Route path="profil"       element={<RestProfil />} />
                     <Route path="commandes"    element={<RestCommandes />} />

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag, Zap } from "lucide-react";
+import { LayoutDashboard, Notebook, CalendarCheck, LayoutTemplate, LogOut, Menu, X, Store, ShoppingBag, Zap, Users } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
@@ -30,6 +30,7 @@ function Logo({ size = 28 }) {
 const NAV = [
   { to: "/restaurant",               label: "Tableau de bord", icon: LayoutDashboard, end: true },
   { to: "/restaurant/reservations",  label: "Réservations",    icon: CalendarCheck },
+  { to: "/restaurant/clients",       label: "Mes clients",     icon: Users },
   { to: "/restaurant/plan",          label: "Plan de salle",   icon: LayoutTemplate },
   { to: "/restaurant/menu",          label: "Menu & QR Code",  icon: Notebook },
   { to: "/restaurant/pos",           label: "Service rapide",  icon: Zap, highlight: true },

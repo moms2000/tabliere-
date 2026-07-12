@@ -11,6 +11,11 @@ export const reservationsService = {
     return res.data;
   },
 
+  async clients() {
+    const res = await api.get("/reservations/clients");
+    return res.data.data;
+  },
+
   async getOne(id) {
     const res = await api.get(`/reservations/${id}`);
     return res.data.data;

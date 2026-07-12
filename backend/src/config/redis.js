@@ -39,7 +39,17 @@ if (REDIS_URL) {
     async get(key)                   { try { const v = await client.get(key); return v ? JSON.parse(v) : null; } catch { return null; } },
     async set(key, value, ttl = 300) { try { await client.set(key, JSON.stringify(value), "EX", ttl); } catch {} },
     async del(key)                   { try { await client.del(key); } catch {} },
-    async delPattern(pattern)        { try { const keys = await client.keys(pattern); if (keys.length) await client.del(...keys); } catch {} },
+    async delPattern(pattern)        {
+      // SCAN (non bloquant) au lieu de KEYS (O(N), stalle Redis à l'échelle)
+      try {
+        let cursor = "0";
+        do {
+          const [next, batch] = await client.scan(cursor, "MATCH", pattern, "COUNT", 200);
+          cursor = next;
+          if (batch.length) await client.del(...batch);
+        } while (cursor !== "0");
+      } catch {}
+    },
     async incr(key, ttl = 60)        { try { const v = await client.incr(key); if (v === 1) await client.expire(key, ttl); return v; } catch { return 1; } },
   };
 } else {

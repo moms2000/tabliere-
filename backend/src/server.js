@@ -489,6 +489,11 @@ async function runPerfIndexes() {
     `CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant ON menu_items(restaurant_id)`,
     // Codes restaurateurs
     `CREATE INDEX IF NOT EXISTS idx_codes_used ON restaurateur_codes(is_used)`,
+    // Ajouts perf : owner (admin N+1 / login / cascade), table (conflit/annulation), commandes QR
+    `CREATE INDEX IF NOT EXISTS idx_restaurants_owner  ON restaurants(owner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reservations_table ON reservations(table_id) WHERE table_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_qr_orders_resto_date ON qr_orders(restaurant_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_resa_table ON event_reservations(table_id) WHERE table_id IS NOT NULL`,
   ];
 
   let ok = 0;

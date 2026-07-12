@@ -13,10 +13,12 @@ import { logger }     from "../utils/logger.js";
 // ── GET /restaurants — liste publique ─────────────────────────────────────────
 export const list = asyncHandler(async (req, res) => {
   const {
-    page = 1, limit = 12,
     ville, quartier, cuisine_type,
     search, sort = "rating", min_capacity,
   } = req.query;
+  // Bornes strictes : évite un ?limit=100000 (dump/DoS) ou un page non numérique
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
   const offset = (page - 1) * limit;
   const params = ["actif"];
   const conditions = ["r.status = $1"];

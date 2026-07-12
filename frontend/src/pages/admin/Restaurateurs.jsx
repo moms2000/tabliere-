@@ -20,14 +20,18 @@ export default function Restaurateurs() {
   const [selected,  setSelected]  = useState(new Set());
   const [exporting, setExporting] = useState(false);
   const [batching,  setBatching]  = useState(false);
+  const [page,      setPage]      = useState(1);
+  const LIMIT = 50;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  useEffect(() => { setPage(1); }, [search]);
   useEffect(() => {
-    setSelected(new Set());
-    adminService.listRestaurants({ search: search || undefined, limit: 50 })
+    setSelected(new Set()); setLoading(true);
+    adminService.listRestaurants({ search: search || undefined, limit: LIMIT, page })
       .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [search, page]);
 
   const setStatus = async (id, status) => {
     try {
@@ -195,6 +199,18 @@ export default function Restaurateurs() {
           {!loading && data.length === 0 && (
             <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>
               Aucun restaurant trouvé
+            </div>
+          )}
+          {/* Pagination */}
+          {total > LIMIT && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ border: "0.5px solid #eee", borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.4 : 1, fontSize: 13 }}>← Préc.</button>
+              <span style={{ fontSize: 13, color: "#888" }}>Page {page} / {totalPages} · {total} restaurants</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ border: "0.5px solid #eee", borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontSize: 13 }}>Suiv. →</button>
             </div>
           )}
         </Card>

@@ -459,6 +459,7 @@ export default function RestaurantDetail() {
 
   const [resto,   setResto]   = useState(null);
   const [menu,    setMenu]    = useState(null); // catégories du menu si menu_public
+  const [tab,     setTab]     = useState("reserver"); // reserver | menu
   usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
   const [loading,  setLoading]  = useState(true);
   const [modal,    setModal]    = useState(false);
@@ -607,9 +608,9 @@ export default function RestaurantDetail() {
       try {
         const reserved_at = toDatetime(selDate, selSlot);
         const dateOnly    = selDate;
-        // Récupérer une table disponible si possible (optionnel — ne bloque pas la réservation)
-        // Le backend vérifie la capacité totale du restaurant et rejette si dépassée
-        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers).catch(() => null);
+        // Récupérer une table libre à CET horaire (tient compte de la durée d'assise :
+        // une table occupée se libère après la durée → pas de double réservation).
+        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers, reserved_at).catch(() => null);
         const table = avail?.available_tables?.[0] || null;
 
         const payload     = {
@@ -723,6 +724,11 @@ export default function RestaurantDetail() {
         );
       })()}
 
+      {/* ── Instants — juste sous les photos, au-dessus du nom ── */}
+      <div style={{ padding: "16px 0 4px" }}>
+        <Stories slug={slug} />
+      </div>
+
       {/* Body */}
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "28px 20px",
         display: "grid",
@@ -781,42 +787,93 @@ export default function RestaurantDetail() {
             </div>
           )}
 
-          {/* Créneaux rapides (visible aussi sur mobile) */}
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: DARK,
-              marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              <CalendarCheck size={15} color={P} /> Créneaux disponibles aujourd'hui
+          {/* ── Onglets Réserver / Menu (Menu visible seulement s'il existe) ── */}
+          {menu && menu.length > 0 && (
+            <div style={{ display: "flex", gap: 4, marginBottom: 22, borderBottom: `0.5px solid ${BORDER}` }}>
+              {[["reserver", "Réserver"], ["menu", "Menu"]].map(([k, label]) => (
+                <button key={k} onClick={() => setTab(k)}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
+                    padding: "10px 18px", fontSize: 14, fontWeight: tab === k ? 700 : 500,
+                    color: tab === k ? DARK : MUTED,
+                    borderBottom: tab === k ? `2px solid ${P}` : "2px solid transparent", marginBottom: -1 }}>
+                  {label}
+                </button>
+              ))}
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {(() => {
-                const todayIso = buildDays()[0].iso;
-                // Ne proposer que les créneaux encore à venir aujourd'hui : cliquer
-                // un créneau déjà passé provoquait un échec 400 côté serveur.
-                const upcoming = ALL_SLOTS.filter(s => !isPastSlot(todayIso, s));
-                if (upcoming.length === 0) {
-                  return (
-                    <div style={{ fontSize: 13, color: MUTED, fontFamily: FONT }}>
-                      Plus de créneaux aujourd'hui — choisissez une autre date dans le formulaire de réservation.
-                    </div>
-                  );
-                }
-                return upcoming.map((s, i) => (
-                  <motion.button key={i} whileTap={{ scale: 0.95 }}
-                    onClick={() => openModal({ date: todayIso, slot: s, pers: 2 })}
-                    style={{ fontSize: 13, fontWeight: 500, padding: "8px 14px",
-                      borderRadius: 8, border: `0.5px solid ${P}66`,
-                      background: PL, color: DARK, cursor: "pointer", fontFamily: FONT }}>
-                    {s}
-                  </motion.button>
-                ));
-              })()}
-            </div>
-          </div>
+          )}
 
-          {/* Sur mobile, le widget de réservation apparaît ici aussi */}
-          {isMobile && (
-            <div style={{ marginTop: 28 }}>
-              <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />
+          {/* Onglet Réserver — créneaux + widget mobile */}
+          {(tab === "reserver" || !menu || !menu.length) && (
+            <>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: DARK,
+                  marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <CalendarCheck size={15} color={P} /> Créneaux disponibles aujourd'hui
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(() => {
+                    const todayIso = buildDays()[0].iso;
+                    const upcoming = ALL_SLOTS.filter(s => !isPastSlot(todayIso, s));
+                    if (upcoming.length === 0) {
+                      return (
+                        <div style={{ fontSize: 13, color: MUTED, fontFamily: FONT }}>
+                          Plus de créneaux aujourd'hui — choisissez une autre date dans le formulaire de réservation.
+                        </div>
+                      );
+                    }
+                    return upcoming.map((s, i) => (
+                      <motion.button key={i} whileTap={{ scale: 0.95 }}
+                        onClick={() => openModal({ date: todayIso, slot: s, pers: 2 })}
+                        style={{ fontSize: 13, fontWeight: 500, padding: "8px 14px",
+                          borderRadius: 8, border: `0.5px solid ${P}66`,
+                          background: PL, color: DARK, cursor: "pointer", fontFamily: FONT }}>
+                        {s}
+                      </motion.button>
+                    ));
+                  })()}
+                </div>
+              </div>
+              {isMobile && (
+                <div style={{ marginTop: 28 }}>
+                  <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Onglet Menu */}
+          {tab === "menu" && menu && menu.length > 0 && (
+            <div>
+              {menu.map((cat) => (
+                <div key={cat.id} style={{ marginBottom: 26 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: P, textTransform: "uppercase",
+                    letterSpacing: "0.6px", marginBottom: 12 }}>{cat.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+                    {(cat.items || []).map((it) => (
+                      <div key={it.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
+                        borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
+                        {it.image_url && (
+                          <img src={it.image_url} alt={it.name} loading="lazy"
+                            style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
+                        )}
+                        <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
+                            {it.price != null && (
+                              <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
+                                {Number(it.price).toLocaleString("fr-FR")} F
+                              </span>
+                            )}
+                          </div>
+                          {it.description && (
+                            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{it.description}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -824,53 +881,6 @@ export default function RestaurantDetail() {
         {/* Sidebar — desktop seulement */}
         {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
       </div>
-
-      {/* ── Instants (stories éphémères 24h) ── */}
-      <div style={{ padding: "16px 0 8px" }}>
-        <Stories slug={slug} />
-      </div>
-
-      {/* ── Menu du restaurant (si activé par le restaurateur) ── */}
-      {menu && menu.length > 0 && (
-        <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 8px" }}>
-          <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: DARK, margin: "0 0 18px" }}>Menu</h2>
-            {menu.map((cat) => (
-              <div key={cat.id} style={{ marginBottom: 26 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: P, textTransform: "uppercase",
-                  letterSpacing: "0.6px", marginBottom: 12 }}>{cat.name}</div>
-                <div style={{ display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-                  {(cat.items || []).map((it) => (
-                    <div key={it.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
-                      borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
-                      {it.image_url && (
-                        <img src={it.image_url} alt={it.name} loading="lazy"
-                          style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
-                      )}
-                      <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
-                          {it.price != null && (
-                            <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
-                              {Number(it.price).toLocaleString("fr-FR")} F
-                            </span>
-                          )}
-                        </div>
-                        {it.description && (
-                          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
-                            {it.description}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Où nous trouver (carte) — si coordonnées précises ── */}
       {resto.latitude && resto.longitude && (

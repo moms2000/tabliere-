@@ -63,6 +63,7 @@ export default function RestProfil() {
           logo_url:      r.logo_url      || "",
           photos:        Array.isArray(r.photos) ? r.photos : [],
           auto_confirm:  r.auto_confirm !== false, // défaut true
+          seating_duration: r.seating_duration || 120,
           deposit_enabled:   r.deposit_enabled === true,
           deposit_min_party: r.deposit_min_party || 6,
           deposit_message:   r.deposit_message || "",
@@ -324,6 +325,27 @@ export default function RestProfil() {
                     width: 20, height: 20, borderRadius: "50%", background: "white",
                     transition: "left .2s" }} />
                 </button>
+              </div>
+
+              {/* Durée d'assise — libère la table automatiquement pour éviter les doubles réservations */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                gap: 12, padding: "12px 14px", background: "#F8F5EF",
+                border: "0.5px solid #E4DFD8", borderRadius: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2e28" }}>Durée d'assise par table</div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 3, lineHeight: 1.5 }}>
+                    La table redevient <strong>automatiquement réservable</strong> après ce délai. Les créneaux se calculent
+                    tout seuls en fonction des réservations — plus besoin de mettre à jour à la main.
+                  </div>
+                </div>
+                <select value={form.seating_duration}
+                  onChange={e => setForm(p => ({ ...p, seating_duration: Number(e.target.value) }))}
+                  style={{ border: "0.5px solid #E4DFD8", borderRadius: 8, padding: "9px 12px",
+                    fontSize: 13, background: "white", color: "#1e2e28", cursor: "pointer", fontFamily: "inherit" }}>
+                  {[60, 90, 120, 150, 180, 240].map(m => (
+                    <option key={m} value={m}>{m >= 60 ? `${Math.floor(m/60)}h${m%60 ? (m%60) : ""}` : `${m} min`}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Dépôt / arrhes requis à partir d'un certain nombre de personnes */}

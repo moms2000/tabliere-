@@ -51,7 +51,7 @@ export default function EventOrder() {
       const order = await eventOpsService.createOrder({
         slug, table_id: tableId || undefined, table_label: tableLabel || undefined,
         guest_name: guest || undefined, note: note || undefined,
-        items: lines.map(l => ({ name: l.name, price: l.price, qty: l.qty })),
+        items: lines.map(l => ({ id: l.id, name: l.name, price: l.price, qty: l.qty })),
       });
       setDone(order.ref); setCart({}); setNote("");
     } catch (e) { alert(e.response?.data?.message || "Erreur lors de la commande"); }

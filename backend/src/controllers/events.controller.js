@@ -4,6 +4,7 @@
  * Chaque événement a un plan de salle (tables simples + packs VIP) réservable.
  * Cash sur place — aucun paiement in-app. Statuts en VARCHAR (pas d'ENUM).
  */
+import crypto from "crypto";
 import { query } from "../config/db.js";
 import { ok, created, notFound, paginated, forbidden } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -297,7 +298,7 @@ export const deleteBottle = asyncHandler(async (req, res) => {
 });
 
 // ── Staff (comptes temporaires par PIN) ───────────────────────────────────────
-const genPin = (i) => String(1000 + ((i * 7919 + 137) % 9000)); // 4 chiffres déterministe (pas de Math.random)
+const genPin = () => String(crypto.randomInt(100000, 1000000)); // 6 chiffres aléatoires (crypto)
 
 export const listStaff = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
@@ -315,14 +316,12 @@ export const createStaff = asyncHandler(async (req, res) => {
   const b = req.body || {};
   if (!b.name) throw new AppError("Nom requis", 400);
   const role = ["all", "checkin", "bar"].includes(b.role) ? b.role : "all";
-  // PIN unique dans l'événement
-  const { rows: [{ count }] } = await query("SELECT COUNT(*)::int AS count FROM event_staff WHERE event_id = $1", [event.id]);
-  let pin = b.pin && /^\d{4,6}$/.test(b.pin) ? b.pin : genPin(count + 1);
-  // éviter collision
+  // PIN aléatoire (crypto), unique dans l'événement
+  let pin = b.pin && /^\d{6}$/.test(b.pin) ? b.pin : genPin();
   for (let k = 0; k < 20; k++) {
     const { rows } = await query("SELECT 1 FROM event_staff WHERE event_id = $1 AND pin = $2", [event.id, pin]);
     if (!rows.length) break;
-    pin = genPin(count + 2 + k);
+    pin = genPin();
   }
   const { rows: [staff] } = await query(
     `INSERT INTO event_staff (event_id, name, role, pin) VALUES ($1,$2,$3,$4) RETURNING id, name, role, pin, is_active, created_at`,
@@ -344,6 +343,7 @@ export const staffLogin = asyncHandler(async (req, res) => {
   if (!slug || !pin) throw new AppError("Événement et PIN requis", 400);
   const { rows: [event] } = await query("SELECT id, name, slug, status FROM events WHERE slug = $1", [slug]);
   if (!event) return notFound(res, "Événement introuvable");
+  if (event.status !== "publie") throw new AppError("Cet événement n'est pas actif", 403);
   const { rows: [staff] } = await query(
     "SELECT id, name, role, event_id FROM event_staff WHERE event_id = $1 AND pin = $2 AND is_active = TRUE",
     [event.id, String(pin)]

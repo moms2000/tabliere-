@@ -9,6 +9,14 @@ import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 
 const ORDER_STATUSES = ["en_attente", "servi", "paye", "annule"];
 
+// Le propriétaire (req.user, pas de req.staff) a tous les droits.
+// Un staff est limité à son rôle : 'all' partout, 'bar' = commandes, 'checkin' = entrées.
+function assertStaffRole(req, allowed) {
+  if (!req.staff) return; // organisateur / admin
+  if (req.staff.role === "all" || allowed.includes(req.staff.role)) return;
+  throw new AppError("Action non autorisée pour ce rôle staff", 403);
+}
+
 // ── POST /event-orders — commande d'un invité (public, scan QR) ────────────────
 export const createOrder = asyncHandler(async (req, res) => {
   const b = req.body || {};
@@ -21,12 +29,18 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
   if (!Array.isArray(b.items) || b.items.length === 0) throw new AppError("Panier vide", 400);
 
-  // Total serveur (jamais confiance au client)
+  // Prix SERVEUR depuis la carte (jamais confiance au prix envoyé par le client)
+  const ids = [...new Set(b.items.map(it => it.id).filter(Boolean))];
+  const { rows: bRows } = ids.length
+    ? await query("SELECT id, name, price FROM event_bottles WHERE event_id = $1 AND id = ANY($2) AND is_active = TRUE", [event.id, ids])
+    : { rows: [] };
+  const bMap = new Map(bRows.map(x => [String(x.id), x]));
   const items = b.items.map(it => {
-    const price = Number(it.price); const qty = Number(it.qty);
-    return { name: String(it.name || "Article").slice(0, 120),
-             price: Number.isFinite(price) && price >= 0 ? Math.round(price) : 0,
-             qty: Number.isFinite(qty) && qty > 0 ? Math.round(qty) : 1 };
+    const m = bMap.get(String(it.id));
+    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+    return m
+      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty }
+      : { name: String(it.name || "Article").slice(0, 120), price: 0, qty };
   });
   const total = items.reduce((s, it) => s + it.price * it.qty, 0);
 
@@ -47,6 +61,7 @@ export const createOrder = asyncHandler(async (req, res) => {
 
 // ── GET /event-orders?event_id= — tableau des commandes (organisateur/staff) ──
 export const listOrders = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["bar"]);
   const { rows } = await query(
     `SELECT o.*, t.kind AS table_kind FROM event_orders o
      LEFT JOIN event_tables t ON t.id = o.table_id
@@ -58,6 +73,7 @@ export const listOrders = asyncHandler(async (req, res) => {
 
 // ── PATCH /event-orders/:id/status ────────────────────────────────────────────
 export const updateOrderStatus = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["bar"]);
   const status = req.body?.status;
   if (!ORDER_STATUSES.includes(status)) throw new AppError("Statut invalide", 400);
   const { rows: [order] } = await query(
@@ -70,6 +86,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
 // ── GET /event-checkin?event_id= — liste des arrivées (organisateur/staff) ────
 export const listCheckin = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["checkin"]);
   const { rows } = await query(
     `SELECT r.id, r.ref, r.party_size, r.status, r.checked_in_at, r.promoter_code,
             r.special_request, r.created_at,
@@ -99,6 +116,7 @@ export const listCheckin = asyncHandler(async (req, res) => {
 
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────
 export const doCheckin = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["checkin"]);
   const undo = req.body?.undo === true;
   const { rows: [resa] } = await query(
     `UPDATE event_reservations SET checked_in_at = ${undo ? "NULL" : "NOW()"}, updated_at = NOW()
@@ -111,6 +129,7 @@ export const doCheckin = asyncHandler(async (req, res) => {
 
 // ── POST /event-checkin/by-ref — pointer via QR (ref scannée) ─────────────────
 export const checkinByRef = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["checkin"]);
   const ref = String(req.body?.ref || "").trim().toUpperCase();
   if (!ref) throw new AppError("Référence requise", 400);
   const { rows: [resa] } = await query(

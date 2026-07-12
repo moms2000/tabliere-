@@ -1,0 +1,387 @@
+import { useState, useEffect } from "react";
+import QRCode from "react-qr-code";
+import {
+  Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
+  QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
+} from "lucide-react";
+import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
+import { eventsService, eventOpsService } from "../../services/events.service.js";
+
+const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
+const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
+const fmt = (n) => Number(n || 0).toLocaleString("fr-FR") + " F";
+const fmtInt = (n) => Number(n || 0).toLocaleString("fr-FR");
+
+// ═══ DASHBOARD ═══════════════════════════════════════════════════════════════
+export function DashboardTab({ event }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(null);
+  useEffect(() => { eventsService.dashboard(event.id).then(setD).catch(console.error); }, [event.id]);
+  if (!d) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+
+  const r = d.reservations || {}, o = d.orders || {}, v = d.vip || {};
+  const stat = (label, val, color = DARK) => (
+    <div style={{ flex: 1, minWidth: 130, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11.5, color: MUTED }}>{label}</div>
+      <div style={{ fontSize: 21, fontWeight: 700, color }}>{val}</div>
+    </div>
+  );
+  const doExport = async (kind) => {
+    setBusy(kind);
+    try {
+      const mod = await import("../../services/exports.js");
+      const cols = ["Indicateur", "Valeur"];
+      const rows = [
+        ["Réservations", fmtInt(r.total)], ["Confirmées", fmtInt(r.confirmed)],
+        ["Arrivées (check-in)", fmtInt(r.checked_in)], ["Couverts", fmtInt(r.covers)],
+        ["Packs VIP vendus", fmtInt(v.vip_sold)], ["Revenu VIP", fmt(v.vip_revenue)],
+        ["Commandes bouteilles", fmtInt(o.count)], ["Total commandes", fmt(o.total)], ["Encaissé", fmt(o.paid)],
+        ...(d.top_bottles || []).map(b => [`Bouteille · ${b.name}`, `${b.qty}`]),
+        ...(d.promoters || []).map(p => [`Promoteur · ${p.name} (${p.code})`, `${p.reservations} résa`]),
+      ];
+      const opt = { title: `Dashboard — ${event.name}`, subtitle: "Événement", columns: cols, rows, filename: `dashboard-${event.slug}` };
+      kind === "pdf" ? await mod.exportPDF(opt) : await mod.exportXLSX({ ...opt, sheetName: "Dashboard" });
+    } catch (e) { alert("Export impossible"); } finally { setBusy(null); }
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={busy}>{busy === "pdf" ? "…" : "PDF"}</Btn>
+        <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={busy}>{busy === "xls" ? "…" : "Excel"}</Btn>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {stat("Réservations", fmtInt(r.total))}
+        {stat("Confirmées", fmtInt(r.confirmed), GREEN)}
+        {stat("Arrivées", fmtInt(r.checked_in), P)}
+        {stat("Couverts", fmtInt(r.covers))}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {stat("Packs VIP vendus", fmtInt(v.vip_sold))}
+        {stat("Revenu VIP", fmt(v.vip_revenue), GREEN)}
+        {stat("Commandes", fmtInt(o.count))}
+        {stat("Encaissé", fmt(o.paid), GREEN)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))", gap: 12 }}>
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10 }}>Top bouteilles</div>
+          {(d.top_bottles || []).length === 0 ? <Empty /> :
+            d.top_bottles.map((b, i) => <RowLine key={i} label={b.name} value={`${b.qty}`} rank={i + 1} />)}
+        </Card>
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10 }}>Promoteurs</div>
+          {(d.promoters || []).length === 0 ? <Empty /> :
+            d.promoters.map((p, i) => <RowLine key={i} label={`${p.name} · ${p.code}`} value={`${p.reservations} résa`} rank={i + 1} />)}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ═══ BOUTEILLES (carte + config + QR par table) ═══════════════════════════════
+export function BottlesTab({ event, tables, onChanged }) {
+  const [bottles, setBottles] = useState([]);
+  const [enabled, setEnabled] = useState(event.bottles_enabled !== false && event.bottles_enabled === true);
+  const [mode, setMode] = useState(event.ordering_mode || "per_order");
+  const [modal, setModal] = useState(false);
+  const [edit, setEdit] = useState(null);
+  const [f, setF] = useState({ name: "", category: "Bouteilles", price: 0, description: "" });
+  const [qrTable, setQrTable] = useState(null);
+  const load = () => eventsService.listBottles(event.id).then(d => setBottles(d?.bottles || [])).catch(console.error);
+  useEffect(() => { load(); setEnabled(event.bottles_enabled === true); setMode(event.ordering_mode || "per_order"); }, [event.id]);
+
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const saveConfig = async (patch) => { try { await eventsService.update(event.id, patch); onChanged?.(); } catch { alert("Erreur"); } };
+  const toggleEnabled = (v) => { setEnabled(v); saveConfig({ bottles_enabled: v }); };
+  const changeMode = (m) => { setMode(m); saveConfig({ ordering_mode: m }); };
+
+  const openNew = () => { setEdit(null); setF({ name: "", category: "Bouteilles", price: 0, description: "" }); setModal(true); };
+  const openEdit = (b) => { setEdit(b); setF({ name: b.name, category: b.category, price: b.price, description: b.description || "" }); setModal(true); };
+  const save = async () => {
+    if (!f.name) return;
+    const payload = { ...f, price: Number(f.price) || 0 };
+    try { edit ? await eventsService.updateBottle(event.id, edit.id, payload) : await eventsService.createBottle(event.id, payload); setModal(false); load(); }
+    catch { alert("Erreur"); }
+  };
+  const del = async (b) => { if (!window.confirm(`Retirer « ${b.name} » ?`)) return; try { await eventsService.deleteBottle(event.id, b.id); load(); } catch { alert("Erreur"); } };
+
+  const activeTables = (tables || []).filter(t => t.is_active);
+  const carteUrl = (t) => `${window.location.origin}/evenement/${event.slug}/carte${t ? `?table=${t.id}&label=${encodeURIComponent(t.label)}` : ""}`;
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {/* Config */}
+      <Card>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+          <Toggle value={enabled} onChange={toggleEnabled} />
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>
+            Commande de bouteilles {enabled ? "activée" : "désactivée"}
+          </span>
+        </label>
+        <div style={{ fontSize: 12, color: MUTED, margin: "6px 0 12px" }}>
+          Les invités scannent le QR de leur table pour commander. Paiement <strong>cash sur place</strong>.
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Mode de paiement</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["per_order", "À la commande"], ["tab", "Note en fin de soirée"]].map(([k, label]) => (
+            <button key={k} onClick={() => changeMode(k)}
+              style={{ flex: 1, border: `1.5px solid ${mode === k ? P : BORDER}`, borderRadius: 10, padding: "10px 0",
+                background: mode === k ? "#FEF6EC" : "white", cursor: "pointer", fontFamily: FONT,
+                color: mode === k ? "#C47D1A" : DARK, fontSize: 13, fontWeight: 600 }}>{label}</button>
+          ))}
+        </div>
+      </Card>
+
+      {/* Carte */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}>
+            <Wine size={16} color={P} /> Carte des bouteilles
+          </div>
+          <Btn variant="primary" icon={Plus} onClick={openNew}>Ajouter</Btn>
+        </div>
+        {bottles.length === 0 ? <Empty text="Aucune bouteille. Ajoutez votre carte." /> : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {bottles.map(b => (
+              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `0.5px solid ${BORDER}`, borderRadius: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{b.name} <span style={{ fontSize: 11, color: MUTED }}>· {b.category}</span></div>
+                  {b.description && <div style={{ fontSize: 11.5, color: MUTED }}>{b.description}</div>}
+                </div>
+                <div style={{ fontWeight: 700, color: P, fontSize: 14 }}>{fmt(b.price)}</div>
+                <button onClick={() => openEdit(b)} style={iconBtn}><Pencil size={14} color={MUTED} /></button>
+                <button onClick={() => del(b)} style={iconBtn}><Trash2 size={14} color="#DC2626" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* QR par table */}
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
+          <QrCode size={16} color={P} /> QR de commande par table
+        </div>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+          Imprimez et posez le QR sur chaque table. Le QR général (sans table) est aussi disponible.
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <button onClick={() => setQrTable({ label: "Général", id: null })} style={qrChip}>Général</button>
+          {activeTables.map(t => (
+            <button key={t.id} onClick={() => setQrTable(t)} style={qrChip}>{t.label}</button>
+          ))}
+          {activeTables.length === 0 && <span style={{ fontSize: 12.5, color: MUTED }}>Ajoutez des tables dans « Plan & Tables ».</span>}
+        </div>
+      </Card>
+
+      {qrTable && (
+        <Modal open title={`QR — ${qrTable.label}`} onClose={() => setQrTable(null)} width={320}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ background: "white", padding: 14, display: "inline-block", borderRadius: 10, border: `0.5px solid ${BORDER}` }}>
+              <QRCode value={carteUrl(qrTable.id ? qrTable : null)} size={180} fgColor={DARK} />
+            </div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 10, wordBreak: "break-all" }}>{carteUrl(qrTable.id ? qrTable : null)}</div>
+            <div style={{ fontSize: 12, color: DARK, marginTop: 6 }}>Scannez pour commander à « {qrTable.label} »</div>
+          </div>
+        </Modal>
+      )}
+
+      <Modal open={modal} title={edit ? "Modifier" : "Nouvelle bouteille"} onClose={() => setModal(false)}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <FormField label="Nom"><Input value={f.name} onChange={e => set("name", e.target.value)} placeholder="Moët & Chandon" /></FormField>
+          <FormField label="Catégorie"><Input value={f.category} onChange={e => set("category", e.target.value)} placeholder="Champagne" /></FormField>
+        </div>
+        <FormField label="Prix (FCFA)"><Input type="number" value={f.price} onChange={e => set("price", e.target.value)} placeholder="75000" /></FormField>
+        <FormField label="Description (optionnel)"><Input value={f.description} onChange={e => set("description", e.target.value)} placeholder="75cl, brut" /></FormField>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn onClick={() => setModal(false)}>Annuler</Btn>
+          <Btn variant="primary" onClick={save} disabled={!f.name}>{edit ? "Enregistrer" : "Ajouter"}</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ═══ PROMOTEURS ════════════════════════════════════════════════════════════════
+export function PromotersTab({ event }) {
+  const [list, setList] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [f, setF] = useState({ name: "", code: "" });
+  const load = () => eventsService.listPromoters(event.id).then(d => setList(d?.promoters || [])).catch(console.error);
+  useEffect(() => { load(); }, [event.id]);
+  const create = async () => {
+    if (!f.name) return;
+    try { await eventsService.createPromoter(event.id, f); setModal(false); setF({ name: "", code: "" }); load(); }
+    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+  };
+  const del = async (p) => { if (!window.confirm(`Retirer ${p.name} ?`)) return; try { await eventsService.deletePromoter(event.id, p.id); load(); } catch { alert("Erreur"); } };
+
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}>
+          <Megaphone size={16} color={P} /> Codes promoteurs
+        </div>
+        <Btn variant="primary" icon={Plus} onClick={() => setModal(true)}>Ajouter</Btn>
+      </div>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+        Les invités saisissent le code à la réservation → entrées attribuées au promoteur.
+      </div>
+      {list.length === 0 ? <Empty text="Aucun promoteur." /> : (
+        <div style={{ display: "grid", gap: 8 }}>
+          {list.map(p => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `0.5px solid ${BORDER}`, borderRadius: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: P, fontFamily: "monospace", fontWeight: 700 }}>{p.code}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: DARK }}>{p.reservations}</div>
+                <div style={{ fontSize: 10.5, color: MUTED }}>résa · {p.covers} couv.</div>
+              </div>
+              <button onClick={() => del(p)} style={iconBtn}><Trash2 size={14} color="#DC2626" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Modal open={modal} title="Nouveau promoteur" onClose={() => setModal(false)}>
+        <FormField label="Nom du promoteur"><Input value={f.name} onChange={e => setF(p => ({ ...p, name: e.target.value }))} placeholder="DJ Koffi" /></FormField>
+        <FormField label="Code (optionnel — auto sinon)"><Input value={f.code} onChange={e => setF(p => ({ ...p, code: e.target.value.toUpperCase() }))} placeholder="KOFFI" /></FormField>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn onClick={() => setModal(false)}>Annuler</Btn>
+          <Btn variant="primary" onClick={create} disabled={!f.name}>Ajouter</Btn>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+
+// ═══ STAFF ═════════════════════════════════════════════════════════════════════
+export function StaffTab({ event }) {
+  const [list, setList] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [f, setF] = useState({ name: "", role: "all" });
+  const load = () => eventsService.listStaff(event.id).then(d => setList(d?.staff || [])).catch(console.error);
+  useEffect(() => { load(); }, [event.id]);
+  const create = async () => { if (!f.name) return; try { await eventsService.createStaff(event.id, f); setModal(false); setF({ name: "", role: "all" }); load(); } catch { alert("Erreur"); } };
+  const del = async (s) => { if (!window.confirm(`Retirer ${s.name} ?`)) return; try { await eventsService.deleteStaff(event.id, s.id); load(); } catch { alert("Erreur"); } };
+  const staffUrl = `${window.location.origin}/staff`;
+  const roleLabel = { all: "Tout", checkin: "Check-in", bar: "Bar" };
+
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}>
+          <Users size={16} color={P} /> Équipe (comptes staff)
+        </div>
+        <Btn variant="primary" icon={Plus} onClick={() => setModal(true)}>Ajouter</Btn>
+      </div>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, background: BG, borderRadius: 8, padding: "8px 12px" }}>
+        Le staff se connecte sur <strong>{staffUrl}</strong> avec le code événement <strong>{event.slug}</strong> + son PIN.
+      </div>
+      {list.length === 0 ? <Empty text="Aucun staff." /> : (
+        <div style={{ display: "grid", gap: 8 }}>
+          {list.map(s => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `0.5px solid ${BORDER}`, borderRadius: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{s.name}</div>
+                <Badge label={roleLabel[s.role] || s.role} variant="gray" />
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: P, fontFamily: "monospace", letterSpacing: 2 }}>{s.pin}</div>
+              <button onClick={() => del(s)} style={iconBtn}><Trash2 size={14} color="#DC2626" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Modal open={modal} title="Nouveau staff" onClose={() => setModal(false)}>
+        <FormField label="Nom"><Input value={f.name} onChange={e => setF(p => ({ ...p, name: e.target.value }))} placeholder="Awa (accueil)" /></FormField>
+        <FormField label="Rôle">
+          <div style={{ display: "flex", gap: 8 }}>
+            {[["all", "Tout"], ["checkin", "Check-in"], ["bar", "Bar"]].map(([k, label]) => (
+              <button key={k} onClick={() => setF(p => ({ ...p, role: k }))}
+                style={{ flex: 1, border: `1.5px solid ${f.role === k ? P : BORDER}`, borderRadius: 10, padding: "9px 0",
+                  background: f.role === k ? "#FEF6EC" : "white", cursor: "pointer", fontFamily: FONT, color: f.role === k ? "#C47D1A" : DARK, fontSize: 13, fontWeight: 600 }}>{label}</button>
+            ))}
+          </div>
+        </FormField>
+        <div style={{ fontSize: 12, color: MUTED }}>Un PIN sera généré automatiquement.</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <Btn onClick={() => setModal(false)}>Annuler</Btn>
+          <Btn variant="primary" onClick={create} disabled={!f.name}>Ajouter</Btn>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+
+// ═══ CHECK-IN ══════════════════════════════════════════════════════════════════
+export function CheckinTab({ eventId, staffToken }) {
+  const [data, setData] = useState(null);
+  const [q, setQ] = useState("");
+  const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
+  useEffect(() => { load(); }, [eventId]);
+  const toggle = async (r) => { try { await eventOpsService.checkin(r.id, !!r.checked_in_at, staffToken); load(); } catch { alert("Erreur"); } };
+
+  if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  const t = data.totals || {};
+  const list = (data.reservations || []).filter(r => {
+    const s = q.trim().toLowerCase(); if (!s) return true;
+    return (r.client_name || "").toLowerCase().includes(s) || (r.ref || "").toLowerCase().includes(s) || (r.table_label || "").toLowerCase().includes(s);
+  });
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {[["Attendus", t.total, DARK], ["Arrivés", t.arrived, GREEN], ["Couverts", t.covers, P]].map(([l, v, c], i) => (
+          <div key={i} style={{ flex: 1, minWidth: 100, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+            <div style={{ fontSize: 11.5, color: MUTED }}>{l}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: c }}>{fmtInt(v)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", background: "white", maxWidth: 360 }}>
+        <Search size={15} color={MUTED} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Nom, réf (EVT-…) ou table…"
+          style={{ border: "none", outline: "none", flex: 1, fontSize: 13, color: DARK, fontFamily: FONT, background: "transparent" }} />
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {list.map(r => {
+          const arrived = !!r.checked_in_at;
+          return (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px", borderRadius: 10,
+              border: `0.5px solid ${arrived ? GREEN + "55" : BORDER}`, background: arrived ? "#F0F6F2" : "white" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{r.client_name || "Client"}</div>
+                <div style={{ fontSize: 12, color: MUTED, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: "monospace" }}>{r.ref}</span>
+                  <span>{r.party_size} pers.</span>
+                  {r.table_label && <span>{r.table_kind === "vip" ? "👑 " : ""}{r.table_label}</span>}
+                  {r.promoter_code && <span>promo {r.promoter_code}</span>}
+                </div>
+              </div>
+              <button onClick={() => toggle(r)}
+                style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
+                  background: arrived ? "#e8e8e8" : GREEN, color: arrived ? DARK : "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                {arrived ? <><X size={14} /> Annuler</> : <><Check size={14} /> Arrivé</>}
+              </button>
+            </div>
+          );
+        })}
+        {list.length === 0 && <Empty text="Aucune réservation." />}
+      </div>
+    </div>
+  );
+}
+
+const iconBtn = { border: "none", background: "transparent", cursor: "pointer", padding: 4, display: "flex" };
+const qrChip = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", background: "white", cursor: "pointer", fontFamily: FONT, fontSize: 13, color: DARK, fontWeight: 600 };
+const Empty = ({ text = "Aucune donnée." }) => <div style={{ textAlign: "center", padding: "26px 0", color: MUTED, fontSize: 12.5 }}>{text}</div>;
+function RowLine({ label, value, rank }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 9px", background: "#fafafa", borderRadius: 8, marginBottom: 5 }}>
+      {rank && <span style={{ fontSize: 11, color: MUTED, width: 14 }}>{rank}</span>}
+      <span style={{ flex: 1, fontSize: 12.5, color: DARK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{value}</span>
+    </div>
+  );
+}

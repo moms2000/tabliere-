@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import QRCode from "react-qr-code";
 import { Calendar, MapPin, ArrowLeft, Crown, Armchair, Users, Check, PartyPopper } from "lucide-react";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -21,6 +22,7 @@ export default function EventDetail() {
   const [picked, setPicked] = useState(null);      // table object being reserved (or {free:true})
   const [party, setParty] = useState(2);
   const [note, setNote] = useState("");
+  const [promo, setPromo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);          // reservation ref after success
 
@@ -43,6 +45,7 @@ export default function EventDetail() {
     try {
       const { reservation } = await eventReservationsService.create({
         slug, table_id: picked?.id || undefined, party_size: party, special_request: note || undefined,
+        promoter_code: promo || undefined,
       });
       setDone(reservation.ref); setPicked(null); load();
     } catch (e) { alert(e.response?.data?.message || "Erreur lors de la réservation"); }
@@ -86,6 +89,14 @@ export default function EventDetail() {
             <div style={{ fontSize: 13, color: "#3a5a4a", marginTop: 6 }}>
               Votre réservation <strong>{done}</strong> est en attente de confirmation de l'organisateur. Paiement en cash sur place.
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, background: "white", borderRadius: 10, padding: 12 }}>
+              <div style={{ background: "white", padding: 6, borderRadius: 8, border: `0.5px solid ${BORDER}` }}>
+                <QRCode value={done} size={72} fgColor={DARK} />
+              </div>
+              <div style={{ fontSize: 12.5, color: MUTED }}>
+                Présentez ce QR à l'entrée pour votre <strong style={{ color: DARK }}>check-in</strong>.
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -122,6 +133,10 @@ export default function EventDetail() {
 
             <label style={lbl}>Nombre de personnes</label>
             <input type="number" min={1} max={picked.capacity || 20} value={party} onChange={e => setParty(+e.target.value)} style={inp} />
+
+            <label style={{ ...lbl, marginTop: 12 }}>Code promoteur (optionnel)</label>
+            <input value={promo} onChange={e => setPromo(e.target.value.toUpperCase())} placeholder="Ex : KOFFI"
+              style={{ ...inp, letterSpacing: 1, fontWeight: 600 }} />
 
             <label style={{ ...lbl, marginTop: 12 }}>Message (optionnel)</label>
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Occasion, arrivée prévue…"

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
+import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab } from "./EventTabs2.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -64,10 +65,19 @@ export default function EventEditor() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: `0.5px solid ${BORDER}` }}>
-        {[["details", "Détails"], ["plan", `Plan & Tables${tables.length ? " · " + tables.length : ""}`], ["resa", "Réservations"]].map(([k, label]) => (
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: `0.5px solid ${BORDER}`, overflowX: "auto" }}>
+        {[
+          ["dashboard", "Dashboard"],
+          ["details", "Détails"],
+          ["plan", `Plan & Tables${tables.length ? " · " + tables.length : ""}`],
+          ["bottles", "Bouteilles"],
+          ["resa", "Réservations"],
+          ["checkin", "Check-in"],
+          ["promoters", "Promoteurs"],
+          ["staff", "Staff"],
+        ].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
-            style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
+            style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
               padding: "10px 14px", fontSize: 13.5, fontWeight: tab === k ? 700 : 500,
               color: tab === k ? DARK : MUTED, borderBottom: tab === k ? `2px solid ${P}` : "2px solid transparent",
               marginBottom: -1 }}>
@@ -76,9 +86,14 @@ export default function EventEditor() {
         ))}
       </div>
 
-      {tab === "details" && <DetailsTab event={event} onSaved={load} publicUrl={publicUrl} />}
-      {tab === "plan"    && <PlanTab event={event} tables={tables} onChanged={load} />}
-      {tab === "resa"    && <ResaTab eventId={event.id} />}
+      {tab === "dashboard" && <DashboardTab event={event} />}
+      {tab === "details"   && <DetailsTab event={event} onSaved={load} publicUrl={publicUrl} />}
+      {tab === "plan"      && <PlanTab event={event} tables={tables} onChanged={load} />}
+      {tab === "bottles"   && <BottlesTab event={event} tables={tables} onChanged={load} />}
+      {tab === "resa"      && <ResaTab eventId={event.id} />}
+      {tab === "checkin"   && <CheckinTab eventId={event.id} />}
+      {tab === "promoters" && <PromotersTab event={event} />}
+      {tab === "staff"     && <StaffTab event={event} />}
     </motion.div>
   );
 }

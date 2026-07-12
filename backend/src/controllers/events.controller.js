@@ -5,8 +5,9 @@
  * Cash sur place — aucun paiement in-app. Statuts en VARCHAR (pas d'ENUM).
  */
 import { query } from "../config/db.js";
-import { ok, created, notFound, paginated } from "../utils/response.js";
+import { ok, created, notFound, paginated, forbidden } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { signStaffToken } from "../middleware/eventAuth.js";
 
 const EVENT_STATUSES = ["brouillon", "publie", "annule", "termine"];
 const TABLE_KINDS    = ["simple", "vip"];
@@ -137,12 +138,14 @@ export const updateEvent = asyncHandler(async (req, res) => {
   const ALLOWED = [
     "name", "description", "venue_name", "address", "ville", "quartier",
     "starts_at", "ends_at", "cover_url", "theme_color", "is_public", "status",
+    "bottles_enabled", "ordering_mode",
   ];
   const updates = [], values = [];
   for (const f of ALLOWED) {
     if (req.body[f] === undefined) continue;
     let val = req.body[f];
-    if (f === "is_public") val = (val === true || val === "true" || val === 1);
+    if (f === "is_public" || f === "bottles_enabled") val = (val === true || val === "true" || val === 1);
+    if (f === "ordering_mode" && !["per_order", "tab"].includes(val)) throw new AppError("Mode de commande invalide", 400);
     if (f === "status" && !EVENT_STATUSES.includes(val)) throw new AppError("Statut invalide", 400);
     values.push(val);
     updates.push(`${f} = $${values.length}`);
@@ -213,4 +216,207 @@ export const deleteTable = asyncHandler(async (req, res) => {
     [req.params.tableId, event.id]
   );
   return ok(res, {}, "Table retirée");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 2 — Bouteilles (QR), Staff, Promoteurs, Dashboard
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function ownedEvent(req) {
+  const event = await eventById(req.params.id);
+  if (!event) return { error: "notfound" };
+  if (req.user.role !== "admin" && event.owner_id !== req.user.id) return { error: "forbidden" };
+  return { event };
+}
+
+// ── Bouteilles ───────────────────────────────────────────────────────────────
+export const listBottles = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error === "notfound") return notFound(res, "Événement introuvable");
+  if (error === "forbidden") return forbidden(res, "Accès refusé");
+  const { rows } = await query(
+    "SELECT * FROM event_bottles WHERE event_id = $1 AND is_active = TRUE ORDER BY category, position, name",
+    [event.id]
+  );
+  return ok(res, { bottles: rows });
+});
+
+export const listBottlesPublic = asyncHandler(async (req, res) => {
+  const { rows: [event] } = await query(
+    "SELECT id, name, slug, status, bottles_enabled, ordering_mode FROM events WHERE slug = $1", [req.params.slug]
+  );
+  if (!event || event.status !== "publie" || !event.bottles_enabled) return notFound(res, "Carte indisponible");
+  const { rows } = await query(
+    "SELECT id, name, category, price, description FROM event_bottles WHERE event_id = $1 AND is_active = TRUE ORDER BY category, position, name",
+    [event.id]
+  );
+  return ok(res, { event: { name: event.name, slug: event.slug, ordering_mode: event.ordering_mode }, bottles: rows });
+});
+
+export const createBottle = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const b = req.body || {};
+  if (!b.name) throw new AppError("Nom requis", 400);
+  const { rows: [bottle] } = await query(
+    `INSERT INTO event_bottles (event_id, name, category, price, description, position)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [event.id, b.name, b.category || "Bouteilles", b.price || 0, b.description || null, b.position || 0]
+  );
+  return created(res, { bottle }, "Bouteille ajoutée");
+});
+
+export const updateBottle = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const ALLOWED = ["name", "category", "price", "description", "is_active", "position"];
+  const updates = [], values = [];
+  for (const f of ALLOWED) {
+    if (req.body[f] === undefined) continue;
+    let val = req.body[f];
+    if (f === "is_active") val = (val === true || val === "true" || val === 1);
+    values.push(val); updates.push(`${f} = $${values.length}`);
+  }
+  if (!updates.length) throw new AppError("Aucun champ", 400);
+  values.push(req.params.bottleId, event.id);
+  const { rows: [bottle] } = await query(
+    `UPDATE event_bottles SET ${updates.join(", ")} WHERE id = $${values.length - 1} AND event_id = $${values.length} RETURNING *`,
+    values
+  );
+  if (!bottle) return notFound(res, "Bouteille introuvable");
+  return ok(res, { bottle }, "Bouteille mise à jour");
+});
+
+export const deleteBottle = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  await query("UPDATE event_bottles SET is_active = FALSE WHERE id = $1 AND event_id = $2", [req.params.bottleId, event.id]);
+  return ok(res, {}, "Bouteille retirée");
+});
+
+// ── Staff (comptes temporaires par PIN) ───────────────────────────────────────
+const genPin = (i) => String(1000 + ((i * 7919 + 137) % 9000)); // 4 chiffres déterministe (pas de Math.random)
+
+export const listStaff = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const { rows } = await query(
+    "SELECT id, name, role, pin, is_active, created_at FROM event_staff WHERE event_id = $1 ORDER BY created_at DESC",
+    [event.id]
+  );
+  return ok(res, { staff: rows });
+});
+
+export const createStaff = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const b = req.body || {};
+  if (!b.name) throw new AppError("Nom requis", 400);
+  const role = ["all", "checkin", "bar"].includes(b.role) ? b.role : "all";
+  // PIN unique dans l'événement
+  const { rows: [{ count }] } = await query("SELECT COUNT(*)::int AS count FROM event_staff WHERE event_id = $1", [event.id]);
+  let pin = b.pin && /^\d{4,6}$/.test(b.pin) ? b.pin : genPin(count + 1);
+  // éviter collision
+  for (let k = 0; k < 20; k++) {
+    const { rows } = await query("SELECT 1 FROM event_staff WHERE event_id = $1 AND pin = $2", [event.id, pin]);
+    if (!rows.length) break;
+    pin = genPin(count + 2 + k);
+  }
+  const { rows: [staff] } = await query(
+    `INSERT INTO event_staff (event_id, name, role, pin) VALUES ($1,$2,$3,$4) RETURNING id, name, role, pin, is_active, created_at`,
+    [event.id, b.name, role, pin]
+  );
+  return created(res, { staff }, "Staff ajouté");
+});
+
+export const deleteStaff = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  await query("DELETE FROM event_staff WHERE id = $1 AND event_id = $2", [req.params.staffId, event.id]);
+  return ok(res, {}, "Staff retiré");
+});
+
+// POST /event-staff/login — connexion staff via slug + PIN (public)
+export const staffLogin = asyncHandler(async (req, res) => {
+  const { slug, pin } = req.body || {};
+  if (!slug || !pin) throw new AppError("Événement et PIN requis", 400);
+  const { rows: [event] } = await query("SELECT id, name, slug, status FROM events WHERE slug = $1", [slug]);
+  if (!event) return notFound(res, "Événement introuvable");
+  const { rows: [staff] } = await query(
+    "SELECT id, name, role, event_id FROM event_staff WHERE event_id = $1 AND pin = $2 AND is_active = TRUE",
+    [event.id, String(pin)]
+  );
+  if (!staff) throw new AppError("PIN invalide", 401);
+  const token = signStaffToken(staff);
+  return ok(res, { token, staff: { name: staff.name, role: staff.role }, event: { id: event.id, name: event.name, slug: event.slug } }, "Connecté");
+});
+
+// ── Promoteurs ────────────────────────────────────────────────────────────────
+export const listPromoters = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const { rows } = await query(
+    `SELECT p.*,
+        (SELECT COUNT(*) FROM event_reservations r WHERE r.event_id = p.event_id AND UPPER(r.promoter_code) = UPPER(p.code) AND r.status <> 'annule')::int AS reservations,
+        (SELECT COALESCE(SUM(r.party_size),0) FROM event_reservations r WHERE r.event_id = p.event_id AND UPPER(r.promoter_code) = UPPER(p.code) AND r.status <> 'annule')::int AS covers
+     FROM event_promoters p WHERE p.event_id = $1 ORDER BY reservations DESC, p.created_at DESC`,
+    [event.id]
+  );
+  return ok(res, { promoters: rows });
+});
+
+export const createPromoter = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const b = req.body || {};
+  if (!b.name) throw new AppError("Nom requis", 400);
+  const code = (b.code || b.name).trim().toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 20) || "PROMO";
+  try {
+    const { rows: [promoter] } = await query(
+      `INSERT INTO event_promoters (event_id, name, code) VALUES ($1,$2,$3) RETURNING *`,
+      [event.id, b.name, code]
+    );
+    return created(res, { promoter }, "Promoteur ajouté");
+  } catch (e) {
+    if (e.code === "23505") throw new AppError("Ce code promoteur existe déjà", 409);
+    throw e;
+  }
+});
+
+export const deletePromoter = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  await query("DELETE FROM event_promoters WHERE id = $1 AND event_id = $2", [req.params.promoterId, event.id]);
+  return ok(res, {}, "Promoteur retiré");
+});
+
+// ── Dashboard organisateur ─────────────────────────────────────────────────────
+export const getDashboard = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const id = event.id;
+  const [{ rows: [resa] }, { rows: [vip] }, { rows: [orders] }, { rows: topBottles }, { rows: promoters }] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE status='confirme')::int AS confirmed,
+              COUNT(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in,
+              COALESCE(SUM(party_size),0)::int AS covers
+           FROM event_reservations WHERE event_id = $1 AND status <> 'annule'`, [id]),
+    query(`SELECT COALESCE(SUM(t.price),0)::int AS vip_revenue, COUNT(*)::int AS vip_sold
+           FROM event_reservations r JOIN event_tables t ON t.id = r.table_id
+           WHERE r.event_id = $1 AND r.status = 'confirme' AND t.kind = 'vip'`, [id]),
+    query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(total),0)::int AS total,
+              COALESCE(SUM(total) FILTER (WHERE status='paye'),0)::int AS paid
+           FROM event_orders WHERE event_id = $1 AND status <> 'annule'`, [id]),
+    query(`SELECT item->>'name' AS name, SUM(COALESCE(NULLIF(item->>'qty','')::int,1))::int AS qty
+           FROM event_orders o, jsonb_array_elements(o.items) AS item
+           WHERE o.event_id = $1 AND o.status <> 'annule' AND item->>'name' IS NOT NULL
+           GROUP BY item->>'name' ORDER BY qty DESC LIMIT 10`, [id]).catch(() => ({ rows: [] })),
+    query(`SELECT p.name, p.code,
+              (SELECT COUNT(*) FROM event_reservations r WHERE r.event_id = p.event_id AND UPPER(r.promoter_code)=UPPER(p.code) AND r.status<>'annule')::int AS reservations
+           FROM event_promoters p WHERE p.event_id = $1 ORDER BY reservations DESC`, [id]),
+  ]);
+  return ok(res, {
+    event: { id: event.id, name: event.name, slug: event.slug, starts_at: event.starts_at },
+    reservations: resa, vip, orders, top_bottles: topBottles, promoters,
+  });
 });

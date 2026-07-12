@@ -329,6 +329,76 @@ async function runEventsMigration() {
   logger.info(`Migration Événements : ${okc} ok, ${failc} ignoré(s)`);
 }
 
+// ── Événements Phase 2 : QR bouteilles, staff, promoteurs, check-in, dashboard ─
+async function runEventsPhase2Migration() {
+  const stmts = [
+    // Config événement : commande de bouteilles + mode de paiement
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS bottles_enabled BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS ordering_mode   VARCHAR(10) DEFAULT 'per_order'`, -- per_order | tab
+    // Réservations : code promoteur + check-in
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS promoter_code VARCHAR(30)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ`,
+    // Carte des bouteilles / boissons de l'événement
+    `CREATE TABLE IF NOT EXISTS event_bottles (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       name        VARCHAR(120) NOT NULL,
+       category    VARCHAR(60) DEFAULT 'Bouteilles',
+       price       INTEGER NOT NULL DEFAULT 0,
+       description TEXT,
+       is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+       position    INTEGER NOT NULL DEFAULT 0,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Commandes de bouteilles par table (scan QR)
+    `CREATE SEQUENCE IF NOT EXISTS event_order_ref_seq START 1000`,
+    `CREATE TABLE IF NOT EXISTS event_orders (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       ref         VARCHAR(20) UNIQUE NOT NULL,
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       table_id    UUID REFERENCES event_tables(id) ON DELETE SET NULL,
+       table_label VARCHAR(40),
+       guest_name  VARCHAR(120),
+       items       JSONB NOT NULL DEFAULT '[]',
+       total       INTEGER NOT NULL DEFAULT 0,
+       status      VARCHAR(15) NOT NULL DEFAULT 'en_attente', -- en_attente|servi|paye|annule
+       note        TEXT,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Comptes staff temporaires (accès par PIN, liés à un événement)
+    `CREATE TABLE IF NOT EXISTS event_staff (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       name        VARCHAR(80) NOT NULL,
+       role        VARCHAR(15) NOT NULL DEFAULT 'all', -- all|checkin|bar
+       pin         VARCHAR(8) NOT NULL,
+       is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Codes promoteurs
+    `CREATE TABLE IF NOT EXISTS event_promoters (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       name        VARCHAR(80) NOT NULL,
+       code        VARCHAR(30) NOT NULL,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       UNIQUE (event_id, code)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_bottles_evt ON event_bottles(event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt  ON event_orders(event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_staff_evt   ON event_staff(event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_promoters_evt ON event_promoters(event_id)`,
+  ];
+  let okc = 0, failc = 0;
+  for (const sql of stmts) {
+    try { await query(sql); okc++; } catch (e) {
+      failc++; logger.warn("Migration Événements P2 — statement ignoré", { error: e?.message });
+    }
+  }
+  logger.info(`Migration Événements P2 : ${okc} ok, ${failc} ignoré(s)`);
+}
+
 // ── Cascade de suppression de compte (masquage réversible) ───────────────────
 // Colonnes de soft-delete + rattrapage RÉVERSIBLE de l'existant : les restaurants
 // des comptes déjà supprimés sont masqués, leurs réservations archivées, leurs
@@ -449,6 +519,7 @@ async function start() {
     await runCodesMigration();
     await runStoriesMigration();  // ← Instants (isolée + logguée)
     await runEventsMigration();   // ← Espace Événements (organisateurs)
+    await runEventsPhase2Migration(); // ← Événements P2 (bouteilles, staff, promoteurs, check-in)
     await runDeletionCascadeMigration(); // ← Cascade suppression compte (soft-delete + rattrapage)
     await runPerfIndexes();       // ← Indexes de performance
     await activateTestRestaurants();

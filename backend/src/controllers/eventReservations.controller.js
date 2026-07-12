@@ -52,14 +52,15 @@ export const createEventReservation = asyncHandler(async (req, res) => {
   }
 
   const partySize = Math.max(1, parseInt(b.party_size, 10) || 1);
+  const promoter = b.promoter_code ? String(b.promoter_code).trim().toUpperCase().slice(0, 30) : null;
   const { rows: [resa] } = await query(
     `INSERT INTO event_reservations
-       (ref, event_id, client_id, table_id, party_size, guest_name, guest_phone, special_request, status)
+       (ref, event_id, client_id, table_id, party_size, guest_name, guest_phone, special_request, promoter_code, status)
      VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
-             $1, $2, $3, $4, $5, $6, $7, 'en_attente')
+             $1, $2, $3, $4, $5, $6, $7, $8, 'en_attente')
      RETURNING *`,
     [event.id, req.user.id, tableId, partySize,
-     b.guest_name || null, b.guest_phone || null, b.special_request || null]
+     b.guest_name || null, b.guest_phone || null, b.special_request || null, promoter]
   );
   if (tableId) {
     await query("UPDATE event_tables SET status = 'reserve', updated_at = NOW() WHERE id = $1", [tableId]);

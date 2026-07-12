@@ -77,7 +77,10 @@ app.use(cors({
 }));
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "8mb" })); // 8mb : autorise l'envoi d'images (data URI base64)
+app.use(express.json({
+  limit: "8mb", // 8mb : autorise l'envoi d'images (data URI base64)
+  verify: (req, _res, buf) => { req.rawBody = buf; }, // corps brut → vérif signature webhooks
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ── Logs HTTP ───────────────────────────────────────────────────────────────

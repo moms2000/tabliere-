@@ -58,20 +58,27 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (!resto) throw new AppError("Restaurant introuvable", 404);
   if (!resto.qr_active) throw new AppError("Les commandes QR ne sont pas activées pour ce restaurant", 403);
 
-  // Coercition numérique stricte : un price/qty non numérique produirait NaN,
-  // rejeté par la colonne INTEGER (500). On borne à des entiers >= 0.
-  const total = items.reduce((sum, it) => {
-    const price = Number(it.price); const qty = Number(it.qty);
-    const p = Number.isFinite(price) && price > 0 ? price : 0;
-    const q = Number.isFinite(qty)   && qty   > 0 ? qty   : 1;
-    return sum + p * q;
-  }, 0);
+  // SÉCURITÉ : ne JAMAIS faire confiance au prix envoyé par le client (route publique).
+  // On récupère le prix réel des plats depuis la carte du restaurant.
+  const ids = [...new Set(items.map(it => it.id).filter(Boolean))];
+  const { rows: menuRows } = ids.length
+    ? await query("SELECT id, name, price FROM menu_items WHERE restaurant_id = $1 AND id = ANY($2)", [restaurant_id, ids])
+    : { rows: [] };
+  const priceMap = new Map(menuRows.map(m => [String(m.id), m]));
+  const safeItems = items.map(it => {
+    const m = priceMap.get(String(it.id));
+    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+    return m
+      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty, options: it.options || undefined }
+      : { id: it.id || null, name: String(it.name || "Article").slice(0, 120), price: 0, qty }; // inconnu → 0 (jamais le prix client)
+  });
+  const total = safeItems.reduce((sum, it) => sum + it.price * it.qty, 0);
 
   const { rows: [order] } = await query(
     `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING *`,
     [restaurant_id, table_label || null, client_name || null, client_phone || null,
-     JSON.stringify(items), total, note || null]
+     JSON.stringify(safeItems), total, note || null]
   );
 
   logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });

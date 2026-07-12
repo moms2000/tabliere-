@@ -4,8 +4,31 @@
  */
 
 import axios  from "axios";
+import crypto from "crypto";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
+
+// ── Vérification de signature des webhooks ────────────────────────────────────
+// Empêche un tiers de forger un « paiement réussi ». Si le secret du fournisseur
+// n'est pas configuré, on ne bloque pas (rétro-compat) mais on loggue un avert.
+const WEBHOOK_SECRETS = {
+  wave:         () => process.env.WAVE_WEBHOOK_SECRET,
+  orange_money: () => process.env.ORANGE_MONEY_WEBHOOK_SECRET,
+  mtn_momo:     () => process.env.MTN_MOMO_WEBHOOK_SECRET,
+};
+function verifyCallback(method, req) {
+  const secret = WEBHOOK_SECRETS[method]?.();
+  if (!secret) { logger.warn("[Webhook] Secret non configuré — signature non vérifiée", { method }); return true; }
+  const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}));
+  const provided = String(
+    req.headers["wave-signature"] || req.headers["x-signature"] || req.headers["x-webhook-signature"] || ""
+  ).replace(/^sha256=/i, "").trim();
+  const expected = crypto.createHmac("sha256", secret).update(raw).digest("hex");
+  try {
+    return provided.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(provided, "hex"), Buffer.from(expected, "hex"));
+  } catch { return false; }
+}
 
 // ── Orange Money CI ───────────────────────────────────────────────────────────
 async function initiateOrangeMoney({ phone, amount, reference, description }) {
@@ -146,4 +169,4 @@ async function initiate({ method, phone, amount, reference, description }) {
   }
 }
 
-export const paymentService = { initiate, parseCallback };
+export const paymentService = { initiate, parseCallback, verifyCallback };

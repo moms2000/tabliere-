@@ -101,6 +101,12 @@ export const callback = asyncHandler(async (req, res) => {
   const { method } = req.params;
   const payload    = req.body;
 
+  // Sécurité : vérifier la signature du fournisseur (anti-forge de paiement)
+  if (!paymentService.verifyCallback(method, req)) {
+    logger.warn("[Callback] Signature invalide — rejeté", { method });
+    return res.status(401).json({ error: "invalid signature" });
+  }
+
   logger.info(`[Callback] ${method}`, { payload });
 
   let providerRef, success;

@@ -29,9 +29,15 @@ export const ownerOrStaff = async (req, res, next) => {
   try { decoded = jwt.verify(token, env.JWT_SECRET); }
   catch { return unauth(res, "Session invalide ou expirée"); }
 
-  // Staff : périmètre = événement du token
+  // Staff : périmètre = événement du token. On revérifie que le compte staff
+  // existe encore et est actif (révocation immédiate si supprimé/désactivé).
   if (decoded.typ === "staff") {
-    req.staff = decoded;
+    const { rows: [s] } = await query(
+      "SELECT id, role, is_active FROM event_staff WHERE id = $1 AND event_id = $2",
+      [decoded.staff_id, decoded.event_id]
+    );
+    if (!s || s.is_active === false) return unauth(res, "Accès staff révoqué");
+    req.staff = { ...decoded, role: s.role };
     req.eventScope = decoded.event_id;
     return next();
   }

@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate, authorize("admin"));
 
 router.get   ("/stats",                    ctrl.getStats);
+router.get   ("/analytics",                ctrl.getAnalytics);
 router.get   ("/export",                   ctrl.exportCSV);
 
 // Paramètres plateforme

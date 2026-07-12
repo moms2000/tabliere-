@@ -96,7 +96,7 @@ export const getBySlug = asyncHandler(async (req, res) => {
   if (event.status !== "publie" && !isOwner) return notFound(res, "Événement introuvable");
 
   const { rows: tables } = await query(
-    `SELECT id, label, kind, capacity, price, description, zone, pos_x, pos_y, status
+    `SELECT id, label, kind, capacity, price, description, zone, pos_x, pos_y, status, min_order
      FROM event_tables
      WHERE event_id = $1 AND is_active = TRUE
      ORDER BY kind DESC, label ASC`, [event.id]
@@ -138,7 +138,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
   const ALLOWED = [
     "name", "description", "venue_name", "address", "ville", "quartier",
     "starts_at", "ends_at", "cover_url", "theme_color", "is_public", "status",
-    "bottles_enabled", "ordering_mode",
+    "bottles_enabled", "ordering_mode", "capacity", "photos",
   ];
   const updates = [], values = [];
   for (const f of ALLOWED) {
@@ -147,6 +147,8 @@ export const updateEvent = asyncHandler(async (req, res) => {
     if (f === "is_public" || f === "bottles_enabled") val = (val === true || val === "true" || val === 1);
     if (f === "ordering_mode" && !["per_order", "tab"].includes(val)) throw new AppError("Mode de commande invalide", 400);
     if (f === "status" && !EVENT_STATUSES.includes(val)) throw new AppError("Statut invalide", 400);
+    if (f === "capacity") val = (val === null || val === "" ) ? null : (parseInt(val, 10) || null);
+    if (f === "photos") val = JSON.stringify(Array.isArray(val) ? val.slice(0, 5) : []);
     values.push(val);
     updates.push(`${f} = $${values.length}`);
   }
@@ -169,11 +171,11 @@ export const createTable = asyncHandler(async (req, res) => {
   if (!b.label) throw new AppError("Libellé requis", 400);
   const kind = TABLE_KINDS.includes(b.kind) ? b.kind : "simple";
   const { rows: [table] } = await query(
-    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     [
       event.id, b.label, kind, b.capacity || 2, b.price || 0,
-      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20,
+      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, b.min_order || 0,
     ]
   );
   return created(res, { table }, "Table ajoutée");
@@ -185,7 +187,7 @@ export const updateTable = asyncHandler(async (req, res) => {
   if (!event) return notFound(res, "Événement introuvable");
   assertOwner(req, event);
 
-  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active"];
+  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order"];
   const updates = [], values = [];
   for (const f of ALLOWED) {
     if (req.body[f] === undefined) continue;

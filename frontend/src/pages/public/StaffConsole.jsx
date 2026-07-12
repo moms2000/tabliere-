@@ -61,12 +61,18 @@ function Login({ onOk }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e) => {
-    e.preventDefault(); setErr(""); setBusy(true);
+    e.preventDefault(); setErr("");
+    if (!slug.trim()) { setErr("Entrez le code de l'événement."); return; }
+    if (!pin.trim())  { setErr("Entrez votre PIN."); return; }
+    setBusy(true);
     try {
       const s = await eventStaffService.login(slug.trim().toLowerCase(), pin.trim());
       onOk(s);
-    } catch (e2) { setErr(e2.response?.data?.message || "Connexion impossible"); }
-    finally { setBusy(false); }
+    } catch (e2) {
+      const st = e2.response?.status;
+      setErr(st === 429 ? "Trop de tentatives. Réessayez dans un instant."
+        : e2.response?.data?.message || "Code événement ou PIN incorrect.");
+    } finally { setBusy(false); }
   };
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT }}>
@@ -81,7 +87,7 @@ function Login({ onOk }) {
         <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="ex : soiree-afro-vibes" style={inp} autoCapitalize="none" />
         <label style={{ ...lbl, marginTop: 12 }}>PIN</label>
         <input value={pin} onChange={e => setPin(e.target.value)} placeholder="••••" inputMode="numeric" style={{ ...inp, letterSpacing: 4, fontWeight: 700 }} />
-        <button type="submit" disabled={busy || !slug || !pin} style={{ width: "100%", marginTop: 18, border: "none", borderRadius: 11, padding: "13px 0", background: P, color: "#1A1000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+        <button type="submit" disabled={busy} style={{ width: "100%", marginTop: 18, border: "none", borderRadius: 11, padding: "13px 0", background: P, color: "#1A1000", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", fontFamily: FONT }}>
           {busy ? "Connexion…" : "Se connecter"}
         </button>
       </form>

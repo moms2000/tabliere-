@@ -318,6 +318,7 @@ export function StaffTab({ event }) {
 export function CheckinTab({ eventId, staffToken }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(null); // réservation dépliée
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
   useEffect(() => { load(); }, [eventId]);
   const toggle = async (r) => { try { await eventOpsService.checkin(r.id, !!r.checked_in_at, staffToken, eventId); load(); } catch { alert("Erreur"); } };
@@ -332,10 +333,17 @@ export function CheckinTab({ eventId, staffToken }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {[["Attendus", t.total, DARK], ["Arrivés", t.arrived, GREEN], ["Couverts", t.covers, P]].map(([l, v, c], i) => (
-          <div key={i} style={{ flex: 1, minWidth: 100, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+        {[
+          ["Arrivés (pers.)", fmtInt(t.arrived_covers), GREEN, `${t.arrived || 0}/${t.total || 0} résa`],
+          t.capacity != null
+            ? ["Places restantes", fmtInt(Math.max(0, (t.capacity || 0) - (t.arrived_covers || 0))), P, `capacité ${fmtInt(t.capacity)}`]
+            : ["Attendus (pers.)", fmtInt(t.covers), P, `${fmtInt(t.total)} réservations`],
+          ["Couverts attendus", fmtInt(t.covers), DARK, ""],
+        ].map(([l, v, c, sub], i) => (
+          <div key={i} style={{ flex: 1, minWidth: 110, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
             <div style={{ fontSize: 11.5, color: MUTED }}>{l}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: c }}>{fmtInt(v)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: c }}>{v}</div>
+            {sub && <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{sub}</div>}
           </div>
         ))}
       </div>
@@ -347,23 +355,36 @@ export function CheckinTab({ eventId, staffToken }) {
       <div style={{ display: "grid", gap: 8 }}>
         {list.map(r => {
           const arrived = !!r.checked_in_at;
+          const isOpen = open === r.id;
           return (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px", borderRadius: 10,
-              border: `0.5px solid ${arrived ? GREEN + "55" : BORDER}`, background: arrived ? "#F0F6F2" : "white" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{r.client_name || "Client"}</div>
-                <div style={{ fontSize: 12, color: MUTED, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "monospace" }}>{r.ref}</span>
-                  <span>{r.party_size} pers.</span>
-                  {r.table_label && <span>{r.table_kind === "vip" ? "👑 " : ""}{r.table_label}</span>}
-                  {r.promoter_code && <span>promo {r.promoter_code}</span>}
+            <div key={r.id} style={{ borderRadius: 10, border: `0.5px solid ${arrived ? GREEN + "55" : BORDER}`, background: arrived ? "#F0F6F2" : "white" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px" }}>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setOpen(isOpen ? null : r.id)}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{r.client_name || "Client"}</div>
+                  <div style={{ fontSize: 12, color: MUTED, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: "monospace" }}>{r.ref}</span>
+                    <span>{r.party_size} pers.</span>
+                    {r.table_label && <span>{r.table_kind === "vip" ? "👑 " : ""}{r.table_label}</span>}
+                    {r.promoter_code && <span>promo {r.promoter_code}</span>}
+                    <span style={{ color: P }}>{isOpen ? "▲ détail" : "▼ détail"}</span>
+                  </div>
                 </div>
+                <button onClick={() => toggle(r)}
+                  style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
+                    background: arrived ? "#e8e8e8" : GREEN, color: arrived ? DARK : "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                  {arrived ? <><X size={14} /> Annuler</> : <><Check size={14} /> Arrivé</>}
+                </button>
               </div>
-              <button onClick={() => toggle(r)}
-                style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
-                  background: arrived ? "#e8e8e8" : GREEN, color: arrived ? DARK : "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                {arrived ? <><X size={14} /> Annuler</> : <><Check size={14} /> Arrivé</>}
-              </button>
+              {isOpen && (
+                <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 4 }}>
+                  <div>👥 <strong>{r.party_size}</strong> personne(s)</div>
+                  {r.table_label && <div>{r.table_kind === "vip" ? "👑" : "🪑"} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</div>}
+                  {r.client_phone && <div>📞 {r.client_phone}</div>}
+                  {r.promoter_code && <div>📣 promoteur : {r.promoter_code}</div>}
+                  {r.special_request && <div>📝 « {r.special_request} »</div>}
+                  {arrived && <div style={{ color: GREEN }}>✓ Arrivé{r.checked_in_at ? ` à ${new Date(r.checked_in_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>}
+                </div>
+              )}
             </div>
           );
         })}

@@ -539,6 +539,7 @@ export default function Home() {
   useEffect(() => {
     if (user?.role === "restaurateur") navigate("/restaurant", { replace: true });
     else if (user?.role === "admin")   navigate("/admin", { replace: true });
+    else if (user?.role === "organisateur") navigate("/event", { replace: true });
   }, [user, navigate]);
 
   // Keep-alive : ping léger du backend pour éviter la mise en veille (cold start

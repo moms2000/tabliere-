@@ -80,6 +80,15 @@ export default function EventDetail() {
           {event.description && <p style={{ fontSize: 13.5, color: "#4a5a52", lineHeight: 1.6, marginTop: 12, marginBottom: 0, whiteSpace: "pre-wrap" }}>{event.description}</p>}
         </div>
 
+        {/* Galerie photos */}
+        {Array.isArray(event.photos) && event.photos.length > 1 && (
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: 14, paddingBottom: 4 }}>
+            {event.photos.map((url, i) => (
+              <img key={i} src={url} alt="" style={{ height: 130, borderRadius: 12, flexShrink: 0, objectFit: "cover" }} />
+            ))}
+          </div>
+        )}
+
         {done && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             style={{ background: "#F0F6F2", border: `0.5px solid ${GREEN}55`, borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
@@ -175,7 +184,12 @@ function Group({ title, icon: Icon, items, onPick }) {
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
                   <Users size={12} /> {t.capacity} pers. · {fmt(t.price)}
                 </div>
-                {t.description && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>{t.description}</div>}
+                {t.description && <div style={{ fontSize: 11.5, color: "#4a5a52", marginTop: 4, whiteSpace: "pre-wrap" }}>🍾 {t.description}</div>}
+                {t.min_order > 0 && (
+                  <div style={{ fontSize: 11.5, color: "#C47D1A", marginTop: 3, fontWeight: 600 }}>
+                    Minimum de commande : {fmt(t.min_order)}
+                  </div>
+                )}
               </div>
               {taken ? (
                 <span style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>Réservée</span>

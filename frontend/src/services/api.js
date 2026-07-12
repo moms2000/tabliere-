@@ -79,6 +79,8 @@ async function attemptRefresh(refreshToken) {
 
 // ── Intercepteur requête : injecter le token ─────────────────────────────────
 api.interceptors.request.use((config) => {
+  // Ne PAS écraser un header Authorization déjà posé explicitement (ex: token staff)
+  if (config.headers?.Authorization) return config;
   const token = getStoredToken("access_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

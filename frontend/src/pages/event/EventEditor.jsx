@@ -106,14 +106,20 @@ function DetailsTab({ event, onSaved, publicUrl }) {
     ville: event.ville || "", quartier: event.quartier || "",
     starts_at: toLocalInput(event.starts_at), ends_at: toLocalInput(event.ends_at),
     cover_url: event.cover_url || "", is_public: event.is_public !== false,
+    capacity: event.capacity ?? "",
   });
+  const [photos, setPhotos] = useState(Array.isArray(event.photos) ? event.photos : (event.cover_url ? [event.cover_url] : []));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const setPhotoAt = (i, url) => setPhotos(p => { const n = [...p]; if (url) n[i] = url; else n.splice(i, 1); return n.filter(Boolean); });
 
   const save = async () => {
     setSaving(true);
-    try { await eventsService.update(event.id, f); await onSaved(); }
+    try {
+      await eventsService.update(event.id, { ...f, photos, cover_url: photos[0] || f.cover_url || "" });
+      await onSaved();
+    }
     catch (e) { alert(e.response?.data?.message || "Erreur"); }
     finally { setSaving(false); }
   };
@@ -156,7 +162,18 @@ function DetailsTab({ event, onSaved, publicUrl }) {
 
       {/* Infos */}
       <Card>
-        <PhotoUpload label="Affiche / couverture" type="event" value={f.cover_url} onChange={url => set("cover_url", url)} height={130} />
+        {/* Galerie (jusqu'à 5 photos pour promouvoir l'événement) */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 6 }}>
+          PHOTOS DE L'ÉVÉNEMENT <span style={{ fontWeight: 400 }}>({photos.length}/5 — la 1ʳᵉ sert d'affiche)</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8, marginBottom: 14 }}>
+          {photos.map((url, i) => (
+            <PhotoUpload key={i} label="" type="event" value={url} onChange={(u) => setPhotoAt(i, u)} height={90} />
+          ))}
+          {photos.length < 5 && (
+            <PhotoUpload key={`add-${photos.length}`} label="" type="event" value="" onChange={(u) => u && setPhotos(p => [...p, u])} height={90} />
+          )}
+        </div>
         <FormField label="Nom de l'événement"><Input value={f.name} onChange={e => set("name", e.target.value)} /></FormField>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <FormField label="Début">
@@ -174,6 +191,9 @@ function DetailsTab({ event, onSaved, publicUrl }) {
           <FormField label="Quartier"><Input value={f.quartier} onChange={e => set("quartier", e.target.value)} placeholder="Cocody" /></FormField>
           <FormField label="Adresse"><Input value={f.address} onChange={e => set("address", e.target.value)} placeholder="Rue des Jardins" /></FormField>
         </div>
+        <FormField label="Capacité / jauge d'entrées (optionnel)">
+          <Input type="number" value={f.capacity} onChange={e => set("capacity", e.target.value)} placeholder="Ex : 300" />
+        </FormField>
         <FormField label="Description">
           <textarea value={f.description} onChange={e => set("description", e.target.value)} rows={3}
             placeholder="Ambiance, line-up, dress code…"
@@ -196,18 +216,18 @@ function DetailsTab({ event, onSaved, publicUrl }) {
 function PlanTab({ event, tables, onChanged }) {
   const [modal, setModal] = useState(false);
   const [edit, setEdit] = useState(null);
-  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general" });
+  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general", min_order: 0 });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
-  const openNew = () => { setEdit(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general" }); setModal(true); };
-  const openEdit = (t) => { setEdit(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", zone: t.zone || "general" }); setModal(true); };
+  const openNew = () => { setEdit(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general", min_order: 0 }); setModal(true); };
+  const openEdit = (t) => { setEdit(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", zone: t.zone || "general", min_order: t.min_order || 0 }); setModal(true); };
 
   const save = async () => {
     if (!f.label) return;
     setSaving(true);
     try {
-      const payload = { ...f, capacity: Number(f.capacity) || 1, price: Number(f.price) || 0 };
+      const payload = { ...f, capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0 };
       if (edit) await eventsService.updateTable(event.id, edit.id, payload);
       else await eventsService.createTable(event.id, payload);
       setModal(false); await onChanged();
@@ -267,12 +287,17 @@ function PlanTab({ event, tables, onChanged }) {
           <Input type="number" value={f.price} onChange={e => set("price", e.target.value)} placeholder={f.kind === "vip" ? "150000" : "0"} />
         </FormField>
         {f.kind === "vip" && (
-          <FormField label="Contenu du pack (optionnel)">
-            <textarea value={f.description} onChange={e => set("description", e.target.value)} rows={2}
-              placeholder="1 bouteille offerte, service dédié, table réservée…"
-              style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px",
-                fontSize: 13, background: BG, outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box", color: DARK }} />
-          </FormField>
+          <>
+            <FormField label="Bouteilles incluses / contenu du pack (optionnel)">
+              <textarea value={f.description} onChange={e => set("description", e.target.value)} rows={2}
+                placeholder="Ex : 1 bouteille de champagne offerte, service dédié, table réservée…"
+                style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px",
+                  fontSize: 13, background: BG, outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box", color: DARK }} />
+            </FormField>
+            <FormField label="Minimum de commande pour ce salon (FCFA, 0 = aucun)">
+              <Input type="number" value={f.min_order} onChange={e => set("min_order", e.target.value)} placeholder="Ex : 300000" />
+            </FormField>
+          </>
         )}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn onClick={() => setModal(false)}>Annuler</Btn>

@@ -206,6 +206,41 @@ export const list = asyncHandler(async (req, res) => {
   return paginated(res, rows, +count, +page, +limit);
 });
 
+// ── GET /reservations/clients — base clients du restaurant (restaurateur) ─────
+// Agrège les réservations en fiches clients : contact + historique de visites.
+export const getClients = asyncHandler(async (req, res) => {
+  await ensureResaColumns();
+  const isAdmin = req.user.role === "admin";
+  const restoId = isAdmin ? req.query.restaurant_id : req.user.restaurant_id;
+  if (!restoId) throw new AppError("Aucun restaurant associé", 400);
+
+  const { rows } = await query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(r.walk_in_name), ''), u.full_name, 'Client')  AS name,
+       COALESCE(NULLIF(TRIM(r.walk_in_phone), ''), u.phone)               AS phone,
+       MAX(COALESCE(NULLIF(TRIM(r.walk_in_email), ''), u.email))          AS email,
+       COUNT(*)::int                                          AS visits,
+       COALESCE(SUM(r.party_size), 0)::int                    AS total_covers,
+       MAX(r.reserved_at)                                     AS last_visit,
+       MIN(r.reserved_at)                                     AS first_visit,
+       COUNT(*) FILTER (WHERE r.status = 'confirme')::int     AS confirmed,
+       COUNT(*) FILTER (WHERE r.status = 'no_show')::int      AS no_shows
+     FROM reservations r
+     LEFT JOIN users u ON u.id = r.client_id
+     WHERE r.restaurant_id = $1 AND r.archived_at IS NULL
+     GROUP BY 1, 2
+     ORDER BY MAX(r.reserved_at) DESC`,
+    [restoId]
+  );
+
+  const totals = {
+    clients: rows.length,
+    visits: rows.reduce((a, c) => a + c.visits, 0),
+    covers: rows.reduce((a, c) => a + c.total_covers, 0),
+  };
+  return ok(res, { clients: rows, totals });
+});
+
 // ── GET /reservations/:id ─────────────────────────────────────────────────────
 export const getOne = asyncHandler(async (req, res) => {
   const { rows: [resa] } = await query(

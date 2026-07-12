@@ -47,6 +47,9 @@ router.post  ("/waitlist",      authenticate, authorize("restaurateur","admin"),
 router.patch ("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.updateWaitlist);
 router.delete("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.deleteWaitlist);
 
+// Base clients (agrégée) — avant /:id pour éviter la collision de route
+router.get   ("/clients",       authenticate, authorize("restaurateur","admin"), ctrl.getClients);
+
 router.get("/",        authenticate,                          ctrl.list);
 router.get("/:id",     authenticate,                          ctrl.getOne);
 router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"), ctrl.confirm);

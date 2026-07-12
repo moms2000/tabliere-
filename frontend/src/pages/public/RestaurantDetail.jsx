@@ -787,23 +787,21 @@ export default function RestaurantDetail() {
             </div>
           )}
 
-          {/* ── Onglets Réserver / Menu (Menu visible seulement s'il existe) ── */}
-          {menu && menu.length > 0 && (
-            <div style={{ display: "flex", gap: 4, marginBottom: 22, borderBottom: `0.5px solid ${BORDER}` }}>
-              {[["reserver", "Réserver"], ["menu", "Menu"]].map(([k, label]) => (
-                <button key={k} onClick={() => setTab(k)}
-                  style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
-                    padding: "10px 18px", fontSize: 14, fontWeight: tab === k ? 700 : 500,
-                    color: tab === k ? DARK : MUTED,
-                    borderBottom: tab === k ? `2px solid ${P}` : "2px solid transparent", marginBottom: -1 }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* ── Onglets Réserver / Menu (toujours affichés) ── */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 22, borderBottom: `0.5px solid ${BORDER}` }}>
+            {[["reserver", "Réserver"], ["menu", "Menu"]].map(([k, label]) => (
+              <button key={k} onClick={() => setTab(k)}
+                style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
+                  padding: "10px 18px", fontSize: 14, fontWeight: tab === k ? 700 : 500,
+                  color: tab === k ? DARK : MUTED,
+                  borderBottom: tab === k ? `2px solid ${P}` : "2px solid transparent", marginBottom: -1 }}>
+                {label}
+              </button>
+            ))}
+          </div>
 
           {/* Onglet Réserver — créneaux + widget mobile */}
-          {(tab === "reserver" || !menu || !menu.length) && (
+          {tab === "reserver" && (
             <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: DARK,
@@ -841,7 +839,14 @@ export default function RestaurantDetail() {
             </>
           )}
 
-          {/* Onglet Menu */}
+          {/* Onglet Menu — état vide si pas encore publié */}
+          {tab === "menu" && (!menu || menu.length === 0) && (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: MUTED }}>
+              <UtensilsCrossed size={30} color={BORDER} style={{ marginBottom: 10 }} />
+              <div style={{ fontSize: 14 }}>Le menu n'est pas encore disponible.</div>
+              <div style={{ fontSize: 12.5, marginTop: 4 }}>Réservez votre table dès maintenant.</div>
+            </div>
+          )}
           {tab === "menu" && menu && menu.length > 0 && (
             <div>
               {menu.map((cat) => (

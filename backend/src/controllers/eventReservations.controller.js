@@ -3,7 +3,7 @@
  * Cash sur place, aucun paiement in-app. L'organisateur confirme les demandes.
  * Statuts VARCHAR : en_attente | confirme | annule | termine.
  */
-import { query } from "../config/db.js";
+import { query, withTransaction } from "../config/db.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 
@@ -39,32 +39,37 @@ export const createEventReservation = asyncHandler(async (req, res) => {
   if (!event) return notFound(res, "Événement introuvable");
   if (event.status !== "publie") throw new AppError("Cet événement n'accepte pas encore de réservations", 400);
 
-  // Table / pack VIP optionnel — mais s'il est fourni, il doit être libre et actif
-  let tableId = null;
-  if (b.table_id) {
-    const { rows: [t] } = await query(
-      "SELECT id, status, is_active, capacity FROM event_tables WHERE id = $1 AND event_id = $2",
-      [b.table_id, event.id]
-    );
-    if (!t || !t.is_active) throw new AppError("Table introuvable", 404);
-    if (t.status !== "libre") throw new AppError("Cette table n'est plus disponible", 409);
-    tableId = t.id;
-  }
-
   const partySize = Math.max(1, parseInt(b.party_size, 10) || 1);
   const promoter = b.promoter_code ? String(b.promoter_code).trim().toUpperCase().slice(0, 30) : null;
-  const { rows: [resa] } = await query(
-    `INSERT INTO event_reservations
-       (ref, event_id, client_id, table_id, party_size, guest_name, guest_phone, special_request, promoter_code, status)
-     VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
-             $1, $2, $3, $4, $5, $6, $7, $8, 'en_attente')
-     RETURNING *`,
-    [event.id, req.user.id, tableId, partySize,
-     b.guest_name || null, b.guest_phone || null, b.special_request || null, promoter]
-  );
-  if (tableId) {
-    await query("UPDATE event_tables SET status = 'reserve', updated_at = NOW() WHERE id = $1", [tableId]);
-  }
+
+  // Verrou + vérification dans une transaction (anti-double-booking) + contrôle capacité.
+  const resa = await withTransaction(async (client) => {
+    let tableId = null;
+    if (b.table_id) {
+      const { rows: [t] } = await client.query(
+        "SELECT id, status, is_active, capacity FROM event_tables WHERE id = $1 AND event_id = $2 FOR UPDATE",
+        [b.table_id, event.id]
+      );
+      if (!t || !t.is_active) throw new AppError("Table introuvable", 404);
+      if (t.status !== "libre") throw new AppError("Cette table n'est plus disponible", 409);
+      if (t.capacity && partySize > t.capacity)
+        throw new AppError(`Cette table accueille au maximum ${t.capacity} personnes`, 400);
+      tableId = t.id;
+    }
+    const { rows: [r] } = await client.query(
+      `INSERT INTO event_reservations
+         (ref, event_id, client_id, table_id, party_size, guest_name, guest_phone, special_request, promoter_code, status)
+       VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
+               $1, $2, $3, $4, $5, $6, $7, $8, 'en_attente')
+       RETURNING *`,
+      [event.id, req.user.id, tableId, partySize,
+       b.guest_name || null, b.guest_phone || null, b.special_request || null, promoter]
+    );
+    if (tableId) {
+      await client.query("UPDATE event_tables SET status = 'reserve', updated_at = NOW() WHERE id = $1", [tableId]);
+    }
+    return r;
+  });
   return created(res, { reservation: resa }, "Demande de réservation envoyée");
 });
 
@@ -124,9 +129,16 @@ export const cancelEventReservation = asyncHandler(async (req, res) => {
     "UPDATE event_reservations SET status = 'annule', cancelled_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *",
     [resa.id]
   );
-  // Libérer la table
+  // Libérer la table SEULEMENT si aucune autre réservation active ne la détient
   if (resa.table_id) {
-    await query("UPDATE event_tables SET status = 'libre', updated_at = NOW() WHERE id = $1", [resa.table_id]);
+    await query(
+      `UPDATE event_tables SET status = 'libre', updated_at = NOW()
+       WHERE id = $1 AND NOT EXISTS (
+         SELECT 1 FROM event_reservations
+         WHERE table_id = $1 AND status IN ('en_attente','confirme') AND id <> $2
+       )`,
+      [resa.table_id, resa.id]
+    );
   }
   return ok(res, { reservation: updated }, "Réservation annulée");
 });

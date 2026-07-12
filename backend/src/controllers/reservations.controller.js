@@ -61,18 +61,10 @@ export const create = asyncHandler(async (req, res) => {
   if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 
   // Anti-double-booking : la table est libre après la durée d'assise du restaurant.
-  // Conflit = réservation qui chevauche [reserved_at ± durée d'assise].
+  // La vérification de conflit + l'insert se font DANS la transaction avec un
+  // verrou de ligne (SELECT ... FOR UPDATE) pour éviter la course TOCTOU
+  // (deux réservations simultanées sur la même table).
   const durSec = (resto.seating_duration || 120) * 60;
-  if (table_id) {
-    const { rows: [conflict] } = await query(
-      `SELECT id FROM reservations
-       WHERE table_id = $1
-         AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < $3
-         AND status IN ('en_attente','confirme')`,
-      [table_id, reserved_at, durSec]
-    );
-    if (conflict) throw new AppError("Cette table est déjà réservée sur ce créneau", 409);
-  }
 
   // Générer un ref unique RES-XXXX
   // Réf atomique via la séquence dédiée (resa_ref_seq) : COUNT(*)+1 provoquait
@@ -91,6 +83,18 @@ export const create = asyncHandler(async (req, res) => {
   const initialStatus = (isResto || autoConfirm) ? "confirme" : "en_attente";
 
   const resa = await withTransaction(async (client) => {
+    // Verrou + re-vérification du conflit DANS la transaction (anti-course)
+    if (table_id) {
+      await client.query("SELECT id FROM restaurant_tables WHERE id = $1 FOR UPDATE", [table_id]);
+      const { rows: [conflict] } = await client.query(
+        `SELECT id FROM reservations
+         WHERE table_id = $1
+           AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < $3
+           AND status IN ('en_attente','confirme')`,
+        [table_id, reserved_at, durSec]
+      );
+      if (conflict) throw new AppError("Cette table est déjà réservée sur ce créneau", 409);
+    }
     let newResa;
     if (isResto && (walk_in_name || walk_in_phone)) {
       // Walk-in : nécessite les colonnes migrées
@@ -441,7 +445,13 @@ export const noShow = asyncHandler(async (req, res) => {
   );
 
   if (resa.table_id) {
-    await query("UPDATE restaurant_tables SET status = 'libre' WHERE id = $1", [resa.table_id]);
+    // Ne libérer que si aucune autre réservation active ne détient la table
+    await query(
+      `UPDATE restaurant_tables SET status = 'libre' WHERE id = $1 AND NOT EXISTS (
+         SELECT 1 FROM reservations WHERE table_id = $1 AND status IN ('en_attente','confirme') AND id <> $2
+       )`,
+      [resa.table_id, req.params.id]
+    );
   }
 
   return ok(res, { reservation: updated }, "No-show enregistré");

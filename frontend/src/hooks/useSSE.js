@@ -1,7 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { getStoredToken } from "../services/api.js";
-
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+import { getStoredToken, BASE_URL } from "../services/api.js";
 
 /**
  * useSSE — connexion Server-Sent Events pour les notifications temps réel

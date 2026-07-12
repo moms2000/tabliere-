@@ -1,4 +1,5 @@
 import { query, withTransaction }  from "../config/db.js";
+import { seedLoad, cleanSeed, seedStats } from "../utils/seeder.js";
 import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -915,4 +916,30 @@ export const changeAdminPassword = asyncHandler(async (req, res) => {
 
   logger.info("Mot de passe admin changé", { userId: req.user.id });
   return ok(res, null, "Mot de passe mis à jour avec succès");
+});
+
+// ---------------------------------------------------------------------------
+// SEED de charge (test de solidité) — admin uniquement
+// ---------------------------------------------------------------------------
+export const seedRun = asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  const R  = Math.min(5000,  Math.max(0, parseInt(b.restaurants, 10) || 0));
+  const C  = Math.min(50000, Math.max(0, parseInt(b.clients, 10) || 0));
+  const RP = Math.min(50,    Math.max(0, parseInt(b.reservationsPerResto, 10) || 0));
+  const visible = b.visible === true;
+  // Lancé en arrière-plan (peut durer plusieurs secondes) — suivi via /admin/seed/stats
+  seedLoad({ restaurants: R, clients: C, reservationsPerResto: RP, visible,
+    onProgress: (m) => logger.info(`[Seed] ${m}`) })
+    .catch(e => logger.error("[Seed] échec", { error: e.message }));
+  return ok(res, { started: true, restaurants: R, clients: C, reservationsPerResto: RP, visible },
+    "Seed démarré en arrière-plan");
+});
+
+export const seedClean = asyncHandler(async (_req, res) => {
+  const summary = await cleanSeed({ onProgress: (m) => logger.info(`[Seed] ${m}`) });
+  return ok(res, summary, "Données de seed supprimées");
+});
+
+export const seedStatus = asyncHandler(async (_req, res) => {
+  return ok(res, await seedStats(), "Stats seed");
 });

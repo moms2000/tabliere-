@@ -261,10 +261,10 @@ export default function ClientMenu() {
   }, [slug]);
   useEffect(() => { loadMenu(); }, [loadMenu]);
 
-  /* ── Panier ── */
-  const cartItems = Object.values(cart);
-  const cartCount = cartItems.reduce((a, c) => a + c.qty, 0);
-  const cartTotal = cartItems.reduce((a, c) => a + c.item.price * c.qty, 0);
+  /* ── Panier (mémoïsé) ── */
+  const cartItems = useMemo(() => Object.values(cart), [cart]);
+  const cartCount = useMemo(() => cartItems.reduce((a, c) => a + c.qty, 0), [cartItems]);
+  const cartTotal = useMemo(() => cartItems.reduce((a, c) => a + c.item.price * c.qty, 0), [cartItems]);
 
   const openItem = (item) => {
     setActiveItem(item);
@@ -319,13 +319,19 @@ export default function ClientMenu() {
   const addOne = (item) =>
     setCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty||0)+1, note: p[item.id]?.note||"", options: p[item.id]?.options||{} } }));
 
-  /* ── Filtre ── */
-  const allItems = categories.flatMap(c => (c.items||[]).filter(i => i.is_active !== false && i.is_available !== false).map(i => ({ ...i, catId: c.id, catName: c.name })));
-  const filteredItems = allItems.filter(i => {
-    const matchCat = selectedCat === "tous" || i.catId === selectedCat;
-    const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase()) || (i.description||"").toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  /* ── Filtre (mémoïsé — évite de re-filtrer tout le catalogue à chaque frappe) ── */
+  const allItems = useMemo(
+    () => categories.flatMap(c => (c.items||[]).filter(i => i.is_active !== false && i.is_available !== false).map(i => ({ ...i, catId: c.id, catName: c.name }))),
+    [categories]
+  );
+  const filteredItems = useMemo(() => {
+    const q = search.toLowerCase();
+    return allItems.filter(i => {
+      const matchCat = selectedCat === "tous" || i.catId === selectedCat;
+      const matchSearch = !q || i.name.toLowerCase().includes(q) || (i.description||"").toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [allItems, selectedCat, search]);
 
   /* ── Commande ── */
   const placeOrder = async () => {
@@ -565,7 +571,7 @@ export default function ClientMenu() {
                 {/* Photo */}
                 <div style={{ flexShrink: 0 }}>
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.name}
+                    <img src={item.image_url} alt={item.name} loading="lazy"
                       style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover",
                         border: `0.5px solid ${BORDER}` }}
                       onError={e => { e.target.style.display = "none"; }} />
@@ -844,7 +850,7 @@ export default function ClientMenu() {
             marginBottom: 10, border: `0.5px solid ${BORDER}` }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
               {item.image_url && (
-                <img src={item.image_url} alt={item.name}
+                <img src={item.image_url} alt={item.name} loading="lazy"
                   style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
                   onError={e => { e.target.style.display = "none"; }} />
               )}

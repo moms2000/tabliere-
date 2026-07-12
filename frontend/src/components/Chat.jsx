@@ -74,9 +74,12 @@ export default function Chat({ reservationId, otherName = "Restaurant", onClose 
   useEffect(() => {
     if (!reservationId) return;
     fetchMessages();
-    // Polling toutes les 4 secondes
-    pollRef.current = setInterval(fetchMessages, 4000);
-    return () => clearInterval(pollRef.current);
+    // Polling 4s — en pause quand l'onglet est masqué (économie batterie/trafic)
+    const tick = () => { if (document.visibilityState === "visible") fetchMessages(); };
+    pollRef.current = setInterval(tick, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") fetchMessages(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(pollRef.current); document.removeEventListener("visibilitychange", onVis); };
   }, [reservationId]);
 
   // Scroll en bas à chaque nouveau message

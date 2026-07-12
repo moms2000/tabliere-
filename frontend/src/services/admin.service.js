@@ -12,6 +12,11 @@ export const adminService = {
     return data;
   },
 
+  async getAnalytics() {
+    const res = await api.get("/admin/analytics");
+    return res.data.data;
+  },
+
   async listRestaurants(params = {}) {
     // Cache uniquement si pas de filtres dynamiques
     const hasFilters = params.search || params.status || params.plan;

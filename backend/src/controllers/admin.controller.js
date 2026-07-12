@@ -49,6 +49,66 @@ export const getStats = asyncHandler(async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/analytics — base de données & tendances (réservations, plats QR, types)
+// ---------------------------------------------------------------------------
+export const getAnalytics = asyncHandler(async (_req, res) => {
+  const cacheKey = "admin:analytics";
+  const cached = await cache.get(cacheKey);
+  if (cached) return ok(res, cached);
+
+  const safe = (p) => p.catch(() => ({ rows: [] }));
+  const [
+    { rows: [resaGlobal = {}] },
+    { rows: byStatus },
+    { rows: byMonth },
+    { rows: topRestaurants },
+    { rows: topDishes },
+    { rows: topCuisines },
+  ] = await Promise.all([
+    // Réservations — total (hors archivées)
+    safe(query(`SELECT COUNT(*)::int AS total,
+                  COUNT(*) FILTER (WHERE DATE_TRUNC('month', reserved_at) = DATE_TRUNC('month', CURRENT_DATE))::int AS this_month,
+                  COALESCE(SUM(party_size),0)::int AS total_covers
+           FROM reservations WHERE archived_at IS NULL`)),
+    // Par statut
+    safe(query(`SELECT status::text AS status, COUNT(*)::int AS count
+           FROM reservations WHERE archived_at IS NULL GROUP BY status ORDER BY count DESC`)),
+    // Par mois (12 derniers mois)
+    safe(query(`SELECT to_char(DATE_TRUNC('month', reserved_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+           FROM reservations
+           WHERE archived_at IS NULL AND reserved_at >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+           GROUP BY 1 ORDER BY 1`)),
+    // Top restaurants par réservations
+    safe(query(`SELECT re.name, COUNT(*)::int AS reservations
+           FROM reservations r JOIN restaurants re ON re.id = r.restaurant_id
+           WHERE r.archived_at IS NULL AND re.deleted_at IS NULL
+           GROUP BY re.id, re.name ORDER BY reservations DESC LIMIT 10`)),
+    // Plats les plus commandés via QR (agrégat JSONB global)
+    safe(query(`SELECT item->>'name' AS name,
+                  SUM(COALESCE(NULLIF(item->>'qty','')::int, 1))::int AS qty,
+                  SUM(COALESCE(NULLIF(item->>'price','')::int, 0) * COALESCE(NULLIF(item->>'qty','')::int, 1))::int AS revenue
+           FROM qr_orders o
+           JOIN restaurants re ON re.id = o.restaurant_id AND re.deleted_at IS NULL
+           , jsonb_array_elements(o.items) AS item
+           WHERE item->>'name' IS NOT NULL
+           GROUP BY item->>'name' ORDER BY qty DESC LIMIT 15`)),
+    // Types de restaurant les plus réservés (cuisine_type)
+    safe(query(`SELECT COALESCE(NULLIF(TRIM(re.cuisine_type), ''), 'Non renseigné') AS cuisine, COUNT(*)::int AS reservations
+           FROM reservations r JOIN restaurants re ON re.id = r.restaurant_id
+           WHERE r.archived_at IS NULL AND re.deleted_at IS NULL
+           GROUP BY 1 ORDER BY reservations DESC LIMIT 12`)),
+  ]);
+
+  const data = {
+    reservations: { ...resaGlobal, by_status: byStatus, by_month: byMonth, top_restaurants: topRestaurants },
+    top_dishes: topDishes,
+    top_cuisines: topCuisines,
+  };
+  await cache.set(cacheKey, data, 300); // 5 min
+  return ok(res, data);
+});
+
+// ---------------------------------------------------------------------------
 // GET /admin/restaurants
 // ---------------------------------------------------------------------------
 export const listRestaurants = asyncHandler(async (req, res) => {

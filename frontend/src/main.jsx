@@ -39,6 +39,7 @@ const EventLayout       = lazy(() => import("./components/layout/EventLayout"));
 const EventList         = lazy(() => import("./pages/event/EventList"));
 const EventEditor       = lazy(() => import("./pages/event/EventEditor"));
 const CodesOrganisateurs = lazy(() => import("./pages/admin/CodesOrganisateurs"));
+const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
 const Evenements        = lazy(() => import("./pages/public/Evenements"));
 const EventDetail       = lazy(() => import("./pages/public/EventDetail"));
 
@@ -189,6 +190,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <ProtectedRoute roles="admin"><AdminLayout /></ProtectedRoute>
                   }>
                     <Route index              element={<AdminOverview />} />
+                    <Route path="analytics"     element={<AdminAnalytics />} />
                     <Route path="restaurateurs" element={<Restaurateurs />} />
                     <Route path="utilisateurs"  element={<Utilisateurs />} />
                     <Route path="reservations"  element={<Reservations />} />

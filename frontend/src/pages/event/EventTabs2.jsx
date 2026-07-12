@@ -320,7 +320,7 @@ export function CheckinTab({ eventId, staffToken }) {
   const [q, setQ] = useState("");
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
   useEffect(() => { load(); }, [eventId]);
-  const toggle = async (r) => { try { await eventOpsService.checkin(r.id, !!r.checked_in_at, staffToken); load(); } catch { alert("Erreur"); } };
+  const toggle = async (r) => { try { await eventOpsService.checkin(r.id, !!r.checked_in_at, staffToken, eventId); load(); } catch { alert("Erreur"); } };
 
   if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
   const t = data.totals || {};

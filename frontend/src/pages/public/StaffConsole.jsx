@@ -94,7 +94,7 @@ function OrdersBoard({ eventId, token }) {
   const [loading, setLoading] = useState(true);
   const load = () => eventOpsService.listOrders(eventId, token).then(d => setOrders(d?.orders || [])).catch(console.error).finally(() => setLoading(false));
   useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [eventId]);
-  const setStatus = async (o, status) => { try { await eventOpsService.setOrderStatus(o.id, status, token); load(); } catch { alert("Erreur"); } };
+  const setStatus = async (o, status) => { try { await eventOpsService.setOrderStatus(o.id, status, token, eventId); load(); } catch { alert("Erreur"); } };
 
   const ST = { en_attente: ["En attente", "#C47D1A", "#FEF6EC"], servi: ["Servi", GREEN, "#F0F6F2"], paye: ["Payé", "#2563EB", "#EFF6FF"], annule: ["Annulé", "#DC2626", "#FEF2F2"] };
   if (loading) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;

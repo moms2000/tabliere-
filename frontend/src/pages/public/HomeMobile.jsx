@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, MapPin, Star, UtensilsCrossed, Bookmark, Bell,
   ChevronDown, ChevronRight, User, Calendar, Clock, Users, Navigation,
-  Mail, Phone, X, WifiOff, RefreshCw,
+  Mail, Phone, X, WifiOff, RefreshCw, PartyPopper,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -596,6 +596,18 @@ export default function HomeMobile() {
           <Navigation size={14} color={S} />
           Utiliser ma position
         </button>
+      </div>
+
+      {/* ── Accès Événements ── */}
+      <div onClick={() => navigate("/evenements")}
+        style={{ margin: "10px 12px 2px", background: DARK, borderRadius: 12, padding: "12px 14px",
+          display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+        <PartyPopper size={18} color={P} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "white" }}>Événements & soirées</div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)" }}>Réservez tables & packs VIP</div>
+        </div>
+        <ChevronRight size={16} color={P} />
       </div>
 
       {/* ── Onglets catégories (scrollable horizontal) ── */}

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P      = "#E8A045";
@@ -109,6 +109,14 @@ function StepChoix({ onChoose }) {
                 bg: "#F0F6F2",
                 border: `0.5px solid ${S}44`,
               },
+              {
+                type: "organisateur",
+                icon: PartyPopper,
+                title: "Organisateur",
+                sub: "Gérez vos événements et réservations",
+                bg: PL,
+                border: `0.5px solid ${P}44`,
+              },
             ].map(opt => (
               <motion.button key={opt.type} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
                 onClick={() => onChoose(opt.type)}
@@ -116,9 +124,9 @@ function StepChoix({ onChoose }) {
                   borderRadius: 12, border: opt.border, background: opt.bg,
                   cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
                 <div style={{ width: 44, height: 44, borderRadius: 11,
-                  background: opt.type === "client" ? P + "22" : S + "22",
+                  background: (opt.type === "restaurateur" ? S : P) + "22",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <opt.icon size={20} color={opt.type === "client" ? P : S} />
+                  <opt.icon size={20} color={opt.type === "restaurateur" ? S : P} />
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: DARK, marginBottom: 3 }}>
@@ -158,6 +166,7 @@ function StepForm({ type, onBack }) {
   const from = location.state?.from?.pathname || null;
 
   const isResto = type === "restaurateur";
+  const isOrga  = type === "organisateur";
   const accentColor = isResto ? S : P;
 
   const handleSubmit = async (e) => {
@@ -169,11 +178,13 @@ function StepForm({ type, onBack }) {
 
       // Vérification du rôle selon l'espace choisi
       // Vérifier la cohérence rôle/espace choisi
-      if (type === "client" && (user.role === "restaurateur" || user.role === "admin")) {
+      if (type === "client" && user.role !== "client") {
         await logout();
         setError(user.role === "admin"
           ? "Ce compte est un compte administrateur. Accédez à l'espace Admin."
-          : "Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur.");
+          : user.role === "restaurateur"
+          ? "Ce compte est un compte restaurateur. Utilisez l'espace Restaurateur."
+          : "Ce compte est un compte organisateur. Utilisez l'espace Organisateur.");
         setLoading(false);
         return;
       }
@@ -181,7 +192,15 @@ function StepForm({ type, onBack }) {
         await logout();
         setError(user.role === "admin"
           ? "Les administrateurs n'ont pas accès à l'espace restaurateur."
-          : "Ce compte est un compte client. Utilisez l'espace Client.");
+          : "Ce compte n'est pas un compte restaurateur. Utilisez le bon espace.");
+        setLoading(false);
+        return;
+      }
+      if (type === "organisateur" && user.role !== "organisateur") {
+        await logout();
+        setError(user.role === "admin"
+          ? "Les administrateurs n'ont pas accès à l'espace organisateur."
+          : "Ce compte n'est pas un compte organisateur. Utilisez le bon espace.");
         setLoading(false);
         return;
       }
@@ -191,6 +210,8 @@ function StepForm({ type, onBack }) {
         navigate("/admin", { replace: true });
       } else if (user.role === "restaurateur") {
         navigate("/restaurant", { replace: true });
+      } else if (user.role === "organisateur") {
+        navigate("/event", { replace: true });
       } else {
         // Client — rediriger vers la destination d'origine ou l'accueil
         if (from && !from.startsWith("/admin") && !from.startsWith("/restaurant")) {
@@ -240,12 +261,12 @@ function StepForm({ type, onBack }) {
                 ? <UtensilsCrossed size={14} color={accentColor} />
                 : <User size={14} color={accentColor} />}
               <span style={{ fontSize: 11, color: accentColor, fontWeight: 600 }}>
-                Espace {isResto ? "Restaurateur" : "Client"}
+                Espace {isResto ? "Restaurateur" : isOrga ? "Organisateur" : "Client"}
               </span>
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 300, color: "#EAE0CC",
               lineHeight: 1.2, letterSpacing: "-0.5px", marginBottom: 14 }}>
-              {isResto ? "Gérez vos tables\net réservations." : "Bon retour\nparmi nous."}
+              {isResto ? "Gérez vos tables\net réservations." : isOrga ? "Gérez vos\névénements." : "Bon retour\nparmi nous."}
             </h1>
             <p style={{ fontSize: 13, color: "rgba(180,165,130,0.5)", lineHeight: 1.7 }}>
               {isResto
@@ -284,7 +305,7 @@ function StepForm({ type, onBack }) {
 
           <div style={{ fontSize: 20, fontWeight: 500, color: DARK, marginBottom: 4 }}>Connexion</div>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 28 }}>
-            Accédez à votre espace {isResto ? "restaurateur" : "client"}
+            Accédez à votre espace {isResto ? "restaurateur" : isOrga ? "organisateur" : "client"}
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -356,7 +377,7 @@ function StepForm({ type, onBack }) {
 
           <p style={{ textAlign: "center", fontSize: 12, color: MUTED, marginTop: 20 }}>
             Pas encore de compte ?{" "}
-            <Link to={`/inscription?type=${isResto ? "restaurateur" : "client"}`}
+            <Link to={`/inscription?type=${isResto ? "restaurateur" : isOrga ? "organisateur" : "client"}`}
               style={{ color: accentColor, fontWeight: 500, textDecoration: "none" }}>
               S'inscrire
             </Link>

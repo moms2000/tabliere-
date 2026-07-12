@@ -92,8 +92,9 @@ export default function Inscription() {
   const { t, lang }       = useLang();
   const isRTL             = lang === "ar";
 
-  const initialType = searchParams.get("type") === "restaurateur" ? "restaurateur" : "client";
-  const [step,        setStep]        = useState(initialType === "restaurateur" ? 2 : 1);
+  const _pt = searchParams.get("type");
+  const initialType = _pt === "restaurateur" ? "restaurateur" : _pt === "organisateur" ? "organisateur" : "client";
+  const [step,        setStep]        = useState(initialType !== "client" ? 2 : 1);
   const [type,        setType]        = useState(initialType);
   const [showPw,      setShowPw]      = useState(false);
   const [loading,     setLoading]     = useState(false);

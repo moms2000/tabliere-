@@ -39,6 +39,11 @@ router.post  ("/codes/generate",           ctrl.generateCodes);
 router.get   ("/codes",                    ctrl.listCodes);
 router.delete("/codes/:id",                ctrl.deleteCode);
 
+// Seed de charge (test de solidité) — admin uniquement
+router.post  ("/seed",                     ctrl.seedRun);
+router.post  ("/seed/clean",               ctrl.seedClean);
+router.get   ("/seed/stats",               ctrl.seedStatus);
+
 // Codes organisateurs (espace Événements)
 router.post  ("/organisateur-codes/generate", ctrl.generateOrganisateurCodes);
 router.get   ("/organisateur-codes",          ctrl.listOrganisateurCodes);

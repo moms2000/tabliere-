@@ -52,10 +52,11 @@ export const getStats = asyncHandler(async (_req, res) => {
 // GET /admin/restaurants
 // ---------------------------------------------------------------------------
 export const listRestaurants = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status, plan, search } = req.query;
+  const { page = 1, limit = 20, status, plan, search, deleted } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
-  const conditions = ["r.deleted_at IS NULL"]; // masquer les restaurants de comptes supprimés
+  // Par défaut on masque les restaurants supprimés ; ?deleted=true affiche la « corbeille »
+  const conditions = [deleted === "true" ? "r.deleted_at IS NOT NULL" : "r.deleted_at IS NULL"];
 
   // Cast ::text : un filtre ENUM invalide (status/plan) donne 0 résultat, pas un 500
   if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
@@ -89,8 +90,12 @@ export const setRestaurantStatus = asyncHandler(async (req, res) => {
   const allowed = ["actif","suspendu","en_attente"];
   if (!allowed.includes(status)) throw new AppError(`Statut invalide. Valeurs: ${allowed.join(", ")}`, 400);
 
+  // Réactiver (status='actif') = restaurer un restaurant masqué → on efface deleted_at.
   const { rows: [resto] } = await query(
-    "UPDATE restaurants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, status",
+    `UPDATE restaurants
+       SET status = $1, updated_at = NOW(),
+           deleted_at = CASE WHEN $1 = 'actif' THEN NULL ELSE deleted_at END
+     WHERE id = $2 RETURNING id, name, status`,
     [status, req.params.id]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

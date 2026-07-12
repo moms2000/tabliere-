@@ -34,6 +34,7 @@ const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"))
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
 const RestClients       = lazy(() => import("./pages/restaurant/RestClients"));
 const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
+const CodesOrganisateurs = lazy(() => import("./pages/admin/CodesOrganisateurs"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
@@ -189,6 +190,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="parametres"    element={<Parametres />} />
                     <Route path="qr-themes"     element={<QRThemes />} />
               <Route path="codes"         element={<CodesRestaurateurs />} />
+                    <Route path="codes-organisateurs" element={<CodesOrganisateurs />} />
                     <Route path="site"          element={<SiteParametres />} />
                   </Route>
 

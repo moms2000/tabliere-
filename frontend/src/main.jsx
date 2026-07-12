@@ -33,6 +33,7 @@ const RestProfil        = lazy(() => import("./pages/restaurant/RestProfil"));
 const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"));
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
 const RestInstants      = lazy(() => import("./pages/restaurant/RestInstants"));
+const RestClients       = lazy(() => import("./pages/restaurant/RestClients"));
 
 const EventLayout       = lazy(() => import("./components/layout/EventLayout"));
 const EventList         = lazy(() => import("./pages/event/EventList"));
@@ -209,6 +210,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="menu"         element={<RestMenu />} />
                     <Route path="instants"     element={<RestInstants />} />
                     <Route path="reservations" element={<RestReservations />} />
+                    <Route path="clients"      element={<RestClients />} />
                     <Route path="plan"         element={<RestPlanSalle />} />
                     <Route path="profil"       element={<RestProfil />} />
                     <Route path="commandes"    element={<RestCommandes />} />

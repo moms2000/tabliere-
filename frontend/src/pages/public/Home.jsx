@@ -539,6 +539,7 @@ export default function Home() {
   useEffect(() => {
     if (user?.role === "restaurateur") navigate("/restaurant", { replace: true });
     else if (user?.role === "admin")   navigate("/admin", { replace: true });
+    else if (user?.role === "organisateur") navigate("/event", { replace: true });
   }, [user, navigate]);
 
   // Keep-alive : ping léger du backend pour éviter la mise en veille (cold start
@@ -771,13 +772,14 @@ export default function Home() {
               { key: "nav_restaurants", action: () => scrollTo(listRef) },
               { key: "nav_experiences", action: () => scrollTo(experiencesRef) },
               { key: "nav_how",         action: () => scrollTo(howRef) },
-            ].map(({ key, action }) => (
+              { key: "nav_events", label: "Événements", action: () => navigate("/evenements") },
+            ].map(({ key, label, action }) => (
               <span key={key} onClick={action}
                 style={{ cursor: "pointer", whiteSpace: "nowrap",
                   transition: "color .15s", fontWeight: 500 }}
                 onMouseEnter={e => e.target.style.color = DARK}
                 onMouseLeave={e => e.target.style.color = MUTED}>
-                {t(key)}
+                {label || t(key)}
               </span>
             ))}
           </div>

@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Utensils, Users, CalendarCheck, CreditCard,
-  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe, BarChart3, PartyPopper,
+  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe, PartyPopper, BarChart3,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";

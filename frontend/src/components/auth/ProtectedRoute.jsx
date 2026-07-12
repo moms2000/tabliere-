@@ -32,6 +32,7 @@ export default function ProtectedRoute({ children, roles }) {
       // Rediriger selon le rôle réel
       if (user.role === "admin")        return <Navigate to="/admin" replace />;
       if (user.role === "restaurateur") return <Navigate to="/restaurant" replace />;
+      if (user.role === "organisateur") return <Navigate to="/event" replace />;
       return <Navigate to="/" replace />;
     }
   }

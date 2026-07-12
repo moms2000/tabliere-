@@ -32,9 +32,18 @@ const RestPlanSalle     = lazy(() => import("./pages/restaurant/RestPlanSalle"))
 const RestProfil        = lazy(() => import("./pages/restaurant/RestProfil"));
 const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"));
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
+const RestInstants      = lazy(() => import("./pages/restaurant/RestInstants"));
 const RestClients       = lazy(() => import("./pages/restaurant/RestClients"));
-const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
+
+const EventLayout       = lazy(() => import("./components/layout/EventLayout"));
+const EventList         = lazy(() => import("./pages/event/EventList"));
+const EventEditor       = lazy(() => import("./pages/event/EventEditor"));
 const CodesOrganisateurs = lazy(() => import("./pages/admin/CodesOrganisateurs"));
+const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
+const Evenements        = lazy(() => import("./pages/public/Evenements"));
+const EventDetail       = lazy(() => import("./pages/public/EventDetail"));
+const EventOrder        = lazy(() => import("./pages/public/EventOrder"));
+const StaffConsole      = lazy(() => import("./pages/public/StaffConsole"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
@@ -112,6 +121,9 @@ function AppWithNav({ children }) {
   const hideBottomNav =
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/restaurant") ||
+    location.pathname.startsWith("/event") ||
+    location.pathname.startsWith("/evenement/") ||
+    location.pathname.startsWith("/staff") ||
     location.pathname.startsWith("/menu/") ||
     location.pathname.startsWith("/connexion") ||
     location.pathname.startsWith("/inscription") ||
@@ -161,6 +173,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/connexion/admin"   element={<ConnexionAdmin />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
+                  <Route path="/evenements"          element={<Evenements />} />
+                  <Route path="/evenement/:slug"     element={<EventDetail />} />
+                  <Route path="/evenement/:slug/carte" element={<EventOrder />} />
+                  <Route path="/staff"               element={<StaffConsole />} />
                   <Route path="/verify-email"         element={<VerifyEmail />} />
                   <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
                   <Route path="/reset-password"       element={<ResetPassword />} />
@@ -200,12 +216,21 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   }>
                     <Route index               element={<RestDashboard />} />
                     <Route path="menu"         element={<RestMenu />} />
+                    <Route path="instants"     element={<RestInstants />} />
                     <Route path="reservations" element={<RestReservations />} />
                     <Route path="clients"      element={<RestClients />} />
                     <Route path="plan"         element={<RestPlanSalle />} />
                     <Route path="profil"       element={<RestProfil />} />
                     <Route path="commandes"    element={<RestCommandes />} />
                     <Route path="pos"          element={<RestPOS />} />
+                  </Route>
+
+                  {/* ── Organisateur (Événements) ────────────────────────── */}
+                  <Route path="/event" element={
+                    <ProtectedRoute roles="organisateur"><EventLayout /></ProtectedRoute>
+                  }>
+                    <Route index        element={<EventList />} />
+                    <Route path=":id"   element={<EventEditor />} />
                   </Route>
 
                   {/* ── QR Menu client ─────────────────────────────────── */}

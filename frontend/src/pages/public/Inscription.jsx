@@ -92,8 +92,9 @@ export default function Inscription() {
   const { t, lang }       = useLang();
   const isRTL             = lang === "ar";
 
-  const initialType = searchParams.get("type") === "restaurateur" ? "restaurateur" : "client";
-  const [step,        setStep]        = useState(initialType === "restaurateur" ? 2 : 1);
+  const _pt = searchParams.get("type");
+  const initialType = _pt === "restaurateur" ? "restaurateur" : _pt === "organisateur" ? "organisateur" : "client";
+  const [step,        setStep]        = useState(initialType !== "client" ? 2 : 1);
   const [type,        setType]        = useState(initialType);
   const [showPw,      setShowPw]      = useState(false);
   const [loading,     setLoading]     = useState(false);
@@ -115,6 +116,7 @@ export default function Inscription() {
     date_naissance: "", localPhone: "",
     password: "", resto: "", terms: false,
     code_restaurateur: "", // code obligatoire pour restaurateurs
+    code_organisateur: "", // code obligatoire pour organisateurs
   });
 
   const set        = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -148,6 +150,10 @@ export default function Inscription() {
     if (type === "restaurateur" && !form.code_restaurateur.trim()) {
       return "Le code restaurateur est obligatoire. Contactez l'équipe TablièreCI pour obtenir votre code d'accès.";
     }
+    // Code organisateur obligatoire
+    if (type === "organisateur" && !form.code_organisateur.trim()) {
+      return "Le code organisateur est obligatoire. Contactez l'équipe TablièreCI pour obtenir votre code d'accès.";
+    }
     return null;
   };
 
@@ -161,6 +167,7 @@ export default function Inscription() {
     // Figer les valeurs du formulaire AVANT tout appel async
     // (évite toute race condition si React re-render entre les appels)
     const isResto = type === "restaurateur";
+    const isOrga  = type === "organisateur";
     const code    = isResto ? form.code_restaurateur.trim().toUpperCase() : undefined;
     const payload = {
       full_name:         fullName,
@@ -170,6 +177,7 @@ export default function Inscription() {
       role:              type,
       restaurant_name:   isResto ? form.resto.trim() : undefined,
       code_restaurateur: code,
+      code_organisateur: isOrga ? form.code_organisateur.trim().toUpperCase() : undefined,
     };
 
     try {
@@ -277,10 +285,10 @@ export default function Inscription() {
 
         <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
           <motion.button whileTap={{ scale: 0.97 }}
-            onClick={() => navigate(type === "restaurateur" ? "/restaurant" : "/")}
+            onClick={() => navigate(type === "restaurateur" ? "/restaurant" : type === "organisateur" ? "/event" : "/")}
             style={{ background: P, color: "#1A1000", border: "none", borderRadius: 9,
               padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            {type === "restaurateur" ? "Accéder à mon espace" : "Continuer"}
+            {(type === "restaurateur" || type === "organisateur") ? "Accéder à mon espace" : "Continuer"}
           </motion.button>
           <span style={{ fontSize: 12, color: MUTED }}>
             Vous n'avez pas reçu l'email ?{" "}
@@ -368,8 +376,10 @@ export default function Inscription() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { key: "client",       titleK: "reg_client_title", descK: "reg_client_desc" },
-              { key: "restaurateur", titleK: "reg_resto_title",  descK: "reg_resto_desc"  },
+              { key: "client",       title: t("reg_client_title"), desc: t("reg_client_desc") },
+              { key: "restaurateur", title: t("reg_resto_title"),  desc: t("reg_resto_desc")  },
+              { key: "organisateur", title: "Organisateur d'événements",
+                desc: "Créez vos événements et gérez les réservations de tables & packs VIP" },
             ].map(o => (
               <motion.div key={o.key} whileHover={{ y: -1 }}
                 onClick={() => { setType(o.key); setStep(2); }}
@@ -378,8 +388,8 @@ export default function Inscription() {
                   background: type === o.key ? "#FEF6EC" : "#fff",
                   transition: "all .15s" }}>
                 <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 3,
-                  color: type === o.key ? "#C47D1A" : DARK }}>{t(o.titleK)}</div>
-                <div style={{ fontSize: 12, color: MUTED }}>{t(o.descK)}</div>
+                  color: type === o.key ? "#C47D1A" : DARK }}>{o.title}</div>
+                <div style={{ fontSize: 12, color: MUTED }}>{o.desc}</div>
               </motion.div>
             ))}
           </div>
@@ -418,7 +428,7 @@ export default function Inscription() {
             </div>
             <div style={{ fontSize: 9, letterSpacing: "2.5px", textTransform: "uppercase",
               color: P, opacity: 0.8, marginBottom: 16 }}>
-              {type === "restaurateur" ? "Espace restaurateur" : "Nouveau compte"}
+              {type === "restaurateur" ? "Espace restaurateur" : type === "organisateur" ? "Espace organisateur" : "Nouveau compte"}
             </div>
             <h1 style={{ fontSize: 26, fontWeight: 300, color: "#EAE0CC",
               lineHeight: 1.2, letterSpacing: "-0.5px", marginBottom: 14 }}>
@@ -591,6 +601,29 @@ export default function Inscription() {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Code organisateur obligatoire */}
+            {type === "organisateur" && (
+              <div>
+                <label style={lbl}>Code d'accès organisateur *</label>
+                <div style={{ ...wrap, border: form.code_organisateur ? `0.5px solid ${P}` : wrap.border }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  <input value={form.code_organisateur}
+                    onChange={e => set("code_organisateur", e.target.value.toUpperCase())}
+                    placeholder="ORG-XXXX-XXXX" required
+                    autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck={false}
+                    style={{ border: "none", background: "transparent", fontSize: 13,
+                      outline: "none", flex: 1, color: DARK, fontFamily: "inherit",
+                      letterSpacing: "1px", fontWeight: 600 }} />
+                </div>
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>
+                  Contactez TablièreCI pour obtenir votre code d'accès organisateur.
+                </div>
+              </div>
             )}
 
             {/* Mot de passe */}

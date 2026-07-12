@@ -568,6 +568,8 @@ export default function Home() {
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page,        setPage]        = useState(1);
   const [loadError,   setLoadError]   = useState(false);
   const [view,        setView]        = useState("list"); // "list" | "map"
   const [search,      setSearch]      = useState("");
@@ -657,22 +659,36 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const loadRestaurants = useCallback(() => {
-    const params = { ...TABS[activeTab].params };
+  const PAGE_SIZE = 24;
+  const buildParams = useCallback(() => {
+    const params = { ...TABS[activeTab].params, limit: PAGE_SIZE };
     if (search) params.search = search;
     if (sort !== "rating") params.sort = sort;
     const ck = Object.entries(checkedC).filter(([,v]) => v).map(([k]) => k);
     if (ck.length === 1) params.cuisine_type = ck[0];
     // Le sélecteur "personnes" filtre les restaurants pouvant accueillir la table
     if (resaGuests > 1) params.min_capacity = resaGuests;
-    setLoading(true); setLoadError(false);
-    restaurantsService.list(params)
-      .then(res => { setRestaurants(res.data || []); setTotal(res.pagination?.total || 0); })
-      .catch(() => { setRestaurants([]); setLoadError(true); }) // distinguer panne vs 0 résultat
-      .finally(() => setLoading(false));
+    return params;
   }, [search, sort, checkedC, activeTab, resaGuests]);
 
-  useEffect(() => { loadRestaurants(); }, [loadRestaurants]);
+  // Charge une page ; append=true ajoute à la suite (« Charger plus »)
+  const loadPage = useCallback((pageArg, append) => {
+    (append ? setLoadingMore : setLoading)(true);
+    if (!append) setLoadError(false);
+    restaurantsService.list({ ...buildParams(), page: pageArg })
+      .then(res => {
+        const rows = res.data || [];
+        setRestaurants(prev => append ? [...prev, ...rows] : rows);
+        setTotal(res.pagination?.total || 0);
+        setPage(pageArg);
+      })
+      .catch(() => { if (!append) { setRestaurants([]); setLoadError(true); } })
+      .finally(() => (append ? setLoadingMore : setLoading)(false));
+  }, [buildParams]);
+
+  const loadRestaurants = useCallback(() => loadPage(1, false), [loadPage]);
+  // Reset à la page 1 quand un filtre/onglet/recherche change
+  useEffect(() => { loadPage(1, false); }, [buildParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ouvre une fiche restaurant en transmettant le contexte de réservation
   // (date/heure/couverts) pour pré-remplir le formulaire de réservation.
@@ -1405,6 +1421,19 @@ export default function Home() {
                   );
                 })}
               </motion.div>
+            )}
+
+            {/* Charger plus (pagination progressive) */}
+            {!loading && restaurants.length > 0 && restaurants.length < total && (
+              <div style={{ textAlign: "center", marginTop: 22 }}>
+                <motion.button whileTap={{ scale: 0.97 }}
+                  onClick={() => loadPage(page + 1, true)} disabled={loadingMore}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 26px",
+                    background: "white", color: DARK, fontSize: 13.5, fontWeight: 600,
+                    cursor: loadingMore ? "default" : "pointer", fontFamily: FONT }}>
+                  {loadingMore ? "Chargement…" : `Charger plus (${restaurants.length}/${total})`}
+                </motion.button>
+              </div>
             )}
           </div>
         </div>

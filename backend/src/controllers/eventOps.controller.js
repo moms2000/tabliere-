@@ -72,9 +72,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 export const listCheckin = asyncHandler(async (req, res) => {
   const { rows } = await query(
     `SELECT r.id, r.ref, r.party_size, r.status, r.checked_in_at, r.promoter_code,
+            r.special_request, r.created_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
-            t.label AS table_label, t.kind AS table_kind
+            t.label AS table_label, t.kind AS table_kind, t.price AS table_price
      FROM event_reservations r
      LEFT JOIN users u ON u.id = r.client_id
      LEFT JOIN event_tables t ON t.id = r.table_id
@@ -82,8 +83,18 @@ export const listCheckin = asyncHandler(async (req, res) => {
      ORDER BY r.checked_in_at NULLS FIRST, r.created_at DESC`,
     [req.eventScope]
   );
-  const arrived = rows.filter(r => r.checked_in_at).length;
-  return ok(res, { reservations: rows, totals: { total: rows.length, arrived, covers: rows.reduce((a, c) => a + (c.party_size || 0), 0) } });
+  const arrivedRows = rows.filter(r => r.checked_in_at);
+  const { rows: [ev] } = await query("SELECT capacity FROM events WHERE id = $1", [req.eventScope]);
+  return ok(res, {
+    reservations: rows,
+    totals: {
+      total: rows.length,
+      arrived: arrivedRows.length,
+      arrived_covers: arrivedRows.reduce((a, c) => a + (c.party_size || 0), 0),
+      covers: rows.reduce((a, c) => a + (c.party_size || 0), 0),
+      capacity: ev?.capacity ?? null,
+    },
+  });
 });
 
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────

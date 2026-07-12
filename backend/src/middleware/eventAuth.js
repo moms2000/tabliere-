@@ -40,7 +40,8 @@ export const ownerOrStaff = async (req, res, next) => {
   const { rows: [u] } = await query("SELECT id, role FROM users WHERE id = $1", [decoded.id]);
   if (!u) return unauth(res, "Session invalide");
   req.user = u;
-  const eventId = req.params.id || req.query.event_id || req.body?.event_id;
+  // event_id vient de la query ou du body (jamais de :id qui peut être une commande/résa)
+  const eventId = req.query.event_id || req.body?.event_id;
   if (!eventId) return forbidden(res, "Événement non précisé");
   if (u.role === "admin") { req.eventScope = eventId; return next(); }
   const { rows: [e] } = await query("SELECT owner_id FROM events WHERE id = $1", [eventId]);

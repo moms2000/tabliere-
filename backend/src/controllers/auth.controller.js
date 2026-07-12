@@ -200,19 +200,18 @@ export const register = asyncHandler(async (req, res) => {
     return user;
   });
 
-  // Rattacher les réservations faites en tant qu'INVITÉ (même e-mail ou même
-  // téléphone) au compte fraîchement créé → elles apparaissent dans « Mes
-  // réservations ». Hors transaction : ne doit jamais bloquer l'inscription.
+  // Rattacher les réservations faites en tant qu'INVITÉ au compte fraîchement créé.
+  // SÉCURITÉ : on exige l'e-mail EXACT (identifiant fourni à l'inscription). Un
+  // simple numéro de téléphone partagé ne suffit plus (évitait qu'un inscrit hérite
+  // des réservations d'un inconnu ayant le même numéro). Hors transaction.
   if ((role || "client") === "client") {
     await query(
       `UPDATE reservations
        SET client_id = $1
        WHERE client_id = (SELECT id FROM users WHERE email = 'guest@tabliereci.net' LIMIT 1)
-         AND (
-           (walk_in_email IS NOT NULL AND lower(walk_in_email) = lower($2))
-           OR ($3 <> '' AND walk_in_phone IS NOT NULL
-               AND regexp_replace(walk_in_phone, '[^0-9]', '', 'g') = regexp_replace($3, '[^0-9]', '', 'g'))
-         )`,
+         AND walk_in_email IS NOT NULL AND lower(walk_in_email) = lower($2)
+         AND ($3 = '' OR walk_in_phone IS NULL
+              OR regexp_replace(walk_in_phone, '[^0-9]', '', 'g') = regexp_replace($3, '[^0-9]', '', 'g'))`,
       [result.id, email, phone || ""]
     ).catch((e) => logger.warn("Rattachement réservations invité échoué", { error: e?.message }));
   }

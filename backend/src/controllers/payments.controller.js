@@ -25,7 +25,7 @@ export const initiate = asyncHandler(async (req, res) => {
 
   // Récupérer la réservation + restaurant
   const { rows: [resa] } = await query(
-    `SELECT r.*, re.name AS resto_name, re.commission_pct
+    `SELECT r.*, re.name AS resto_name, re.commission_pct, re.deposit_amount
      FROM reservations r
      JOIN restaurants re ON re.id = r.restaurant_id
      WHERE r.id = $1 AND r.client_id = $2`,
@@ -34,9 +34,10 @@ export const initiate = asyncHandler(async (req, res) => {
   if (!resa) return notFound(res, "Réservation introuvable");
   if (resa.status === "annule") throw new AppError("Impossible de payer une réservation annulée", 400);
 
-  // Montant de l'arrhes (ex: 2 000 F par couvert, configurable)
-  const ARRHES_PAR_COUVERT = 2_000; // FCFA
-  const amount = resa.party_size * ARRHES_PAR_COUVERT;
+  // Montant de l'arrhes : par couvert, configuré par le restaurant (deposit_amount),
+  // avec repli à 2 000 F/couvert si non défini.
+  const perCover = Number(resa.deposit_amount) > 0 ? Number(resa.deposit_amount) : 2_000;
+  const amount = resa.party_size * perCover;
   const commission = Math.round(amount * (resa.commission_pct / 100));
 
   // Créer le paiement en base (statut en_attente)

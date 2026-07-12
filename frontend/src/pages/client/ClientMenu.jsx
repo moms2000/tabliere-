@@ -2,7 +2,7 @@
  * ClientMenu — Interface QR identique BBR (Boulay Beach Resort)
  * Screens: splash → menu → item → cart → info → confirm
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Minus, ShoppingCart, Search, ArrowLeft, Check, AlertTriangle, History, RefreshCw, ChevronRight } from "lucide-react";
@@ -218,6 +218,7 @@ export default function ClientMenu() {
   const [resto,       setResto]       = useState(null);
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [loadErr,     setLoadErr]     = useState(false);
   const [step,        setStep]        = useState("intro"); // intro → splash → menu → ...
   const [activeItem,  setActiveItem]  = useState(null);   // item détail
   const [selectedCat, setSelectedCat] = useState("tous"); // "tous" ou cat.id
@@ -240,8 +241,9 @@ export default function ClientMenu() {
   const [itemAccomp,  setItemAccomp]  = useState("");
   const [itemNote,    setItemNote]    = useState("");
 
-  useEffect(() => {
-    if (!slug) return;
+  const loadMenu = useCallback(() => {
+    if (!slug) { setLoading(false); setLoadErr(true); return; }
+    setLoading(true); setLoadErr(false);
     Promise.all([
       restaurantsService.getBySlug(slug),
       menuService.getPublicMenu(slug),
@@ -250,9 +252,14 @@ export default function ClientMenu() {
       setResto(r);
       const cats = (md.categories || []).filter(c => (c.items||[]).some(i => i.is_active !== false));
       setCategories(cats);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch((e) => {
+      // 404 = resto inexistant (reste "introuvable") ; sinon = panne réseau/cold-start (retry possible)
+      if (e?.response?.status === 404) setResto(null);
+      else setLoadErr(true);
+    }).finally(() => setLoading(false));
     setLocalOrders(loadOrders());
   }, [slug]);
+  useEffect(() => { loadMenu(); }, [loadMenu]);
 
   /* ── Panier ── */
   const cartItems = Object.values(cart);
@@ -363,6 +370,20 @@ export default function ClientMenu() {
         style={{ fontSize: 20, fontFamily: FS, color: BROWN, fontStyle: "italic" }}>
         Chargement…
       </motion.div>
+    </div>
+  );
+
+  /* ── Erreur de chargement (réseau / cold-start) : proposer un retry ── */
+  if (loadErr) return (
+    <div style={{ minHeight: "100vh", background: CREAM, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 16, color: MUTED, fontFamily: FN, padding: 24, textAlign: "center" }}>
+      <AlertTriangle size={34} color={BROWN} />
+      <div style={{ fontSize: 15, color: BROWN }}>Impossible de charger le menu.<br/>Vérifiez votre connexion et réessayez.</div>
+      <button onClick={loadMenu}
+        style={{ display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 10,
+          padding: "11px 22px", background: BROWN, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FN }}>
+        <RefreshCw size={15} /> Réessayer
+      </button>
     </div>
   );
 
@@ -1040,7 +1061,7 @@ export default function ClientMenu() {
           {/* Réf */}
           <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: MUTED,
             letterSpacing: "1px", textTransform: "uppercase", marginBottom: 16 }}>
-            Réf. {lastOrder?.ref || "CMD-" + String(Math.random()).slice(2,8).toUpperCase()}
+            Réf. {lastOrder?.ref || "—"}
           </div>
 
           {/* Progression */}
@@ -1090,7 +1111,8 @@ export default function ClientMenu() {
         </div>
 
         {/* Actions */}
-        <button style={{ width: "100%", padding: "12px 0", borderRadius: 8,
+        <button onClick={() => setLocalOrders(loadOrders())}
+          style={{ width: "100%", padding: "12px 0", borderRadius: 8,
           border: `0.5px solid ${BORDER}`, background: WHITE, color: MUTED,
           fontSize: 12, cursor: "pointer", fontFamily: FN, marginBottom: 10,
           display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>

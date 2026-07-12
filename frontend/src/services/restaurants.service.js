@@ -11,9 +11,9 @@ export const restaurantsService = {
     return res.data.data;
   },
 
-  async getAvailability(slug, date, partySize) {
+  async getAvailability(slug, date, partySize, at) {
     const res = await api.get(`/restaurants/${slug}/availability`, {
-      params: { date, party_size: partySize },
+      params: { date, party_size: partySize, ...(at ? { at } : {}) },
     });
     return res.data.data;
   },

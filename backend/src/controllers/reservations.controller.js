@@ -52,7 +52,7 @@ export const create = asyncHandler(async (req, res) => {
 
   // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status, auto_confirm FROM restaurants WHERE id = $1",
+    "SELECT id, name, capacity, status, auto_confirm, seating_duration FROM restaurants WHERE id = $1",
     [effectiveRestoId]
   );
   if (!resto) throw new AppError("Restaurant introuvable", 404);
@@ -60,15 +60,16 @@ export const create = asyncHandler(async (req, res) => {
     throw new AppError("Restaurant inactif", 404);
   if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 
-  // Vérifier que la table n'est pas déjà réservée sur ce créneau
+  // Anti-double-booking : la table est libre après la durée d'assise du restaurant.
+  // Conflit = réservation qui chevauche [reserved_at ± durée d'assise].
+  const durSec = (resto.seating_duration || 120) * 60;
   if (table_id) {
     const { rows: [conflict] } = await query(
       `SELECT id FROM reservations
        WHERE table_id = $1
-         AND reserved_at::date = $2::date
-         AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < 7200
+         AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < $3
          AND status IN ('en_attente','confirme')`,
-      [table_id, reserved_at]
+      [table_id, reserved_at, durSec]
     );
     if (conflict) throw new AppError("Cette table est déjà réservée sur ce créneau", 409);
   }

@@ -98,7 +98,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.opening_hours, r.theme_color, r.logo_url, r.photos, r.options,
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
             r.deposit_enabled, r.deposit_min_party, r.deposit_message,
-            r.latitude, r.longitude, r.menu_public, r.stories_enabled,
+            r.latitude, r.longitude, r.menu_public, r.stories_enabled, r.seating_duration,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -154,6 +154,7 @@ export const update = asyncHandler(async (req, res) => {
     "lunch_hours","dinner_hours","tables_2","tables_4","tables_6","tables_8",
     // Confirmation automatique ou manuelle des réservations
     "auto_confirm",
+    "seating_duration",
     // Dépôt / arrhes configurable par le restaurateur
     "deposit_enabled","deposit_min_party","deposit_message",
     // Localisation précise (carte)
@@ -208,6 +209,11 @@ export const update = asyncHandler(async (req, res) => {
     if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled"
         || field === "menu_public" || field === "stories_enabled") {
       val = (val === true || val === "true" || val === 1);
+    }
+    // Durée d'assise : entier borné (30 min → 8h)
+    if (field === "seating_duration") {
+      const n = parseInt(val, 10);
+      val = (Number.isFinite(n) && n >= 30 && n <= 480) ? n : 120;
     }
     values.push(val);
     updates.push(`${field} = $${values.length}`);
@@ -431,35 +437,52 @@ export const generateTableQR = asyncHandler(async (req, res) => {
 
 // ── Disponibilités ─────────────────────────────────────────────────────────────
 export const getAvailability = asyncHandler(async (req, res) => {
-  const { date } = req.query;
+  const { date, at } = req.query;
   if (!date) throw new AppError("Paramètre 'date' requis (ex: 2025-08-15)", 400);
   // Parse robuste : un party_size non numérique casserait la comparaison INTEGER (500)
   const party_size = Math.max(1, parseInt(req.query.party_size, 10) || 2);
 
   const { rows: [resto] } = await query(
-    "SELECT id FROM restaurants WHERE slug = $1 AND status = 'actif'",
+    "SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif'",
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
+  const durMin = resto.seating_duration || 120;
 
-  // Tables disponibles pour le créneau
-  const { rows: tables } = await query(
-    `SELECT t.id, t.label, t.capacity, t.zone
-     FROM restaurant_tables t
-     WHERE t.restaurant_id = $1
-       AND t.is_active = TRUE
-       AND t.capacity >= $2
-       AND t.id NOT IN (
-         SELECT table_id FROM reservations
-         WHERE restaurant_id = $1
-           AND reserved_at::date = $3::date
-           AND status IN ('en_attente','confirme')
-       )
-     ORDER BY t.capacity`,
-    [resto.id, party_size, date]
-  );
+  // Table occupée = réservation qui CHEVAUCHE l'horaire demandé (±durée d'assise).
+  // Avec un horaire précis (at), la table se libère après la durée → pas de blocage
+  // sur toute la journée. Sans horaire, on retombe sur l'exclusion journalière.
+  let tables;
+  if (at) {
+    ({ rows: tables } = await query(
+      `SELECT t.id, t.label, t.capacity, t.zone
+       FROM restaurant_tables t
+       WHERE t.restaurant_id = $1 AND t.is_active = TRUE AND t.capacity >= $2
+         AND t.id NOT IN (
+           SELECT table_id FROM reservations
+           WHERE restaurant_id = $1 AND table_id IS NOT NULL
+             AND status IN ('en_attente','confirme')
+             AND ABS(EXTRACT(EPOCH FROM (reserved_at - $3::timestamptz))) < $4
+         )
+       ORDER BY t.capacity`,
+      [resto.id, party_size, at, durMin * 60]
+    ));
+  } else {
+    ({ rows: tables } = await query(
+      `SELECT t.id, t.label, t.capacity, t.zone
+       FROM restaurant_tables t
+       WHERE t.restaurant_id = $1 AND t.is_active = TRUE AND t.capacity >= $2
+         AND t.id NOT IN (
+           SELECT table_id FROM reservations
+           WHERE restaurant_id = $1 AND reserved_at::date = $3::date
+             AND status IN ('en_attente','confirme')
+         )
+       ORDER BY t.capacity`,
+      [resto.id, party_size, date]
+    ));
+  }
 
-  return ok(res, { available_tables: tables, date });
+  return ok(res, { available_tables: tables, date, seating_duration: durMin });
 });
 
 // ── Helper interne ─────────────────────────────────────────────────────────────

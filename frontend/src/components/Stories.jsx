@@ -35,24 +35,37 @@ export default function Stories({ slug }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user, slug]);
 
-  // ── Non connecté : teaser (incite à l'inscription) ──
+  // ── Non connecté : teaser esthétique (bulles floues = photos masquées) ──
   if (!user) {
+    const BUBBLES = ["#E8A045", "#3D6B55", "#E86A45", "#8A5AE8", "#45A0E8"];
     return (
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px" }}>
         <div onClick={() => navigate("/connexion")}
-          style={{ display: "flex", alignItems: "center", gap: 14, background: DARK, borderRadius: 16,
-            padding: "16px 20px", cursor: "pointer", fontFamily: FONT }}>
-          <div style={{ width: 48, height: 48, borderRadius: "50%", background: AMBER + "33",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Camera size={22} color={AMBER} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Instants du restaurant</div>
-            <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginTop: 2 }}>
-              Connectez-vous pour voir les photos partagées par les clients aujourd'hui
+          style={{ position: "relative", overflow: "hidden", borderRadius: 18, cursor: "pointer",
+            background: "linear-gradient(120deg, #ffffff 0%, #FEF6EC 100%)",
+            border: "0.5px solid #E4DFD8", padding: "14px 16px",
+            display: "flex", alignItems: "center", gap: 16, fontFamily: FONT }}>
+          {/* Bulles floues — évoquent des photos masquées */}
+          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+            {BUBBLES.map((c, i) => (
+              <div key={i} style={{ width: 46, height: 46, borderRadius: "50%", marginLeft: i ? -14 : 0,
+                background: `radial-gradient(circle at 32% 28%, ${c}, ${c}66)`,
+                filter: "blur(2.5px)", border: "2.5px solid #fff",
+                boxShadow: "0 2px 10px rgba(0,0,0,.10)" }} />
+            ))}
+            <div style={{ width: 46, height: 46, borderRadius: "50%", marginLeft: -14, zIndex: 1,
+              background: AMBER, border: "2.5px solid #fff", display: "flex",
+              alignItems: "center", justifyContent: "center", color: "#1a1000", flexShrink: 0 }}>
+              <Camera size={20} />
             </div>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: AMBER }}>Se connecter</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: DARK }}>Instants du restaurant</div>
+            <div style={{ fontSize: 12.5, color: "#8A7F70", marginTop: 2 }}>
+              Connectez-vous pour découvrir les photos partagées par les clients aujourd'hui
+            </div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: AMBER, whiteSpace: "nowrap", flexShrink: 0 }}>Se connecter →</span>
         </div>
       </div>
     );

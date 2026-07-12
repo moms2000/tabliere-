@@ -28,7 +28,7 @@ export const listReviews = asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
 
   const { rows: [resto] } = await query(
-    "SELECT id FROM restaurants WHERE slug = $1",
+    "SELECT id FROM restaurants WHERE slug = $1 AND deleted_at IS NULL",
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

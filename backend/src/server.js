@@ -334,7 +334,7 @@ async function runEventsPhase2Migration() {
   const stmts = [
     // Config événement : commande de bouteilles + mode de paiement
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS bottles_enabled BOOLEAN DEFAULT FALSE`,
-    `ALTER TABLE events ADD COLUMN IF NOT EXISTS ordering_mode   VARCHAR(10) DEFAULT 'per_order'`, -- per_order | tab
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS ordering_mode   VARCHAR(10) DEFAULT 'per_order'`, // per_order | tab
     // Réservations : code promoteur + check-in
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS promoter_code VARCHAR(30)`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ`,

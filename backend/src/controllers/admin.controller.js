@@ -232,6 +232,61 @@ export const getRestaurantDetail = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/platform-stats — croissance, répartition géo/cuisine, adoption, comptes
+// ---------------------------------------------------------------------------
+export const getPlatformStats = asyncHandler(async (req, res) => {
+  const safe = (p) => p.catch(() => ({ rows: [] }));
+  const [restoGrowth, clientGrowth, byVille, byCuisine, adoption, accounts] = await Promise.all([
+    safe(query(
+      `SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+       FROM restaurants WHERE deleted_at IS NULL AND created_at >= date_trunc('month', now()) - interval '5 months'
+       GROUP BY 1 ORDER BY 1`
+    )),
+    safe(query(
+      `SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+       FROM users WHERE role = 'client' AND created_at >= date_trunc('month', now()) - interval '5 months'
+       GROUP BY 1 ORDER BY 1`
+    )),
+    safe(query(
+      `SELECT COALESCE(NULLIF(ville, ''), '—') AS label, COUNT(*)::int AS count
+       FROM restaurants WHERE deleted_at IS NULL GROUP BY 1 ORDER BY count DESC LIMIT 8`
+    )),
+    safe(query(
+      `SELECT COALESCE(NULLIF(cuisine_type, ''), '—') AS label, COUNT(*)::int AS count
+       FROM restaurants WHERE deleted_at IS NULL GROUP BY 1 ORDER BY count DESC LIMIT 8`
+    )),
+    safe(query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE qr_active)::int AS qr,
+         COUNT(*) FILTER (WHERE stories_enabled)::int AS stories,
+         COUNT(*) FILTER (WHERE menu_public)::int AS menu_public,
+         COUNT(*) FILTER (WHERE deposit_enabled)::int AS deposit,
+         COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM menu_items mi WHERE mi.restaurant_id = restaurants.id AND mi.is_active))::int AS with_menu,
+         COUNT(*) FILTER (WHERE status = 'actif')::int AS active,
+         COUNT(*) FILTER (WHERE status = 'suspendu')::int AS suspended
+       FROM restaurants WHERE deleted_at IS NULL`
+    )),
+    safe(query(
+      `SELECT
+         COUNT(*) FILTER (WHERE role = 'client')::int AS clients,
+         COUNT(*) FILTER (WHERE role = 'restaurateur')::int AS restaurateurs,
+         COUNT(*) FILTER (WHERE role = 'admin')::int AS admins
+       FROM users`
+    )),
+  ]);
+
+  return ok(res, {
+    resto_growth:  restoGrowth.rows,
+    client_growth: clientGrowth.rows,
+    by_ville:      byVille.rows,
+    by_cuisine:    byCuisine.rows,
+    adoption:      adoption.rows[0] || {},
+    accounts:      accounts.rows[0] || {},
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /admin/top-restaurants?period=week|month|year|all — classements + à surveiller
 // ---------------------------------------------------------------------------
 export const getTopRestaurants = asyncHandler(async (req, res) => {

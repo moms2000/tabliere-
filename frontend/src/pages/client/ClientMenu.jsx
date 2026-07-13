@@ -232,6 +232,7 @@ export default function ClientMenu() {
   // Infos client
   const [clientName,  setClientName]  = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   const [orderNote,   setOrderNote]   = useState("");
   const [agreed,      setAgreed]      = useState(false);
 
@@ -344,6 +345,7 @@ export default function ClientMenu() {
       const result = await ordersService.create({
         restaurant_id: resto.id, table_label: table||undefined,
         client_name: clientName||undefined, client_phone: clientPhone||undefined,
+        client_email: clientEmail||undefined,
         note: orderNote||undefined, items, total: cartTotal,
       });
       const newOrder = {
@@ -930,6 +932,7 @@ export default function ClientMenu() {
         {[
           { label: "Nom complet *", value: clientName, set: setClientName, ph: "Jean Kouassi" },
           { label: "Téléphone", value: clientPhone, set: setClientPhone, ph: "+225 07 00 00 00 00", type: "tel" },
+          { label: "Email (optionnel)", value: clientEmail, set: setClientEmail, ph: "jean@email.com", type: "email" },
         ].map(({ label, value, set, ph, type }) => (
           <div key={label} style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: MUTED,

@@ -16,6 +16,7 @@ const INIT_SQL = `
     table_label   VARCHAR(50),
     client_name   VARCHAR(255),
     client_phone  VARCHAR(50),
+    client_email  VARCHAR(255),
     items         JSONB NOT NULL DEFAULT '[]',
     total         INTEGER NOT NULL DEFAULT 0,
     status        VARCHAR(20) NOT NULL DEFAULT 'en_attente'
@@ -32,6 +33,7 @@ const INIT_SQL = `
 const MIGRATE_SQL = `
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_name  VARCHAR(255);
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_phone VARCHAR(50);
+  ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_email VARCHAR(255);
 `;
 
 let tableReady = false;
@@ -45,7 +47,7 @@ async function ensureTable() {
 // ── POST /orders — passer commande (client via QR) ─────────────────────────
 export const createOrder = asyncHandler(async (req, res) => {
   await ensureTable();
-  const { restaurant_id, table_label, items, note, client_name, client_phone } = req.body;
+  const { restaurant_id, table_label, items, note, client_name, client_phone, client_email } = req.body;
   if (!restaurant_id) throw new AppError("restaurant_id requis", 400);
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
@@ -75,9 +77,10 @@ export const createOrder = asyncHandler(async (req, res) => {
   const total = safeItems.reduce((sum, it) => sum + it.price * it.qty, 0);
 
   const { rows: [order] } = await query(
-    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING *`,
+    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, client_email, items, total, note)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING *`,
     [restaurant_id, table_label || null, client_name || null, client_phone || null,
+     (client_email && String(client_email).trim().toLowerCase()) || null,
      JSON.stringify(safeItems), total, note || null]
   );
 

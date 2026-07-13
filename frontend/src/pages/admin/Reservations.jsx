@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CalendarCheck, Search, Users, Pencil, Check, X } from "lucide-react";
+import { CalendarCheck, Search, Users, Pencil, Check, X, Download } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Table, DateFilter, Btn, Modal, FormField, Input, Select } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 
@@ -72,6 +72,7 @@ export default function Reservations() {
   const [page,     setPage]     = useState(1);
   const [editModal, setEditModal] = useState(null);
   const [editForm,  setEditForm]  = useState({});
+  const [exporting, setExporting] = useState(false);
   const LIMIT = 50;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
@@ -180,7 +181,21 @@ export default function Reservations() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
           <PageTitle title="Réservations" subtitle="Toutes les réservations de la plateforme" />
-          <DateFilter value={dateMode} onChange={setDateMode} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <DateFilter value={dateMode} onChange={setDateMode} />
+            <button onClick={async () => {
+                setExporting(true);
+                try { await adminService.exportCSV("reservations"); }
+                catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); }
+                finally { setExporting(false); }
+              }}
+              disabled={exporting}
+              style={{ display: "flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px",
+                border: "0.5px solid #E4DFD8", borderRadius: 8, background: "white",
+                cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#555", fontFamily: FONT }}>
+              <Download size={13} /> {exporting ? "…" : "Exporter CSV"}
+            </button>
+          </div>
         </div>
       </motion.div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { QrCode, Palette, CheckCircle, Eye, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { QrCode, Palette, CheckCircle, Eye, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Btn, Toggle, Badge } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 
@@ -28,12 +28,15 @@ export default function QRThemes() {
   const [selected,   setSelected]   = useState(null);  // resto sélectionné pour préview
   const [themeMap,   setThemeMap]   = useState({});    // restoId → themeId
   const [dropOpen,   setDropOpen]   = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [search,      setSearch]      = useState("");  // valeur débattue envoyée au serveur
 
   const totalPages = Math.ceil(total / LIMIT);
 
   const load = (p = 1) => {
     setLoading(true);
-    adminService.listRestaurants({ limit: LIMIT, page: p })
+    // sort=name → liste alphabétique stable ; search → filtre côté serveur (1001 restos)
+    adminService.listRestaurants({ limit: LIMIT, page: p, sort: "name", search: search || undefined })
       .then(res => {
         const data = res.data || [];
         setRestos(data);
@@ -44,7 +47,16 @@ export default function QRThemes() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(page); }, [page]);
+  // Débounce de la recherche (300ms) → pas une requête à chaque frappe
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Retour page 1 dès qu'on change la recherche
+  useEffect(() => { setPage(1); }, [search]);
+
+  useEffect(() => { load(page); }, [page, search]);
 
   const currentTheme = THEMES.find(t => t.id === (themeMap[selected?.id] || "default")) || THEMES[0];
 
@@ -94,12 +106,23 @@ export default function QRThemes() {
 
           <motion.div variants={fadeUp}>
             <Card>
-              <SectionHeader title={`Activation QR Menu — ${total} restaurants`} icon={QrCode} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                <SectionHeader title={`Activation QR Menu — ${total} restaurants`} icon={QrCode} />
+                <div style={{ position: "relative" }}>
+                  <Search size={13} style={{ position: "absolute", left: 9, top: "50%",
+                    transform: "translateY(-50%)", color: "#bbb", pointerEvents: "none" }} />
+                  <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
+                    placeholder="Rechercher un restaurant…"
+                    style={{ paddingLeft: 28, paddingRight: 10, height: 32, border: "0.5px solid #eee",
+                      borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 220 }} />
+                </div>
+              </div>
               {loading ? (
                 <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
               ) : restos.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>
-                  Aucun restaurant enregistré
+                  {search ? `Aucun restaurant pour « ${search} »` : "Aucun restaurant enregistré"}
                 </div>
               ) : restos.map((r, i) => {
                 const active  = !!r.qr_active;

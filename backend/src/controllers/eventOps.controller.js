@@ -96,7 +96,7 @@ export const listCheckin = asyncHandler(async (req, res) => {
      FROM event_reservations r
      LEFT JOIN users u ON u.id = r.client_id
      LEFT JOIN event_tables t ON t.id = r.table_id
-     WHERE r.event_id = $1 AND r.status <> 'annule'
+     WHERE r.event_id = $1 AND r.status = 'confirme'
      ORDER BY r.checked_in_at NULLS FIRST, r.created_at DESC`,
     [req.eventScope]
   );
@@ -158,16 +158,26 @@ export const checkinByRef = asyncHandler(async (req, res) => {
   const ref = String(req.body?.ref || "").trim().toUpperCase();
   if (!ref) throw new AppError("Référence requise", 400);
   const arrived = arrivedFromBody(req.body);
+  // On vérifie d'abord l'existence + le statut pour un message clair
+  const { rows: [found] } = await query(
+    "SELECT id, status FROM event_reservations WHERE ref = $1 AND event_id = $2", [ref, req.eventScope]
+  );
+  if (!found) return notFound(res, "Réservation introuvable pour cet événement");
+  if (found.status !== "confirme") {
+    throw new AppError(
+      found.status === "annule"
+        ? "Cette réservation est annulée."
+        : "Réservation non confirmée — l'organisateur doit la valider avant le check-in.",
+      400
+    );
+  }
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
-       SET checked_in_at = NOW(),
-           arrived_size  = COALESCE($3, party_size),
-           updated_at = NOW()
-     WHERE ref = $1 AND event_id = $2 AND status <> 'annule'
+       SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size), updated_at = NOW()
+     WHERE id = $1 AND event_id = $2
      RETURNING id, ref, party_size, arrived_size, checked_in_at, table_id`,
-    [ref, req.eventScope, arrived]
+    [found.id, req.eventScope, arrived]
   );
-  if (!resa) return notFound(res, "Réservation introuvable pour cet événement");
   if (resa.table_id) await syncTableStatus(resa.id, true);
   return ok(res, { reservation: resa }, "Arrivée confirmée");
 });

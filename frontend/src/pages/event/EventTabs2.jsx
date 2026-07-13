@@ -433,7 +433,7 @@ export function CheckinTab({ eventId, staffToken }) {
             </div>
           );
         })}
-        {list.length === 0 && <Empty text="Aucune réservation." />}
+        {list.length === 0 && <Empty text="Aucune réservation confirmée. Confirmez les réservations dans l'onglet « Réservations » pour qu'elles apparaissent ici." />}
       </div>
 
       {scanning && <QrScanner onScan={onScan} onClose={() => setScanning(false)} />}

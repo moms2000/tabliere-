@@ -13,7 +13,7 @@ import { logger }     from "../utils/logger.js";
 // ── GET /restaurants — liste publique ─────────────────────────────────────────
 export const list = asyncHandler(async (req, res) => {
   const {
-    ville, quartier, cuisine_type,
+    ville, quartier, cuisine_type, option,
     search, sort = "rating", min_capacity,
   } = req.query;
   // Bornes strictes : évite un ?limit=100000 (dump/DoS) ou un page non numérique
@@ -23,10 +23,16 @@ export const list = asyncHandler(async (req, res) => {
   const params = ["actif"];
   const conditions = ["r.status = $1"];
 
-  if (ville)         { params.push(ville);          conditions.push(`r.ville ILIKE $${params.length}`); }
-  if (quartier)      { params.push(quartier);        conditions.push(`r.quartier ILIKE $${params.length}`); }
-  if (cuisine_type)  { params.push(cuisine_type);    conditions.push(`r.cuisine_type ILIKE $${params.length}`); }
-  if (search)        { params.push(`%${search}%`);   conditions.push(`r.name ILIKE $${params.length}`); }
+  // Correspondances partielles (ILIKE %..%) pour tolérer "ivoi" → "Ivoirien", etc.
+  if (ville)         { params.push(`%${ville}%`);        conditions.push(`r.ville ILIKE $${params.length}`); }
+  if (quartier)      { params.push(`%${quartier}%`);     conditions.push(`r.quartier ILIKE $${params.length}`); }
+  if (cuisine_type)  { params.push(`%${cuisine_type}%`); conditions.push(`r.cuisine_type ILIKE $${params.length}`); }
+  if (option)        { params.push(`%${option}%`);       conditions.push(`r.options::text ILIKE $${params.length}`); }
+  // Recherche texte élargie : nom, cuisine, quartier, ville
+  if (search) {
+    params.push(`%${search}%`); const i = params.length;
+    conditions.push(`(r.name ILIKE $${i} OR r.cuisine_type ILIKE $${i} OR r.quartier ILIKE $${i} OR r.ville ILIKE $${i})`);
+  }
   // Filtre "personnes" : restaurants pouvant accueillir la table (parse robuste)
   const minCap = parseInt(min_capacity, 10);
   if (Number.isFinite(minCap) && minCap > 0) {
@@ -43,7 +49,7 @@ export const list = asyncHandler(async (req, res) => {
 
   // ── Cache Redis/mémoire — clé unique par combinaison de filtres ────────────
   // TTL 2 min pour la liste (données peu critiques, mise à jour fréquente)
-  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${search||""}:${min_capacity||""}`;
+  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${option||""}:${search||""}:${min_capacity||""}`;
   const cached = await cache.get(cacheKey).catch(() => null);
   if (cached) return res.status(200).json(cached);
 

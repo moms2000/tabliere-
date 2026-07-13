@@ -148,35 +148,47 @@ export default function HomeMobile() {
   const location = useLocation();
   const { user, logout } = useAuth();
 
+  // État de navigation sauvegardé (retour depuis une fiche restaurant) : on
+  // restaure onglet + commune + recherche + page + position de défilement.
+  const savedRef = useRef(undefined);
+  if (savedRef.current === undefined) {
+    try { savedRef.current = JSON.parse(sessionStorage.getItem("tci_home_state") || "null") || {}; }
+    catch { savedRef.current = {}; }
+  }
+  const saved = savedRef.current;
+  const pendingScroll = useRef(saved.scrollY || 0);
+
+  const PAGE_SIZE = 30;
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
-  const [page,        setPage]        = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [page,        setPage]        = useState(saved.page || 1);
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState(false);
   const [view,        setView]        = useState("list"); // "list" | "map"
-  const [search,      setSearch]      = useState("");
+  const [search,      setSearch]      = useState(saved.search || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(saved.search || "");
   const [favorites,   setFavorites]   = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
   });
   const [notifCount, setNotifCount]   = useState(0);
 
   // Onglets catégorie
-  const [activeTab,    setActiveTab]    = useState(0);
-  const [activeCommune,setActiveCommune]= useState(""); // "" = toutes
+  const [activeTab,    setActiveTab]    = useState(saved.tab || 0);
+  const [activeCommune,setActiveCommune]= useState(saved.commune || ""); // "" = toutes
 
   const COMMUNES = [
     "Cocody","Plateau","Marcory","Yopougon","Adjamé",
     "Abobo","Treichville","Koumassi","Port-Bouët","Attécoubé","Songon",
   ];
 
+  // param = filtre envoyé AU SERVEUR (pagination + total corrects par cuisine)
   const TABS = [
-    { label: "Tous",               filter: () => true },
-    { label: "Gastronomique",      filter: r => (r.cuisine_type || "").toLowerCase().includes("gastro") },
-    { label: "Cuisine ivoirienne", filter: r => (r.cuisine_type || "").toLowerCase().includes("ivoi") },
-    { label: "Brunch",             filter: r => (r.cuisine_type || "").toLowerCase().includes("brunch") || (r.name || "").toLowerCase().includes("brunch") },
-    { label: "Terrasse",           filter: r => Array.isArray(r.options) && r.options.some(o => typeof o === "string" && o.toLowerCase().includes("terrasse")) },
-    { label: "Live musique",       filter: r => Array.isArray(r.options) && r.options.some(o => typeof o === "string" && o.toLowerCase().includes("live")) },
+    { label: "Tous",               param: {} },
+    { label: "Gastronomique",      param: { cuisine_type: "gastro" } },
+    { label: "Cuisine ivoirienne", param: { cuisine_type: "ivoi" } },
+    { label: "Brunch",             param: { cuisine_type: "brunch" } },
+    { label: "Terrasse",           param: { option: "terrasse" } },
+    { label: "Live musique",       param: { option: "live" } },
   ];
 
   // Search card state
@@ -219,31 +231,52 @@ export default function HomeMobile() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const PAGE_SIZE = 50;
-  const loadRestaurants = useCallback(() => {
-    setLoading(true); setLoadError(false); setPage(1);
-    restaurantsService.list({ limit: PAGE_SIZE, page: 1, sort: "rating" })
-      .then(res => { setRestaurants(res.data || []); setTotal(res.pagination?.total || 0); })
+  // Filtres envoyés au serveur (onglet cuisine + commune + recherche)
+  const serverParams = useCallback(() => {
+    const p = { ...(TABS[activeTab]?.param || {}) };
+    if (activeCommune)   p.quartier = activeCommune;
+    if (debouncedSearch) p.search   = debouncedSearch;
+    return p;
+  }, [activeTab, activeCommune, debouncedSearch]);
+
+  // Charge UNE page (30 restos). Le filtrage + le total viennent du serveur.
+  const loadPage = useCallback((p) => {
+    setLoading(true); setLoadError(false);
+    setSearchActive(false); setAvailableSlugs(null); // l'availability se recalcule par page
+    restaurantsService.list({ limit: PAGE_SIZE, page: p, sort: "rating", ...serverParams() })
+      .then(res => {
+        setRestaurants(res.data || []);
+        setTotal(res.pagination?.total || 0);
+        if (pendingScroll.current) {
+          const y = pendingScroll.current; pendingScroll.current = 0;
+          requestAnimationFrame(() => setTimeout(() => window.scrollTo(0, y), 30));
+        }
+      })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
-  }, []);
+  }, [serverParams]);
+  const loadRestaurants = useCallback(() => loadPage(page), [loadPage, page]);
 
-  // « Charger plus » : ajoute la page suivante à la suite
-  const loadMore = useCallback(() => {
-    const next = page + 1;
-    setLoadingMore(true);
-    restaurantsService.list({ limit: PAGE_SIZE, page: next, sort: "rating" })
-      .then(res => {
-        setRestaurants(prev => [...prev, ...(res.data || [])]);
-        setPage(next);
-        setTotal(res.pagination?.total || 0);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
-  }, [page]);
+  // Débounce de la recherche texte
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Un seul effet : si un filtre change → repartir page 1 ; sinon charger la page.
+  // Au 1er rendu, prevKey == filterKey → on garde la page restaurée (retour fiche).
+  const filterKey = `${activeTab}|${activeCommune}|${debouncedSearch}`;
+  const prevKey = useRef(filterKey);
+  useEffect(() => {
+    if (prevKey.current !== filterKey) {
+      prevKey.current = filterKey;
+      if (page !== 1) { setPage(1); return; } // le passage à la page 1 relancera le fetch
+    }
+    loadPage(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey, page]);
 
   useEffect(() => {
-    loadRestaurants();
     if (user) {
       api.get("/notifications").then(r => {
         const notifs = r.data?.data?.notifications || r.data?.data || [];
@@ -251,6 +284,19 @@ export default function HomeMobile() {
       }).catch(() => {});
     }
   }, [user]);
+
+  // L'état sauvegardé n'est restauré qu'UNE fois (au retour immédiat d'une fiche).
+  // Ensuite un accès « Accueil » repart proprement en haut.
+  useEffect(() => { try { sessionStorage.removeItem("tci_home_state"); } catch {} }, []);
+
+  // Sauvegarde de l'état de navigation avant d'ouvrir une fiche restaurant
+  const saveHomeState = useCallback(() => {
+    try {
+      sessionStorage.setItem("tci_home_state", JSON.stringify({
+        tab: activeTab, commune: activeCommune, search, page, scrollY: window.scrollY,
+      }));
+    } catch {}
+  }, [activeTab, activeCommune, search, page]);
 
   // Charger les favoris du compte (source de vérité serveur) à la connexion
   useEffect(() => {
@@ -286,38 +332,14 @@ export default function HomeMobile() {
   // Réinitialiser la recherche quand critères changent
   const resetSearch = () => { setSearchActive(false); setAvailableSlugs(null); };
 
+  // Le filtrage cuisine/commune/recherche est fait CÔTÉ SERVEUR (pagination +
+  // total corrects). Ici, on n'applique que le filtre de disponibilité
+  // (après « Trouver une table »), sur la page courante.
   const filtered = (() => {
     let list = restaurants;
-
-    // Filtre onglet catégorie
-    if (activeTab > 0) {
-      list = list.filter(TABS[activeTab].filter);
-    }
-
-    // Filtre commune
-    if (activeCommune) {
-      list = list.filter(r =>
-        (r.quartier || "").toLowerCase().includes(activeCommune.toLowerCase()) ||
-        (r.ville    || "").toLowerCase().includes(activeCommune.toLowerCase())
-      );
-    }
-
-    // Filtre texte (nom + quartier + ville + type de cuisine)
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(r =>
-        r.name.toLowerCase().includes(q) ||
-        (r.quartier || "").toLowerCase().includes(q) ||
-        (r.ville    || "").toLowerCase().includes(q) ||
-        (r.cuisine_type || "").toLowerCase().includes(q)
-      );
-    }
-
-    // Filtre disponibilité — uniquement après "Trouver une table"
     if (searchActive && availableSlugs) {
       list = list.filter(r => availableSlugs.has(r.slug));
     }
-
     return list;
   })();
 
@@ -759,7 +781,7 @@ export default function HomeMobile() {
                     overflow: "hidden", textOverflow: "ellipsis" }}>
                     {[mapResto.cuisine_type, mapResto.quartier].filter(Boolean).join(" · ")}
                   </div>
-                  <button onClick={() => navigate(`/restaurants/${mapResto.slug}`)}
+                  <button onClick={() => { saveHomeState(); navigate(`/restaurants/${mapResto.slug}`); }}
                     style={{ marginTop: 9, background: P, color: "#1A1000", border: "none", borderRadius: 10,
                       padding: "8px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: FONT }}>
                     Réserver
@@ -821,7 +843,7 @@ export default function HomeMobile() {
           <motion.div key={r.id || idx}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.04 }}
-            onClick={() => navigate(`/restaurants/${r.slug}`)}
+            onClick={() => { saveHomeState(); navigate(`/restaurants/${r.slug}`); }}
             style={{ margin: "0 16px 14px", background: WHITE, borderRadius: 18,
               border: `0.5px solid ${BORDER}`, overflow: "hidden", cursor: "pointer",
               boxShadow: "0 2px 14px rgba(30,46,40,.05)" }}>
@@ -883,7 +905,7 @@ export default function HomeMobile() {
               </div>
               {slots.length === 0 ? (
                 <motion.button whileTap={{ scale: 0.96 }}
-                  onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}`); }}
+                  onClick={e => { e.stopPropagation(); saveHomeState(); navigate(`/restaurants/${r.slug}`); }}
                   style={{ width: "100%", background: P + "18", color: "#C47D1A", border: `0.5px solid ${P}55`,
                     borderRadius: 10, padding: "9px 12px", fontSize: 13, fontWeight: 600,
                     cursor: "pointer", fontFamily: FONT }}>
@@ -893,7 +915,7 @@ export default function HomeMobile() {
                 <div style={{ display: "flex", gap: 7 }}>
                   {slots.slice(0, 4).map(s => (
                     <motion.button key={s} whileTap={{ scale: 0.93 }}
-                      onClick={e => { e.stopPropagation(); navigate(`/restaurants/${r.slug}?date=${selDate}&guests=${selGuest}&slot=${s}`); }}
+                      onClick={e => { e.stopPropagation(); saveHomeState(); navigate(`/restaurants/${r.slug}?date=${selDate}&guests=${selGuest}&slot=${s}`); }}
                       style={{ flex: 1, background: P, color: "white", border: "none",
                         borderRadius: 9, padding: "9px 4px", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: FONT }}>
@@ -908,18 +930,52 @@ export default function HomeMobile() {
         }))}
       </div>
 
-      {/* ── Charger plus (pagination progressive) ── */}
-      {view === "list" && !loading && !loadError && restaurants.length > 0 && restaurants.length < total && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "4px 16px 8px" }}>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={loadMore} disabled={loadingMore}
-            style={{ width: "100%", maxWidth: 320, padding: "13px 0", borderRadius: 12,
-              border: `1.5px solid ${P}`, background: WHITE, color: "#C47D1A", fontSize: 14,
-              fontWeight: 700, cursor: loadingMore ? "default" : "pointer", fontFamily: FONT,
-              touchAction: "manipulation" }}>
-            {loadingMore ? "Chargement…" : `Charger plus (${restaurants.length}/${total})`}
-          </motion.button>
-        </div>
-      )}
+      {/* ── Pagination numérotée (30 restos / page, filtres serveur) ── */}
+      {view === "list" && !loading && !loadError && total > PAGE_SIZE && (() => {
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        const goTo = (p) => {
+          const np = Math.min(totalPages, Math.max(1, p));
+          if (np === page) return;
+          setPage(np);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+        // Fenêtre de pages : 1 … (p-1) p (p+1) … N
+        const nums = [];
+        const add = (n) => { if (n >= 1 && n <= totalPages && !nums.includes(n)) nums.push(n); };
+        add(1); add(page - 1); add(page); add(page + 1); add(totalPages);
+        nums.sort((a, b) => a - b);
+        const items = [];
+        nums.forEach((n, i) => { if (i > 0 && n - nums[i - 1] > 1) items.push("…"); items.push(n); });
+        const arrow = (dir, disabled, onClick) => (
+          <button onClick={onClick} disabled={disabled}
+            style={{ minWidth: 38, height: 38, borderRadius: 10, border: `1px solid ${BORDER}`, background: WHITE,
+              color: disabled ? "#ccc" : DARK, fontSize: 16, cursor: disabled ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", touchAction: "manipulation" }}>
+            {dir === "prev" ? "‹" : "›"}
+          </button>
+        );
+        return (
+          <div style={{ padding: "6px 16px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+              {arrow("prev", page === 1, () => goTo(page - 1))}
+              {items.map((it, i) => it === "…" ? (
+                <span key={`e${i}`} style={{ color: MUTED, padding: "0 2px" }}>…</span>
+              ) : (
+                <button key={it} onClick={() => goTo(it)}
+                  style={{ minWidth: 38, height: 38, borderRadius: 10, cursor: "pointer", touchAction: "manipulation",
+                    border: it === page ? "none" : `1px solid ${BORDER}`, background: it === page ? P : WHITE,
+                    color: it === page ? "#1A1000" : DARK, fontWeight: it === page ? 800 : 500, fontSize: 14 }}>
+                  {it}
+                </button>
+              ))}
+              {arrow("next", page === totalPages, () => goTo(page + 1))}
+            </div>
+            <div style={{ textAlign: "center", fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+              Page {page} sur {totalPages} · {total} restaurants
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Footer mobile ── */}
       <footer style={{ background: DARK, marginTop: 28, padding: "28px 20px 100px", fontFamily: FONT }}>

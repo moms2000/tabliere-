@@ -9,6 +9,7 @@ import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "
 import { useToast } from "../../components/ui/Toast.jsx";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
 import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab } from "./EventTabs2.jsx";
+import EventFloorPlan from "./EventFloorPlan.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -218,100 +219,9 @@ function DetailsTab({ event, onSaved, publicUrl }) {
   );
 }
 
-// ── Plan & Tables ────────────────────────────────────────────────────────────
+// ── Plan & Tables — plan de salle 3D interactif (glisser-déposer, statuts) ────
 function PlanTab({ event, tables, onChanged }) {
-  const [modal, setModal] = useState(false);
-  const [edit, setEdit] = useState(null);
-  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general", min_order: 0 });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-
-  const openNew = () => { setEdit(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", zone: "general", min_order: 0 }); setModal(true); };
-  const openEdit = (t) => { setEdit(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", zone: t.zone || "general", min_order: t.min_order || 0 }); setModal(true); };
-
-  const save = async () => {
-    if (!f.label) return;
-    setSaving(true);
-    try {
-      const payload = { ...f, capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0 };
-      if (edit) await eventsService.updateTable(event.id, edit.id, payload);
-      else await eventsService.createTable(event.id, payload);
-      setModal(false); await onChanged();
-    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
-    finally { setSaving(false); }
-  };
-  const del = async (t) => {
-    if (!window.confirm(`Retirer « ${t.label} » ?`)) return;
-    try { await eventsService.deleteTable(event.id, t.id); await onChanged(); } catch (e) { alert("Erreur"); }
-  };
-
-  const vip = tables.filter(t => t.kind === "vip");
-  const simple = tables.filter(t => t.kind !== "vip");
-
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Tables & Packs VIP</div>
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Ce que vos invités pourront réserver (cash sur place).</div>
-          </div>
-          <Btn variant="primary" icon={Plus} onClick={openNew}>Ajouter</Btn>
-        </div>
-      </Card>
-
-      {tables.length === 0 ? (
-        <Card><div style={{ textAlign: "center", padding: "38px 0", color: MUTED, fontSize: 13 }}>
-          Aucune table. Ajoutez des tables simples et des packs VIP à réserver.
-        </div></Card>
-      ) : (
-        <>
-          {vip.length > 0 && <TableGroup title="Packs VIP" icon={Crown} items={vip} onEdit={openEdit} onDel={del} />}
-          {simple.length > 0 && <TableGroup title="Tables" icon={Armchair} items={simple} onEdit={openEdit} onDel={del} />}
-        </>
-      )}
-
-      <Modal open={modal} title={edit ? "Modifier" : "Nouvelle table / pack VIP"} onClose={() => setModal(false)}>
-        <FormField label="Type">
-          <div style={{ display: "flex", gap: 8 }}>
-            {[["simple", "Table simple", Armchair], ["vip", "Pack VIP", Crown]].map(([k, label, Icon]) => (
-              <button key={k} onClick={() => set("kind", k)}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  border: `1.5px solid ${f.kind === k ? P : BORDER}`, borderRadius: 10, padding: "10px 0",
-                  background: f.kind === k ? "#FEF6EC" : "white", cursor: "pointer", fontFamily: FONT,
-                  color: f.kind === k ? "#C47D1A" : DARK, fontSize: 13, fontWeight: 600 }}>
-                <Icon size={15} /> {label}
-              </button>
-            ))}
-          </div>
-        </FormField>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <FormField label="Libellé"><Input value={f.label} onChange={e => set("label", e.target.value)} placeholder={f.kind === "vip" ? "Carré VIP 1" : "Table 1"} /></FormField>
-          <FormField label="Capacité (pers.)"><Input type="number" value={f.capacity} onChange={e => set("capacity", e.target.value)} placeholder="4" /></FormField>
-        </div>
-        <FormField label={f.kind === "vip" ? "Prix du pack (FCFA)" : "Prix (FCFA, 0 = gratuit)"}>
-          <Input type="number" value={f.price} onChange={e => set("price", e.target.value)} placeholder={f.kind === "vip" ? "150000" : "0"} />
-        </FormField>
-        {f.kind === "vip" && (
-          <>
-            <FormField label="Bouteilles incluses / contenu du pack (optionnel)">
-              <textarea value={f.description} onChange={e => set("description", e.target.value)} rows={2}
-                placeholder="Ex : 1 bouteille de champagne offerte, service dédié, table réservée…"
-                style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px",
-                  fontSize: 13, background: BG, outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box", color: DARK }} />
-            </FormField>
-            <FormField label="Minimum de commande pour ce salon (FCFA, 0 = aucun)">
-              <Input type="number" value={f.min_order} onChange={e => set("min_order", e.target.value)} placeholder="Ex : 300000" />
-            </FormField>
-          </>
-        )}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <Btn onClick={() => setModal(false)}>Annuler</Btn>
-          <Btn variant="primary" onClick={save} disabled={!f.label || saving}>{saving ? "…" : edit ? "Enregistrer" : "Ajouter"}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
+  return <EventFloorPlan event={event} tables={tables} onChanged={onChanged} />;
 }
 
 function TableGroup({ title, icon: Icon, items, onEdit, onDel }) {

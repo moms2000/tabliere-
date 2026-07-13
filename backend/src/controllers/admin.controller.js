@@ -126,9 +126,17 @@ export const listRestaurants = asyncHandler(async (req, res) => {
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Tri : par défaut les plus récents ; ?sort=name pour un ordre alphabétique
-  // stable (utile pour parcourir/retrouver un restaurant par son nom).
-  const orderBy = sort === "name" ? "r.name ASC, r.created_at DESC" : "r.created_at DESC";
+  // Tri : par défaut les plus récents ; ?sort=name pour un ordre NATUREL
+  // (alphabétique + numérique). Sans ça, "Resto 10" et "Resto 100" se placent
+  // juste après "Resto 1" (tri texte) → on croit qu'il manque des restos.
+  //   1. partie texte du nom sans les chiffres (insensible à la casse)
+  //   2. valeur numérique des chiffres du nom (LEFT 15 = anti-débordement bigint)
+  //   3. nom complet en dernier recours
+  const orderBy = sort === "name"
+    ? `regexp_replace(lower(r.name), '[0-9]+', '', 'g') ASC,
+       COALESCE(NULLIF(LEFT(regexp_replace(r.name, '[^0-9]', '', 'g'), 15), '')::bigint, 0) ASC,
+       r.name ASC`
+    : "r.created_at DESC";
 
   const { rows } = await query(
     `SELECT r.*, u.full_name AS owner_name, u.email AS owner_email,

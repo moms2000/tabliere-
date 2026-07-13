@@ -323,6 +323,7 @@ export function CheckinTab({ eventId, staffToken }) {
   const [open, setOpen] = useState(null);   // réservation dépliée
   const [scanning, setScanning] = useState(false);
   const [confirm, setConfirm] = useState(null); // { resa, count, byScan }
+  const [pinResult, setPinResult] = useState(null); // { pin, name, table } après check-in
   const [busy, setBusy] = useState(false);
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
   useEffect(() => { load(); }, [eventId]);
@@ -342,9 +343,13 @@ export function CheckinTab({ eventId, staffToken }) {
     if (!confirm) return;
     setBusy(true);
     try {
-      if (confirm.byScan) await eventOpsService.checkinByRef(confirm.resa.ref, staffToken, eventId, confirm.count);
-      else                await eventOpsService.checkin(confirm.resa.id, false, staffToken, eventId, confirm.count);
+      const r = confirm.byScan
+        ? await eventOpsService.checkinByRef(confirm.resa.ref, staffToken, eventId, confirm.count)
+        : await eventOpsService.checkin(confirm.resa.id, false, staffToken, eventId, confirm.count);
+      const pin = r?.reservation?.order_pin;
+      const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label };
       setConfirm(null); await load();
+      if (pin) setPinResult(info);
     } catch (e) { alert(e.response?.data?.message || "Erreur"); }
     finally { setBusy(false); }
   };
@@ -488,6 +493,30 @@ export function CheckinTab({ eventId, staffToken }) {
             style={{ width: "100%", justifyContent: "center" }}>
             {busy ? "…" : "Confirmer l'arrivée"}
           </Btn>
+        </Modal>
+      )}
+
+      {/* Code responsable généré au check-in (à remettre au responsable du salon) */}
+      {pinResult && (
+        <Modal open title="Arrivée confirmée" width={340} onClose={() => setPinResult(null)}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+              <Check size={30} color={GREEN} />
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>
+              {pinResult.name || "Client"}{pinResult.table ? ` · ${pinResult.table}` : ""}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+              letterSpacing: "1px", marginTop: 18, marginBottom: 6 }}>
+              Code du responsable de salon
+            </div>
+            <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: 10, color: DARK,
+              fontFamily: "monospace", marginBottom: 12 }}>{pinResult.pin}</div>
+            <div style={{ fontSize: 12.5, color: "#4a5a52", lineHeight: 1.55, marginBottom: 18 }}>
+              Remettez ce code au responsable du salon. Il en aura besoin pour <strong>passer les commandes</strong> via le QR de sa table.
+            </div>
+            <Btn variant="primary" onClick={() => setPinResult(null)} style={{ width: "100%", justifyContent: "center" }}>Terminé</Btn>
+          </div>
         </Modal>
       )}
     </div>

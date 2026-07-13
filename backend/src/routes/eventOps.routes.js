@@ -10,6 +10,7 @@ const router = Router();
 router.post("/event-staff/login", authLimiter, staffLogin);
 
 // Commandes de bouteilles
+router.post ("/event-orders/verify-pin",  authLimiter,  ops.verifyOrderPin); // responsable : PIN → accès
 router.post ("/event-orders",             orderLimiter, ops.createOrder);   // invité (public, scan QR)
 router.get  ("/event-orders",             ownerOrStaff, ops.listOrders);    // ?event_id= (organisateur/staff)
 router.patch("/event-orders/:id/status",  ownerOrStaff, ops.updateOrderStatus);

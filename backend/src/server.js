@@ -344,6 +344,7 @@ async function runEventsPhase2Migration() {
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS promoter_code VARCHAR(30)`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS arrived_size  INTEGER`,   // nb réel de personnes arrivées (check-in)
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS order_pin     VARCHAR(4)`, // code à 4 chiffres du responsable de salon (généré au check-in)
     // Carte des bouteilles / boissons de l'événement
     `CREATE TABLE IF NOT EXISTS event_bottles (
        id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

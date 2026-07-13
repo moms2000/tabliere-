@@ -3,9 +3,13 @@
  * check-in à l'entrée. Accès organisateur propriétaire OU staff (via ownerOrStaff),
  * sauf la création de commande qui est publique (invité qui scanne une table).
  */
+import crypto from "crypto";
 import { query } from "../config/db.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+
+// Code à 4 chiffres aléatoire (crypto) pour le responsable de salon
+const genOrderPin = () => String(crypto.randomInt(0, 10000)).padStart(4, "0");
 
 const ORDER_STATUSES = ["en_attente", "servi", "paye", "annule"];
 
@@ -44,8 +48,24 @@ export const createOrder = asyncHandler(async (req, res) => {
   });
   const total = items.reduce((s, it) => s + it.price * it.qty, 0);
 
-  let tableLabel = b.table_label || null, tableId = null;
-  if (b.table_id) {
+  let tableLabel = b.table_label || null, tableId = null, guestName = b.guest_name || null;
+
+  // Code responsable (Phase 2) : si un PIN est fourni, il DOIT correspondre à un
+  // salon arrivé (check-in). On rattache alors la commande à ce salon.
+  if (b.pin != null && String(b.pin).trim() !== "") {
+    const pin = String(b.pin).trim();
+    if (!/^\d{4}$/.test(pin)) throw new AppError("Code à 4 chiffres invalide", 400);
+    const { rows: [resa] } = await query(
+      `SELECT r.table_id, t.label AS table_label, COALESCE(r.guest_name, u.full_name) AS guest_name
+       FROM event_reservations r
+       LEFT JOIN event_tables t ON t.id = r.table_id
+       LEFT JOIN users u ON u.id = r.client_id
+       WHERE r.event_id = $1 AND r.order_pin = $2 AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
+      [event.id, pin]
+    );
+    if (!resa) throw new AppError("Code responsable invalide ou salon non arrivé.", 401);
+    tableId = resa.table_id; tableLabel = resa.table_label || tableLabel; guestName = guestName || resa.guest_name;
+  } else if (b.table_id) {
     const { rows: [t] } = await query("SELECT id, label FROM event_tables WHERE id = $1 AND event_id = $2", [b.table_id, event.id]);
     if (t) { tableId = t.id; tableLabel = tableLabel || t.label; }
   }
@@ -54,9 +74,32 @@ export const createOrder = asyncHandler(async (req, res) => {
     `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, note)
      VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7)
      RETURNING *`,
-    [event.id, tableId, tableLabel, b.guest_name || null, JSON.stringify(items), total, b.note || null]
+    [event.id, tableId, tableLabel, guestName, JSON.stringify(items), total, b.note || null]
   );
   return created(res, { order }, "Commande envoyée");
+});
+
+// ── POST /event-orders/verify-pin — le responsable déverrouille la commande ───
+export const verifyOrderPin = asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  const pin = String(b.pin || "").trim();
+  if (!/^\d{4}$/.test(pin)) throw new AppError("Code à 4 chiffres requis", 400);
+  if (!b.slug && !b.event_id) throw new AppError("Événement requis", 400);
+  const { rows: [event] } = await query(
+    `SELECT id, name FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
+  );
+  if (!event) return notFound(res, "Événement introuvable");
+  const { rows: [resa] } = await query(
+    `SELECT r.id, r.ref, r.table_id, t.label AS table_label,
+            COALESCE(r.guest_name, u.full_name) AS guest_name
+     FROM event_reservations r
+     LEFT JOIN event_tables t ON t.id = r.table_id
+     LEFT JOIN users u ON u.id = r.client_id
+     WHERE r.event_id = $1 AND r.order_pin = $2 AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
+    [event.id, pin]
+  );
+  if (!resa) throw new AppError("Code invalide ou salon pas encore arrivé à l'entrée.", 401);
+  return ok(res, { reservation: resa }, "Accès responsable validé");
 });
 
 // ── GET /event-orders?event_id= — tableau des commandes (organisateur/staff) ──
@@ -156,14 +199,16 @@ export const doCheckin = asyncHandler(async (req, res) => {
   const undo = req.body?.undo === true;
   const arrived = undo ? null : arrivedFromBody(req.body);
   if (!undo) await assertArrivedFits(req.params.resaId, arrived);
+  const pin = undo ? null : genOrderPin();
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
        SET checked_in_at = ${undo ? "NULL" : "NOW()"},
            arrived_size  = ${undo ? "NULL" : "COALESCE($3, party_size)"},
+           order_pin     = ${undo ? "NULL" : "COALESCE(order_pin, $4)"},
            updated_at = NOW()
      WHERE id = $1 AND event_id = $2
-     RETURNING id, ref, party_size, arrived_size, checked_in_at, table_id`,
-    undo ? [req.params.resaId, req.eventScope] : [req.params.resaId, req.eventScope, arrived]
+     RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
+    undo ? [req.params.resaId, req.eventScope] : [req.params.resaId, req.eventScope, arrived, pin]
   );
   if (!resa) return notFound(res, "Réservation introuvable");
   if (resa.table_id) await syncTableStatus(resa.id, !undo);
@@ -190,12 +235,14 @@ export const checkinByRef = asyncHandler(async (req, res) => {
     );
   }
   await assertArrivedFits(found.id, arrived);
+  const pin = genOrderPin();
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
-       SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size), updated_at = NOW()
+       SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size),
+           order_pin = COALESCE(order_pin, $4), updated_at = NOW()
      WHERE id = $1 AND event_id = $2
-     RETURNING id, ref, party_size, arrived_size, checked_in_at, table_id`,
-    [found.id, req.eventScope, arrived]
+     RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
+    [found.id, req.eventScope, arrived, pin]
   );
   if (resa.table_id) await syncTableStatus(resa.id, true);
   return ok(res, { reservation: resa }, "Arrivée confirmée");

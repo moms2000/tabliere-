@@ -3,6 +3,7 @@ import QRCode from "react-qr-code";
 import {
   Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
   QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
+  Phone, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
@@ -400,12 +401,14 @@ export function CheckinTab({ eventId, staffToken }) {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px" }}>
                 <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setOpen(isOpen ? null : r.id)}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{r.client_name || "Client"}</div>
-                  <div style={{ fontSize: 12, color: MUTED, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "monospace" }}>{r.ref}</span>
                     <span>{r.party_size} pers.</span>
-                    {r.table_label && <span>{r.table_kind === "vip" ? "👑 " : ""}{r.table_label}</span>}
+                    {r.table_label && <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      {r.table_kind === "vip" && <Crown size={12} color={P} />}{r.table_label}</span>}
                     {r.promoter_code && <span>promo {r.promoter_code}</span>}
-                    <span style={{ color: P }}>{isOpen ? "▲ détail" : "▼ détail"}</span>
+                    <span style={{ color: P, display: "inline-flex", alignItems: "center", gap: 2 }}>
+                      {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} détail</span>
                   </div>
                 </div>
                 <button onClick={() => arrived ? undo(r) : setConfirm({ resa: r, count: r.party_size || 1, byScan: false })}
@@ -415,13 +418,16 @@ export function CheckinTab({ eventId, staffToken }) {
                 </button>
               </div>
               {isOpen && (
-                <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 4 }}>
-                  <div>👥 Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong></div>
-                  {r.table_label && <div>{r.table_kind === "vip" ? "👑" : "🪑"} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</div>}
-                  {r.client_phone && <div>📞 {r.client_phone}</div>}
-                  {r.promoter_code && <div>📣 promoteur : {r.promoter_code}</div>}
-                  {r.special_request && <div>📝 « {r.special_request} »</div>}
-                  {arrived && <div style={{ color: GREEN }}>✓ Arrivé{r.checked_in_at ? ` à ${new Date(r.checked_in_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>}
+                <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Users size={13} color={MUTED} /> Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong></div>
+                  {r.table_label && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {r.table_kind === "vip" ? <Crown size={13} color={P} /> : <Armchair size={13} color={MUTED} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</div>}
+                  {r.client_phone && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={13} color={MUTED} /> {r.client_phone}</div>}
+                  {r.promoter_code && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Megaphone size={13} color={MUTED} /> promoteur : {r.promoter_code}</div>}
+                  {r.special_request && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} color={MUTED} /> « {r.special_request} »</div>}
+                  {arrived && <div style={{ display: "flex", alignItems: "center", gap: 6, color: GREEN }}>
+                    <Check size={13} /> Arrivé{r.checked_in_at ? ` à ${new Date(r.checked_in_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>}
                 </div>
               )}
             </div>
@@ -450,15 +456,16 @@ export function CheckinTab({ eventId, staffToken }) {
             <button onClick={() => setConfirm(c => ({ ...c, count: c.count + 1 }))} style={stepBtn}>+</button>
           </div>
           {remaining != null && (
-            <div style={{ fontSize: 11.5, color: confirm.count > remaining ? "#DC2626" : MUTED, textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: confirm.count > remaining ? "#DC2626" : MUTED, textAlign: "center",
+              marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
               {confirm.count > remaining
-                ? `⚠ ${confirm.count - remaining} au-delà de la jauge → surplus payant en caisse`
+                ? <><AlertTriangle size={13} /> {confirm.count - remaining} au-delà de la jauge — surplus payant en caisse</>
                 : `Entrées gratuites restantes après : ${remaining - confirm.count}`}
             </div>
           )}
-          <Btn variant="primary" onClick={doConfirm} disabled={busy}
+          <Btn variant="primary" icon={Check} onClick={doConfirm} disabled={busy}
             style={{ width: "100%", justifyContent: "center" }}>
-            {busy ? "…" : "✓ Confirmer l'arrivée"}
+            {busy ? "…" : "Confirmer l'arrivée"}
           </Btn>
         </Modal>
       )}

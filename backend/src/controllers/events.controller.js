@@ -139,7 +139,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
   const ALLOWED = [
     "name", "description", "venue_name", "address", "ville", "quartier",
     "starts_at", "ends_at", "cover_url", "theme_color", "is_public", "status",
-    "bottles_enabled", "ordering_mode", "capacity", "photos",
+    "bottles_enabled", "ordering_mode", "capacity", "entry_price", "photos",
   ];
   const updates = [], values = [];
   for (const f of ALLOWED) {
@@ -149,6 +149,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
     if (f === "ordering_mode" && !["per_order", "tab"].includes(val)) throw new AppError("Mode de commande invalide", 400);
     if (f === "status" && !EVENT_STATUSES.includes(val)) throw new AppError("Statut invalide", 400);
     if (f === "capacity") val = (val === null || val === "" ) ? null : (parseInt(val, 10) || null);
+    if (f === "entry_price") val = Math.max(0, parseInt(val, 10) || 0);
     if (f === "photos") val = JSON.stringify(Array.isArray(val) ? val.slice(0, 5) : []);
     // Dates : une chaîne vide n'est pas un TIMESTAMPTZ valide → NULL (ou on ignore
     // starts_at qui est obligatoire, pour ne pas le vider par erreur).
@@ -418,17 +419,22 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const id = event.id;
-  const [{ rows: [resa] }, { rows: [vip] }, { rows: [orders] }, { rows: topBottles }, { rows: promoters }] = await Promise.all([
+  const [{ rows: [resa] }, { rows: [vip] }, { rows: [orders] }, { rows: topBottles }, { rows: promoters }, { rows: servers }] = await Promise.all([
     query(`SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE status='confirme')::int AS confirmed,
               COUNT(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in,
-              COALESCE(SUM(party_size),0)::int AS covers
+              COALESCE(SUM(party_size),0)::int AS covers,
+              COALESCE(SUM(COALESCE(arrived_size, party_size)) FILTER (WHERE checked_in_at IS NOT NULL AND status='confirme'),0)::int AS arrived_covers
            FROM event_reservations WHERE event_id = $1 AND status <> 'annule'`, [id]),
     query(`SELECT COALESCE(SUM(t.price),0)::int AS vip_revenue, COUNT(*)::int AS vip_sold
            FROM event_reservations r JOIN event_tables t ON t.id = r.table_id
            WHERE r.event_id = $1 AND r.status = 'confirme' AND t.kind = 'vip'`, [id]),
     query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(total),0)::int AS total,
-              COALESCE(SUM(total) FILTER (WHERE status='paye'),0)::int AS paid
+              COALESCE(SUM(total) FILTER (WHERE status='paye'),0)::int AS paid,
+              COALESCE(SUM(total) FILTER (WHERE status IN ('en_attente','servi')),0)::int AS pending,
+              COUNT(*) FILTER (WHERE status='en_attente')::int AS n_pending,
+              COUNT(*) FILTER (WHERE status='servi')::int AS n_served,
+              COUNT(*) FILTER (WHERE status='paye')::int AS n_paid
            FROM event_orders WHERE event_id = $1 AND status <> 'annule'`, [id]),
     query(`SELECT item->>'name' AS name, SUM(COALESCE(NULLIF(item->>'qty','')::int,1))::int AS qty
            FROM event_orders o, jsonb_array_elements(o.items) AS item
@@ -437,9 +443,44 @@ export const getDashboard = asyncHandler(async (req, res) => {
     query(`SELECT p.name, p.code,
               (SELECT COUNT(*) FROM event_reservations r WHERE r.event_id = p.event_id AND UPPER(r.promoter_code)=UPPER(p.code) AND r.status<>'annule')::int AS reservations
            FROM event_promoters p WHERE p.event_id = $1 ORDER BY reservations DESC`, [id]),
+    // Performance par serveur (Phase 3/4)
+    query(`SELECT s.id, s.name,
+              COUNT(o.id)::int AS orders_count,
+              COALESCE(SUM(o.total),0)::int AS revenue,
+              COALESCE(SUM(o.total) FILTER (WHERE o.status='paye'),0)::int AS cashed,
+              COUNT(DISTINCT t.id)::int AS tables_count
+           FROM event_staff s
+           JOIN event_tables t ON t.server_id = s.id AND t.event_id = $1
+           LEFT JOIN event_orders o ON o.table_id = t.id AND o.status <> 'annule'
+           WHERE s.event_id = $1 AND s.role IN ('serveur','all')
+           GROUP BY s.id, s.name ORDER BY revenue DESC`, [id]).catch(() => ({ rows: [] })),
   ]);
+
+  // ── Réconciliation caisse ────────────────────────────────────────────────
+  const capacity = event.capacity ?? null;
+  const entryPrice = event.entry_price || 0;
+  const arrived = resa.arrived_covers || 0;
+  // Entrées gratuites consommées vs entrées payantes (surplus au-delà de la jauge)
+  const freeUsed = capacity != null ? Math.min(arrived, capacity) : arrived;
+  const paidEntries = capacity != null ? Math.max(0, arrived - capacity) : 0;
+  const entryCashDue = paidEntries * entryPrice;
+  const cash = {
+    capacity,
+    entry_price: entryPrice,
+    arrived_covers: arrived,
+    free_used: freeUsed,
+    free_remaining: capacity != null ? Math.max(0, capacity - arrived) : null,
+    paid_entries: paidEntries,      // nb de personnes payantes (espèces à l'entrée)
+    entry_cash_due: entryCashDue,   // espèces attendues à la caisse d'entrée
+    bar_cashed: orders.paid || 0,   // bouteilles déjà encaissées
+    bar_pending: orders.pending || 0, // bouteilles servies/en attente, pas encore payées
+    vip_revenue: vip.vip_revenue || 0,
+    // Total espèces attendu = entrées payantes + bar encaissé (le VIP est souvent prépayé)
+    total_expected: entryCashDue + (orders.paid || 0),
+  };
+
   return ok(res, {
-    event: { id: event.id, name: event.name, slug: event.slug, starts_at: event.starts_at },
-    reservations: resa, vip, orders, top_bottles: topBottles, promoters,
+    event: { id: event.id, name: event.name, slug: event.slug, starts_at: event.starts_at, capacity, entry_price: entryPrice },
+    reservations: resa, vip, orders, top_bottles: topBottles, promoters, servers, cash,
   });
 });

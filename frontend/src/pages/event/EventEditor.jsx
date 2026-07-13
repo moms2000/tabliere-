@@ -109,7 +109,7 @@ function DetailsTab({ event, onSaved, publicUrl }) {
     ville: event.ville || "", quartier: event.quartier || "",
     starts_at: toLocalInput(event.starts_at), ends_at: toLocalInput(event.ends_at),
     cover_url: event.cover_url || "", is_public: event.is_public !== false,
-    capacity: event.capacity ?? "",
+    capacity: event.capacity ?? "", entry_price: event.entry_price ?? "",
   });
   const [photos, setPhotos] = useState(Array.isArray(event.photos) ? event.photos : (event.cover_url ? [event.cover_url] : []));
   const [saving, setSaving] = useState(false);
@@ -198,9 +198,21 @@ function DetailsTab({ event, onSaved, publicUrl }) {
           <FormField label="Quartier"><Input value={f.quartier} onChange={e => set("quartier", e.target.value)} placeholder="Cocody" /></FormField>
           <FormField label="Adresse"><Input value={f.address} onChange={e => set("address", e.target.value)} placeholder="Rue des Jardins" /></FormField>
         </div>
-        <FormField label="Capacité / jauge d'entrées (optionnel)">
-          <Input type="number" value={f.capacity} onChange={e => set("capacity", e.target.value)} placeholder="Ex : 300" />
-        </FormField>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <FormField label="Capacité / jauge d'entrées gratuites (optionnel)">
+              <Input type="number" value={f.capacity} onChange={e => set("capacity", e.target.value)} placeholder="Ex : 300" />
+            </FormField>
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <FormField label="Prix d'entrée au-delà de la jauge (FCFA)">
+              <Input type="number" value={f.entry_price} onChange={e => set("entry_price", e.target.value)} placeholder="Ex : 5000" />
+            </FormField>
+          </div>
+        </div>
+        <div style={{ fontSize: 11.5, color: MUTED, marginTop: -4, marginBottom: 8 }}>
+          Les personnes arrivées au-delà de la jauge paient ce prix en espèces à la caisse. Utilisé pour la réconciliation dans le Dashboard.
+        </div>
         <FormField label="Description">
           <textarea value={f.description} onChange={e => set("description", e.target.value)} rows={3}
             placeholder="Ambiance, line-up, dress code…"

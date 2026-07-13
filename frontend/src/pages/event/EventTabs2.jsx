@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
+import QrScanner from "../../components/QrScanner.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -318,13 +319,39 @@ export function StaffTab({ event }) {
 export function CheckinTab({ eventId, staffToken }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState(null); // réservation dépliée
+  const [open, setOpen] = useState(null);   // réservation dépliée
+  const [scanning, setScanning] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { resa, count, byScan }
+  const [busy, setBusy] = useState(false);
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
   useEffect(() => { load(); }, [eventId]);
-  const toggle = async (r) => { try { await eventOpsService.checkin(r.id, !!r.checked_in_at, staffToken, eventId); load(); } catch { alert("Erreur"); } };
+
+  // QR scanné → on isole la réf (EVT-1234) et on ouvre la confirmation d'arrivée
+  const onScan = (text) => {
+    setScanning(false);
+    const m = String(text).match(/EVT-\d+/i);
+    const ref = (m ? m[0] : String(text).trim()).toUpperCase();
+    const resa = (data?.reservations || []).find(r => (r.ref || "").toUpperCase() === ref);
+    if (!resa) { alert(`Réservation « ${ref} » introuvable pour cet événement.`); return; }
+    if (resa.checked_in_at) { alert(`${resa.client_name || ref} est déjà pointé(e) comme arrivé(e).`); return; }
+    setConfirm({ resa, count: resa.party_size || 1, byScan: true });
+  };
+
+  const doConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      if (confirm.byScan) await eventOpsService.checkinByRef(confirm.resa.ref, staffToken, eventId, confirm.count);
+      else                await eventOpsService.checkin(confirm.resa.id, false, staffToken, eventId, confirm.count);
+      setConfirm(null); await load();
+    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    finally { setBusy(false); }
+  };
+  const undo = async (r) => { try { await eventOpsService.checkin(r.id, true, staffToken, eventId); load(); } catch { alert("Erreur"); } };
 
   if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
   const t = data.totals || {};
+  const remaining = t.remaining != null ? t.remaining : (t.capacity != null ? Math.max(0, (t.capacity || 0) - (t.arrived_covers || 0)) : null);
   const list = (data.reservations || []).filter(r => {
     const s = q.trim().toLowerCase(); if (!s) return true;
     return (r.client_name || "").toLowerCase().includes(s) || (r.ref || "").toLowerCase().includes(s) || (r.table_label || "").toLowerCase().includes(s);
@@ -332,30 +359,42 @@ export function CheckinTab({ eventId, staffToken }) {
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      {/* Compteurs */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {[
           ["Arrivés (pers.)", fmtInt(t.arrived_covers), GREEN, `${t.arrived || 0}/${t.total || 0} résa`],
-          t.capacity != null
-            ? ["Places restantes", fmtInt(Math.max(0, (t.capacity || 0) - (t.arrived_covers || 0))), P, `capacité ${fmtInt(t.capacity)}`]
+          remaining != null
+            ? ["Entrées gratuites restantes", fmtInt(remaining), remaining === 0 ? "#DC2626" : P, remaining === 0 ? "surplus → caisse espèces" : `jauge ${fmtInt(t.capacity)}`]
             : ["Attendus (pers.)", fmtInt(t.covers), P, `${fmtInt(t.total)} réservations`],
           ["Couverts attendus", fmtInt(t.covers), DARK, ""],
         ].map(([l, v, c, sub], i) => (
           <div key={i} style={{ flex: 1, minWidth: 110, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
             <div style={{ fontSize: 11.5, color: MUTED }}>{l}</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: c }}>{v}</div>
-            {sub && <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{sub}</div>}
+            {sub && <div style={{ fontSize: 10.5, color: c === "#DC2626" ? "#DC2626" : MUTED, marginTop: 1 }}>{sub}</div>}
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", background: "white", maxWidth: 360 }}>
-        <Search size={15} color={MUTED} />
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Nom, réf (EVT-…) ou table…"
-          style={{ border: "none", outline: "none", flex: 1, fontSize: 13, color: DARK, fontFamily: FONT, background: "transparent" }} />
+
+      {/* Scanner + recherche */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={() => setScanning(true)}
+          style={{ display: "flex", alignItems: "center", gap: 7, border: "none", borderRadius: 11, padding: "11px 18px",
+            background: DARK, color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT, touchAction: "manipulation" }}>
+          <QrCode size={17} /> Scanner un QR
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", background: "white", flex: 1, minWidth: 200 }}>
+          <Search size={15} color={MUTED} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Nom, réf (EVT-…) ou table…"
+            style={{ border: "none", outline: "none", flex: 1, fontSize: 13, color: DARK, fontFamily: FONT, background: "transparent" }} />
+        </div>
       </div>
+
       <div style={{ display: "grid", gap: 8 }}>
         {list.map(r => {
           const arrived = !!r.checked_in_at;
           const isOpen = open === r.id;
+          const pax = r.arrived_size != null ? r.arrived_size : r.party_size;
           return (
             <div key={r.id} style={{ borderRadius: 10, border: `0.5px solid ${arrived ? GREEN + "55" : BORDER}`, background: arrived ? "#F0F6F2" : "white" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px" }}>
@@ -369,7 +408,7 @@ export function CheckinTab({ eventId, staffToken }) {
                     <span style={{ color: P }}>{isOpen ? "▲ détail" : "▼ détail"}</span>
                   </div>
                 </div>
-                <button onClick={() => toggle(r)}
+                <button onClick={() => arrived ? undo(r) : setConfirm({ resa: r, count: r.party_size || 1, byScan: false })}
                   style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
                     background: arrived ? "#e8e8e8" : GREEN, color: arrived ? DARK : "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
                   {arrived ? <><X size={14} /> Annuler</> : <><Check size={14} /> Arrivé</>}
@@ -377,7 +416,7 @@ export function CheckinTab({ eventId, staffToken }) {
               </div>
               {isOpen && (
                 <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 4 }}>
-                  <div>👥 <strong>{r.party_size}</strong> personne(s)</div>
+                  <div>👥 Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong></div>
                   {r.table_label && <div>{r.table_kind === "vip" ? "👑" : "🪑"} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</div>}
                   {r.client_phone && <div>📞 {r.client_phone}</div>}
                   {r.promoter_code && <div>📣 promoteur : {r.promoter_code}</div>}
@@ -390,9 +429,45 @@ export function CheckinTab({ eventId, staffToken }) {
         })}
         {list.length === 0 && <Empty text="Aucune réservation." />}
       </div>
+
+      {scanning && <QrScanner onScan={onScan} onClose={() => setScanning(false)} />}
+
+      {/* Confirmation d'arrivée : saisie du nombre réel de personnes */}
+      {confirm && (
+        <Modal open title="Confirmer l'arrivée" width={360} onClose={() => setConfirm(null)}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{confirm.resa.client_name || "Client"}</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
+            <span style={{ fontFamily: "monospace" }}>{confirm.resa.ref}</span>
+            {confirm.resa.table_label ? ` · ${confirm.resa.table_label}` : ""} · réservé {confirm.resa.party_size} pers.
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+            Personnes réellement arrivées
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginBottom: 8 }}>
+            <button onClick={() => setConfirm(c => ({ ...c, count: Math.max(0, c.count - 1) }))}
+              style={stepBtn}>−</button>
+            <span style={{ fontSize: 30, fontWeight: 800, color: DARK, minWidth: 44, textAlign: "center" }}>{confirm.count}</span>
+            <button onClick={() => setConfirm(c => ({ ...c, count: c.count + 1 }))} style={stepBtn}>+</button>
+          </div>
+          {remaining != null && (
+            <div style={{ fontSize: 11.5, color: confirm.count > remaining ? "#DC2626" : MUTED, textAlign: "center", marginBottom: 14 }}>
+              {confirm.count > remaining
+                ? `⚠ ${confirm.count - remaining} au-delà de la jauge → surplus payant en caisse`
+                : `Entrées gratuites restantes après : ${remaining - confirm.count}`}
+            </div>
+          )}
+          <Btn variant="primary" onClick={doConfirm} disabled={busy}
+            style={{ width: "100%", justifyContent: "center" }}>
+            {busy ? "…" : "✓ Confirmer l'arrivée"}
+          </Btn>
+        </Modal>
+      )}
     </div>
   );
 }
+
+const stepBtn = { width: 46, height: 46, borderRadius: "50%", border: `1.5px solid ${BORDER}`, background: "white",
+  fontSize: 24, fontWeight: 700, color: DARK, cursor: "pointer", fontFamily: FONT, touchAction: "manipulation" };
 
 const iconBtn = { border: "none", background: "transparent", cursor: "pointer", padding: 4, display: "flex" };
 const qrChip = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", background: "white", cursor: "pointer", fontFamily: FONT, fontSize: 13, color: DARK, fontWeight: 600 };

@@ -36,7 +36,10 @@ const registerSchema = Joi.object({
 }).options({ stripUnknown: false }); // ← garder tous les champs non listés
 
 const loginSchema = Joi.object({
-  email:    Joi.string().email().lowercase().required(),
+  // tlds.allow=false : ne pas rejeter les TLD hors liste blanche (ex. comptes de
+  // test en .local, ou nouveaux TLD légitimes). La connexion ne fait qu'authentifier
+  // un compte existant — la validation stricte du TLD ne sert qu'à l'inscription.
+  email:    Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   password: Joi.string().required(),
 });
 

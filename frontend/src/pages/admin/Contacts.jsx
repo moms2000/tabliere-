@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Database, Search, Download, Phone, Mail, Users as UsersIcon } from "lucide-react";
+import { Database, Search, FileText, Sheet, Phone, Mail, Users as UsersIcon } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Table } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
+import { runAdminExport } from "../../services/adminExport.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
@@ -19,7 +20,7 @@ export default function Contacts() {
   const [searchInput, setSearchInput] = useState("");
   const [search,   setSearch]   = useState("");
   const [page,     setPage]     = useState(1);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
   const LIMIT = 40;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
@@ -39,11 +40,13 @@ export default function Contacts() {
       .finally(() => setLoading(false));
   }, [page, search]);
 
-  const handleExport = async () => {
-    setExporting(true);
-    try { await adminService.exportCSV("contacts"); }
-    catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); }
-    finally { setExporting(false); }
+  const handleExport = async (kind) => {
+    setExporting(kind);
+    try {
+      const { total, exported } = await runAdminExport("contacts", kind, { title: "Base clients", filename: "base-clients" });
+      if (kind === "pdf" && exported < total) alert(`PDF limité aux ${exported} premières lignes. Utilisez Excel pour les ${total} contacts.`);
+    } catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); }
+    finally { setExporting(null); }
   };
 
   const cols = [
@@ -85,12 +88,20 @@ export default function Contacts() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
           <PageTitle title="Base de données" subtitle="Tous les contacts : clients inscrits, invités (réservations & commandes)" />
-          <button onClick={handleExport} disabled={exporting}
-            style={{ display: "flex", alignItems: "center", gap: 6, height: 34, padding: "0 14px",
-              border: "none", borderRadius: 9, background: P, color: "#1A1000",
-              cursor: exporting ? "default" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: FONT }}>
-            <Download size={14} /> {exporting ? "Export…" : "Exporter CSV"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => handleExport("pdf")} disabled={!!exporting}
+              style={{ display: "flex", alignItems: "center", gap: 6, height: 34, padding: "0 14px",
+                border: `0.5px solid ${BORDER}`, borderRadius: 9, background: "white", color: "#555",
+                cursor: exporting ? "default" : "pointer", fontSize: 13, fontWeight: 600, fontFamily: FONT }}>
+              <FileText size={14} /> {exporting === "pdf" ? "…" : "PDF"}
+            </button>
+            <button onClick={() => handleExport("xls")} disabled={!!exporting}
+              style={{ display: "flex", alignItems: "center", gap: 6, height: 34, padding: "0 14px",
+                border: "none", borderRadius: 9, background: P, color: "#1A1000",
+                cursor: exporting ? "default" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: FONT }}>
+              <Sheet size={14} /> {exporting === "xls" ? "…" : "Excel"}
+            </button>
+          </div>
         </div>
       </motion.div>
 

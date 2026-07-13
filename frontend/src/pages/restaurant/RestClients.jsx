@@ -48,7 +48,7 @@ export default function RestClients() {
   );
 
   const restoName = user?.resto_name || "Mon restaurant";
-  const COLS = ["Nom", "Téléphone", "Email", "Visites", "Couverts", "Confirmées", "No-show", "1ʳᵉ visite", "Dernière visite"];
+  const COLS = ["Nom", "Téléphone", "Email", "Visites", "Couverts", "Confirmées", "No-show", "1re visite", "Dernière visite"];
   const toRows = (list) => list.map(c => [
     c.name, c.phone || "", c.email || "", c.visits, c.total_covers, c.confirmed, c.no_shows, fmtDate(c.first_visit), fmtDate(c.last_visit),
   ]);

@@ -127,4 +127,10 @@ export const adminService = {
     a.click();
     URL.revokeObjectURL(url);
   },
+
+  // Données brutes { headers, rows } pour un export PDF/Excel brandé côté client
+  async exportData(type) {
+    const res = await api.get("/admin/export", { params: { type, format: "json" } });
+    return res.data.data; // { headers, rows }
+  },
 };

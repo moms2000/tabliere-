@@ -80,26 +80,80 @@ function PageLoader() {
 }
 
 // ── ErrorBoundary ─────────────────────────────────────────────────────────────
+// Détecte les erreurs de chargement de chunk périmé (fréquentes après un
+// déploiement : Vercel a supprimé l'ancien fichier .js hashé → renvoie
+// index.html en text/html → « not a valid JavaScript MIME type »). Dans ce cas
+// on recharge automatiquement UNE fois pour récupérer la version fraîche, au
+// lieu d'afficher une erreur technique. Pour toute autre erreur, on montre un
+// écran propre et rassurant (jamais la stack trace côté client).
+const CHUNK_ERR = /Loading chunk|dynamically imported module|valid JavaScript MIME type|Importing a module script failed|Failed to fetch|ChunkLoadError|error loading dynamically/i;
+
 class ErrorBoundary extends React.Component {
-  state = { error: null };
+  state = { error: null, reloading: false };
   static getDerivedStateFromError(e) { return { error: e }; }
+  componentDidCatch(error) {
+    const blob = `${error?.name || ""} ${error?.message || ""} ${error?.stack || ""}`;
+    if (CHUNK_ERR.test(blob)) {
+      // Garde anti-boucle : une seule tentative de rechargement par tranche de 20s.
+      const KEY = "tci_chunk_reload_at";
+      const last = +(sessionStorage.getItem(KEY) || 0);
+      if (Date.now() - last > 20000) {
+        try { sessionStorage.setItem(KEY, String(Date.now())); } catch (_) {}
+        this.setState({ reloading: true });
+        window.location.reload();
+        return;
+      }
+    }
+    // Log pour le debug (console uniquement, jamais affiché au client)
+    console.error("ErrorBoundary:", error);
+  }
   render() {
-    if (this.state.error) {
+    const { error, reloading } = this.state;
+    if (!error) return this.props.children;
+
+    const wrap = {
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#F8F5EF", fontFamily: "'Avenir Next','Avenir','Century Gothic',sans-serif",
+      padding: 24, textAlign: "center",
+    };
+
+    // Rechargement en cours (chunk périmé) : petit loader discret, pas d'erreur.
+    if (reloading) {
       return (
-        <div style={{ padding: 32, fontFamily: "monospace", color: "#DC2626" }}>
-          <h2>Erreur de rendu</h2>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>
-            {this.state.error?.message}{"\n\n"}{this.state.error?.stack}
-          </pre>
-          <button onClick={() => window.location.reload()}
-            style={{ marginTop: 16, padding: "8px 20px", background: "#E8A045",
-              color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>
-            Recharger
-          </button>
+        <div style={wrap}>
+          <div>
+            <div style={{ width: 36, height: 36, border: "3px solid #E4DFD8",
+              borderTopColor: "#E8A045", borderRadius: "50%",
+              animation: "spin 0.7s linear infinite", margin: "0 auto 14px" }} />
+            <div style={{ fontSize: 14, color: "#6B7A70" }}>Mise à jour de l'application…</div>
+          </div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       );
     }
-    return this.props.children;
+
+    // Écran d'erreur propre (aucune donnée technique visible).
+    return (
+      <div style={wrap}>
+        <div style={{ maxWidth: 380 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: "#E8A045",
+            color: "white", fontSize: 26, fontWeight: 700, display: "flex", alignItems: "center",
+            justifyContent: "center", margin: "0 auto 18px" }}>T</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1E2E28", marginBottom: 8 }}>
+            Oups, un petit souci
+          </div>
+          <div style={{ fontSize: 14, color: "#6B7A70", lineHeight: 1.55, marginBottom: 22 }}>
+            L'application a rencontré un problème d'affichage. Rechargez la page,
+            tout devrait rentrer dans l'ordre.
+          </div>
+          <button onClick={() => window.location.reload()}
+            style={{ padding: "11px 26px", background: "#E8A045", color: "white", border: "none",
+              borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+            Recharger la page
+          </button>
+        </div>
+      </div>
+    );
   }
 }
 

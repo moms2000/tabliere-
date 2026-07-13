@@ -408,28 +408,70 @@ export const listPayments = asyncHandler(async (req, res) => {
 // GET /admin/reservations
 // ---------------------------------------------------------------------------
 export const listReservations = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status } = req.query;
+  const page   = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
-  const params = [];
-  const conditions = ["r.archived_at IS NULL"]; // masquer les réservations archivées (comptes supprimés)
-  if (status) { params.push(status); conditions.push(`r.status::text = $${params.length}`); }
-  const where = `WHERE ${conditions.join(" AND ")}`;
+  const { status, search, from, to } = req.query;
+
+  // --- Filtres communs (date + recherche) : appliqués à la liste ET aux compteurs.
+  //     Le filtre "status" n'est appliqué QU'À la liste, pas aux compteurs
+  //     (les compteurs doivent montrer la répartition par statut de la période).
+  const baseParams = [];
+  const baseConditions = ["r.archived_at IS NULL"]; // masquer les réservations archivées (comptes supprimés)
+  if (from)   { baseParams.push(from); baseConditions.push(`r.reserved_at >= $${baseParams.length}`); }
+  if (to)     { baseParams.push(to);   baseConditions.push(`r.reserved_at <= $${baseParams.length}`); }
+  if (search) {
+    baseParams.push(`%${search}%`);
+    const i = baseParams.length;
+    baseConditions.push(`(u.full_name ILIKE $${i} OR re.name ILIKE $${i} OR r.ref ILIKE $${i})`);
+  }
+
+  // Requête liste = base + status éventuel
+  const listParams = [...baseParams];
+  const listConditions = [...baseConditions];
+  if (status) { listParams.push(status); listConditions.push(`r.status::text = $${listParams.length}`); }
+  const listWhere = `WHERE ${listConditions.join(" AND ")}`;
+  const baseWhere = `WHERE ${baseConditions.join(" AND ")}`;
 
   const { rows } = await query(
     `SELECT r.*, re.name AS resto_name, u.full_name AS client_name
      FROM reservations r
      JOIN restaurants re ON re.id = r.restaurant_id
      JOIN users u ON u.id = r.client_id
-     ${where}
+     ${listWhere}
      ORDER BY r.reserved_at DESC
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
+     LIMIT $${listParams.length + 1} OFFSET $${listParams.length + 2}`,
+    [...listParams, limit, offset]
   );
 
   const { rows: [{ count }] } = await query(
-    `SELECT COUNT(*) FROM reservations r ${where}`, params
+    `SELECT COUNT(*) FROM reservations r
+     JOIN restaurants re ON re.id = r.restaurant_id
+     JOIN users u ON u.id = r.client_id
+     ${listWhere}`, listParams
   );
-  return paginated(res, rows, +count, +page, +limit);
+
+  // Compteurs réels par statut sur toute la période (sans le filtre status)
+  const { rows: [c] } = await query(
+    `SELECT
+        COUNT(*)::int                                             AS total,
+        COUNT(*) FILTER (WHERE r.status::text = 'confirme')::int  AS confirme,
+        COUNT(*) FILTER (WHERE r.status::text = 'en_attente')::int AS en_attente,
+        COUNT(*) FILTER (WHERE r.status::text = 'annule')::int    AS annule
+     FROM reservations r
+     JOIN restaurants re ON re.id = r.restaurant_id
+     JOIN users u ON u.id = r.client_id
+     ${baseWhere}`, baseParams
+  );
+
+  const pages = Math.max(1, Math.ceil((+count) / limit));
+  return res.status(200).json({
+    success: true,
+    data: rows,
+    pagination: { page, limit, total: +count, pages, totalPages: pages },
+    meta:       { page, limit, total: +count, pages, totalPages: pages },
+    counts:     { total: c.total, confirme: c.confirme, en_attente: c.en_attente, annule: c.annule },
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -63,33 +63,59 @@ function EditableCell({ value, onSave, type = "text" }) {
 export default function Reservations() {
   const [data,     setData]     = useState([]);
   const [total,    setTotal]    = useState(0);
+  const [counts,   setCounts]   = useState({ total: 0, confirme: 0, en_attente: 0, annule: 0 });
   const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search,   setSearch]   = useState("");   // valeur débattue envoyée au serveur
   const [filter,   setFilter]   = useState("tous");
   const [dateMode, setDateMode] = useState("Mois");
+  const [page,     setPage]     = useState(1);
   const [editModal, setEditModal] = useState(null);
   const [editForm,  setEditForm]  = useState({});
+  const LIMIT = 50;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+
+  // Bornes de dates calculées côté client, filtrage effectué côté serveur
+  // (indispensable avec la pagination : sinon on ne filtrerait que la page chargée).
+  const dateRange = (mode) => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    if (mode === "Jour")  return { from: new Date(y, m, d, 0, 0, 0).toISOString(),   to: new Date(y, m, d, 23, 59, 59).toISOString() };
+    if (mode === "Mois")  return { from: new Date(y, m, 1, 0, 0, 0).toISOString(),   to: new Date(y, m + 1, 0, 23, 59, 59).toISOString() };
+    if (mode === "Année") return { from: new Date(y, 0, 1, 0, 0, 0).toISOString(),   to: new Date(y, 11, 31, 23, 59, 59).toISOString() };
+    return {};
+  };
+
+  const buildParams = (pageArg) => {
+    const { from, to } = dateRange(dateMode);
+    const params = { limit: LIMIT, page: pageArg };
+    if (filter !== "tous") params.status = filter;
+    if (search) params.search = search;
+    if (from)   params.from = from;
+    if (to)     params.to = to;
+    return params;
+  };
+
+  // Débounce de la recherche (350ms) → on ne requête pas à chaque frappe
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Tout changement de filtre/période/recherche ramène à la page 1
+  useEffect(() => { setPage(1); }, [filter, dateMode, search]);
 
   useEffect(() => {
-    const params = { limit: 200 };
-    if (filter !== "tous") params.status = filter;
-    adminService.listReservations(params)
-      .then(res => { setData(res.data || []); setTotal(res.pagination?.total || 0); })
+    setLoading(true);
+    adminService.listReservations(buildParams(page))
+      .then(res => {
+        setData(res.data || []);
+        setTotal(res.pagination?.total || 0);
+        if (res.counts) setCounts(res.counts);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filter]);
-
-  const filterByDate = (items) => {
-    const now = new Date();
-    return items.filter(r => {
-      if (!r.reserved_at) return true;
-      const d = new Date(r.reserved_at);
-      if (dateMode === "Jour")  return d.toDateString() === now.toDateString();
-      if (dateMode === "Mois")  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      if (dateMode === "Année") return d.getFullYear() === now.getFullYear();
-      return true;
-    });
-  };
+  }, [filter, dateMode, search, page]);
 
   const updateInline = async (id, fields) => {
     // Ne plus masquer les erreurs : on n'applique le changement local qu'après
@@ -102,11 +128,9 @@ export default function Reservations() {
       console.error(e);
       const msg = e?.response?.data?.error?.message || e?.message || "Échec de la mise à jour";
       alert(`Mise à jour impossible : ${msg}`);
-      // Resynchroniser la liste avec l'état réel en base
-      const params = { limit: 200 };
-      if (filter !== "tous") params.status = filter;
-      adminService.listReservations(params)
-        .then(res => setData(res.data || []))
+      // Resynchroniser la liste avec l'état réel en base (même page/filtres)
+      adminService.listReservations(buildParams(page))
+        .then(res => { setData(res.data || []); if (res.counts) setCounts(res.counts); })
         .catch(() => {});
     }
   };
@@ -126,14 +150,6 @@ export default function Reservations() {
     await updateInline(editModal.id, { ...editForm, party_size: Number(editForm.party_size) });
     setEditModal(null);
   };
-
-  const baseFiltered = filterByDate(
-    search ? data.filter(r =>
-      (r.client_name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (r.resto_name  || "").toLowerCase().includes(search.toLowerCase()) ||
-      (r.ref         || "").toLowerCase().includes(search.toLowerCase())
-    ) : data
-  );
 
   const cols = [
     { key: "ref",    label: "Réf",        render: r => <span style={{ fontFamily: "monospace", fontSize: 11, color: MUTED }}>{r.ref}</span> },
@@ -158,8 +174,6 @@ export default function Reservations() {
     )},
   ];
 
-  const byStatus = (s) => data.filter(r => [s, s.replace(/_/g," ")].includes(r.status)).length;
-
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
       <motion.div variants={fadeUp}>
@@ -173,10 +187,10 @@ export default function Reservations() {
       {/* Compteurs */}
       <motion.div variants={fadeUp} style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         {[
-          { label: "Total",       val: total,           color: DARK },
-          { label: "Confirmées",  val: byStatus("confirme"), color: S },
-          { label: "En attente",  val: byStatus("en_attente"), color: "#C47D1A" },
-          { label: "Annulées",    val: byStatus("annule"), color: "#DC2626" },
+          { label: "Total",       val: counts.total,      color: DARK },
+          { label: "Confirmées",  val: counts.confirme,   color: S },
+          { label: "En attente",  val: counts.en_attente, color: "#C47D1A" },
+          { label: "Annulées",    val: counts.annule,     color: "#DC2626" },
         ].map((s, i) => (
           <div key={i} style={{ flex: 1, minWidth: 100, background: "white",
             border: `0.5px solid ${BORDER}`, borderRadius: 12,
@@ -207,7 +221,7 @@ export default function Reservations() {
               <div style={{ position: "relative" }}>
                 <Search size={13} style={{ position: "absolute", left: 9, top: "50%",
                   transform: "translateY(-50%)", color: MUTED, pointerEvents: "none" }} />
-                <input value={search} onChange={e => setSearch(e.target.value)}
+                <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
                   placeholder="Rechercher…"
                   style={{ paddingLeft: 28, paddingRight: 10, height: 32,
                     border: `0.5px solid ${BORDER}`, borderRadius: 8, fontSize: 12,
@@ -220,11 +234,23 @@ export default function Reservations() {
               Chargement…
             </div>
           ) : (
-            <Table columns={cols} rows={baseFiltered} />
+            <Table columns={cols} rows={data} />
           )}
-          {!loading && baseFiltered.length === 0 && (
+          {!loading && data.length === 0 && (
             <div style={{ textAlign: "center", padding: "30px 0", color: MUTED, fontSize: 13 }}>
               Aucune réservation pour la période sélectionnée
+            </div>
+          )}
+          {/* Pagination */}
+          {total > LIMIT && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.4 : 1, fontSize: 13, fontFamily: FONT }}>← Préc.</button>
+              <span style={{ fontSize: 13, color: MUTED }}>Page {page} / {totalPages} · {total} réservations</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontSize: 13, fontFamily: FONT }}>Suiv. →</button>
             </div>
           )}
         </Card>

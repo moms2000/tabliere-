@@ -623,28 +623,31 @@ export default function Home() {
     );
   };
 
+  // Les `val` sont des RACINES (partielles) qui matchent la base via ILIKE %..%
+  // (ex. "ivoir" → "Ivoirien" ET "Ivoirienne"). Les cuisines filtrent
+  // cuisine_type ; les spécificités filtrent `options`.
   const TABS = [
     { key: "tab_all",       params: {} },
-    { key: "tab_gastro",    params: { cuisine_type: "Gastronomique" } },
-    { key: "tab_ivoirian",  params: { cuisine_type: "Ivoirienne" } },
+    { key: "tab_gastro",    params: { cuisine_type: "gastro" } },
+    { key: "tab_ivoirian",  params: { cuisine_type: "ivoir" } },
     { key: "tab_brunch",    params: { search: "brunch" } },
-    { key: "tab_terrace",   params: { search: "terrasse" } },
-    { key: "tab_livemusic", params: { search: "jazz" } },
+    { key: "tab_terrace",   params: { option: "terrasse" } },
+    { key: "tab_livemusic", params: { option: "live" } },
   ];
 
   const CUISINES = [
-    { key: "cuisine_ivoirian",      val: "Ivoirienne" },
-    { key: "cuisine_french",        val: "Française" },
-    { key: "cuisine_lebanese",      val: "Libanaise" },
-    { key: "cuisine_senegalese",    val: "Sénégalaise" },
-    { key: "cuisine_international", val: "Internationale" },
+    { key: "cuisine_ivoirian",     val: "ivoir" },
+    { key: "cuisine_french",       val: "franç" },
+    { key: "cuisine_lebanese",     val: "liban" },
+    { key: "cuisine_senegalese",   val: "sénégal" },
+    { key: "cuisine_international", val: "internation" },
   ];
   const SPECS = [
-    { key: "spec_terrace",      val: "Terrasse" },
-    { key: "spec_livemusic",    val: "Live music" },
-    { key: "spec_halal",        val: "Halal" },
-    { key: "spec_privatizable", val: "Privatisable" },
-    { key: "spec_wifi",         val: "Wifi" },
+    { key: "spec_terrace",      val: "terrasse" },
+    { key: "spec_livemusic",    val: "live" },
+    { key: "spec_halal",        val: "halal" },
+    { key: "spec_privatizable", val: "privatis" },
+    { key: "spec_wifi",         val: "wifi" },
   ];
 
   const EXPERIENCES = [
@@ -672,8 +675,14 @@ export default function Home() {
     const params = { ...TABS[activeTab].params, limit: PAGE_SIZE };
     if (search) params.search = search;
     if (sort !== "rating") params.sort = sort;
-    const ck = Object.entries(checkedC).filter(([,v]) => v).map(([k]) => k);
-    if (ck.length === 1) params.cuisine_type = ck[0];
+    // Cases cochées : cuisines → cuisine_type, spécificités → option
+    const ck = Object.entries(checkedC).filter(([, v]) => v).map(([k]) => k);
+    const cuiSet  = new Set(CUISINES.map(c => c.val));
+    const specSet = new Set(SPECS.map(s => s.val));
+    const cuis  = ck.filter(k => cuiSet.has(k));
+    const specs = ck.filter(k => specSet.has(k));
+    if (cuis.length  === 1) params.cuisine_type = cuis[0];
+    if (specs.length === 1) params.option = specs[0];
     // Le sélecteur "personnes" filtre les restaurants pouvant accueillir la table
     if (resaGuests > 1) params.min_capacity = resaGuests;
     return params;

@@ -865,37 +865,20 @@ export default function RestReservations() {
         </motion.div>
       )}
 
-      {/* ── MODALE CONFIRMATION + SÉLECTION TABLE ──────────────────────── */}
-      <AnimatePresence>
-        {(confirmModal || assignModal) && (() => {
-          const modal = confirmModal || assignModal;
-          const isConfirm = !!confirmModal;
-          const closeModal = () => { setConfirmModal(null); setAssignModal(null); setModalError(""); setSelectedTable(""); };
-          return createPortal(
-            <>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={closeModal}
-                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 50 }} />
-              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-                style={{ position: "fixed", top: "50%", left: "50%",
-                  transform: "translate(-50%,-50%)", zIndex: 60,
-                  background: "white", borderRadius: 16, padding: 24,
-                  width: "min(460px, 92vw)", boxShadow: "0 20px 60px rgba(0,0,0,.2)" }}>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600 }}>
-                      {isConfirm ? "Confirmer la réservation" : "Assigner une table"}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-                      {modal.client_name} · {modal.party_size} pers. · {fmtDate(modal.reserved_at)}
-                    </div>
-                  </div>
-                  <button onClick={closeModal}
-                    style={{ border: "none", background: "transparent", cursor: "pointer", color: "#bbb" }}>
-                    <X size={18} />
-                  </button>
+      {/* ── MODALE CONFIRMATION + SÉLECTION TABLE ──────────────────────────
+          On utilise le composant Modal partagé (createPortal + centrage flexbox,
+          SANS AnimatePresence ni transform CSS) : l'ancienne modale maison
+          combinait AnimatePresence autour d'un portail + transform:translate
+          écrasé par framer-motion → elle ne s'affichait pas au clic. */}
+      {(confirmModal || assignModal) && (() => {
+        const modal = confirmModal || assignModal;
+        const isConfirm = !!confirmModal;
+        const closeModal = () => { setConfirmModal(null); setAssignModal(null); setModalError(""); setSelectedTable(""); };
+        return (
+          <Modal open width={460} onClose={closeModal}
+            title={isConfirm ? "Confirmer la réservation" : "Assigner une table"}>
+                <div style={{ fontSize: 12, color: "#888", marginTop: -12, marginBottom: 16 }}>
+                  {modal.client_name} · {modal.party_size} pers. · {fmtDate(modal.reserved_at)}
                 </div>
 
                 <div style={{ marginBottom: 18 }}>
@@ -980,12 +963,9 @@ export default function RestReservations() {
                     }
                   </button>
                 </div>
-              </motion.div>
-            </>,
-            document.body
-          );
-        })()}
-      </AnimatePresence>
+          </Modal>
+        );
+      })()}
 
       {/* ── CHAT ───────────────────────────────────────────────────────── */}
       {mainTab === "chat" && (

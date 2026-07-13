@@ -212,6 +212,16 @@ export const update = asyncHandler(async (req, res) => {
         || field === "menu_public" || field === "stories_enabled") {
       val = (val === true || val === "true" || val === 1);
     }
+    // Contrôle plateforme : le menu QR est une fonctionnalité payante.
+    // Un restaurateur en plan gratuit ne peut pas s'auto-activer le QR — seul
+    // l'admin le peut. On ignore la tentative d'activation (le champ n'est pas
+    // ajouté à l'UPDATE, donc reste à sa valeur actuelle) sans casser la
+    // sauvegarde groupée des autres réglages.
+    if (field === "qr_active" && val === true) {
+      const isAdmin = req.user.role === "admin";
+      const isFree  = !resto.plan || resto.plan === "gratuit";
+      if (!isAdmin && isFree && !resto.qr_active) continue;
+    }
     // Durée d'assise : entier borné (30 min → 8h)
     if (field === "seating_duration") {
       const n = parseInt(val, 10);
@@ -241,10 +251,23 @@ export const update = asyncHandler(async (req, res) => {
 // ── POST /restaurants/:id/qr — générer QR ────────────────────────────────────
 export const generateQR = asyncHandler(async (req, res) => {
   const { rows: [resto] } = await query(
-    "SELECT id, slug, plan, theme_color FROM restaurants WHERE id = $1", [req.params.id]
+    "SELECT id, slug, plan, theme_color, qr_active FROM restaurants WHERE id = $1", [req.params.id]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
   _assertOwnerOrAdmin(req, resto);
+
+  // Le menu QR est une fonctionnalité des plans payants (standard/premium).
+  // Un restaurateur en plan gratuit ne peut PAS l'auto-activer en générant son
+  // QR : seul l'admin peut l'activer manuellement (contrôle de la plateforme).
+  // On autorise toutefois la régénération de l'image si l'admin l'a déjà activé.
+  const isAdmin = req.user.role === "admin";
+  const isFree  = !resto.plan || resto.plan === "gratuit";
+  if (isFree && !isAdmin && !resto.qr_active) {
+    throw new AppError(
+      "Le menu QR est réservé aux plans payants. Contactez l'administrateur pour l'activer.",
+      403
+    );
+  }
 
   const frontendUrl = process.env.FRONTEND_URL || "https://tabliere.vercel.app";
   const menuUrl = `${frontendUrl}/menu/${resto.slug}`;

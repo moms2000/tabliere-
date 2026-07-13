@@ -126,14 +126,21 @@ export default function RestMenu() {
   const handleQrToggle = async (val) => {
     try {
       if (val) {
-        // Activer → générer le QR code
+        // Activer → générer le QR code (réservé aux plans payants côté serveur)
         await restaurantsService.generateQR(user.resto_id);
       } else {
         // Désactiver → persister en DB via PATCH
         await restaurantsService.update(user.resto_id, { qr_active: false });
       }
       setQrActive(val);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      // 403 = fonctionnalité payante non activée pour ce restaurant
+      const msg = e?.response?.data?.message
+        || "Le menu QR est réservé aux plans payants. Contactez l'administrateur pour l'activer.";
+      alert(msg);
+      setQrActive(false);
+    }
   };
 
   const handleMenuPublicToggle = async (val) => {

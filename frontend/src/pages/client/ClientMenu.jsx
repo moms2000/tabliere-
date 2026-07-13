@@ -398,6 +398,22 @@ export default function ClientMenu() {
       justifyContent: "center", color: MUTED, fontFamily: FN }}>Menu introuvable</div>
   );
 
+  /* ── QR Menu désactivé par l'administrateur : commande via QR indisponible ── */
+  if (resto.qr_active === false) return (
+    <div style={{ minHeight: "100vh", background: CREAM, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 14, color: MUTED, fontFamily: FN,
+      padding: 24, textAlign: "center" }}>
+      <AlertTriangle size={38} color={BROWN} />
+      <div style={{ fontSize: 19, fontFamily: FS, color: BROWN, fontStyle: "italic" }}>{resto.name}</div>
+      <div style={{ fontSize: 15, color: BROWN, maxWidth: 320, lineHeight: 1.5 }}>
+        La commande via QR Code n'est pas activée pour ce restaurant.
+      </div>
+      <div style={{ fontSize: 13, color: MUTED, maxWidth: 320 }}>
+        Adressez-vous au personnel pour passer commande.
+      </div>
+    </div>
+  );
+
   /* ══════════════════════════════════════════════════════════════════════
      SPLASH — Style BBR
   ══════════════════════════════════════════════════════════════════════ */

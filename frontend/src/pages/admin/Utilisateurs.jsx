@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Users, Search, ShieldOff, ShieldCheck, Download,
+  Users, Search, ShieldOff, ShieldCheck, FileText, Sheet,
   CheckSquare, Square, X, Trash2, ChevronLeft, ChevronRight,
   ArrowUpAZ, ArrowDownAZ, Clock, Pencil, Save,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
+import { runAdminExport } from "../../services/adminExport.js";
 import { adminService } from "../../services/admin.service.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -32,7 +33,7 @@ export default function Utilisateurs() {
   const [sort,      setSort]      = useState("name");
   const [page,      setPage]      = useState(1);
   const [selected,   setSelected]   = useState(new Set());
-  const [exporting,  setExporting]  = useState(false);
+  const [exporting,  setExporting]  = useState(null); // "pdf" | "xls" | null
   const [batching,   setBatching]   = useState(false);
   const [deleting,   setDeleting]   = useState(null);
   const [editUser,   setEditUser]   = useState(null);  // user en cours d'édition
@@ -105,10 +106,13 @@ export default function Utilisateurs() {
     setBatching(false);
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try { await adminService.exportCSV("users"); } catch (e) { console.error(e); }
-    setExporting(false);
+  const handleExport = async (kind) => {
+    setExporting(kind);
+    try {
+      const { total, exported } = await runAdminExport("users", kind, { title: "Utilisateurs", filename: "utilisateurs" });
+      if (kind === "pdf" && exported < total) alert(`PDF limité aux ${exported} premières lignes. Utilisez Excel pour les ${total} utilisateurs.`);
+    } catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); console.error(e); }
+    setExporting(null);
   };
 
   const allChecked = data.length > 0 && selected.size === data.length;
@@ -249,11 +253,17 @@ export default function Utilisateurs() {
                     borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 180 }} />
               </div>
               {/* Export */}
-              <button onClick={handleExport} disabled={exporting}
+              <button onClick={() => handleExport("pdf")} disabled={!!exporting}
                 style={{ display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 12px",
                   border: "0.5px solid #e4dfd8", borderRadius: 8, background: "white",
-                  cursor: "pointer", fontSize: 12, color: "#666" }}>
-                <Download size={13} />{exporting ? "…" : "CSV"}
+                  cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#666" }}>
+                <FileText size={13} />{exporting === "pdf" ? "…" : "PDF"}
+              </button>
+              <button onClick={() => handleExport("xls")} disabled={!!exporting}
+                style={{ display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 12px",
+                  border: "0.5px solid #e4dfd8", borderRadius: 8, background: "white",
+                  cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#666" }}>
+                <Sheet size={13} />{exporting === "xls" ? "…" : "Excel"}
               </button>
             </div>
           </div>

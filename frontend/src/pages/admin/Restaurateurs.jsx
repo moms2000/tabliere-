@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Utensils, Search, Download, CheckSquare, Square, X } from "lucide-react";
+import { Utensils, Search, FileText, Sheet, CheckSquare, Square, X } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
+import { runAdminExport } from "../../services/adminExport.js";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
@@ -18,7 +19,7 @@ export default function Restaurateurs() {
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState("");
   const [selected,  setSelected]  = useState(new Set());
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
   const [batching,  setBatching]  = useState(false);
   const [page,      setPage]      = useState(1);
   const LIMIT = 50;
@@ -61,11 +62,13 @@ export default function Restaurateurs() {
     setBatching(false);
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try { await adminService.exportCSV("restaurants"); }
-    catch (e) { console.error(e); }
-    setExporting(false);
+  const handleExport = async (kind) => {
+    setExporting(kind);
+    try {
+      const { total, exported } = await runAdminExport("restaurants", kind, { title: "Restaurants", filename: "restaurants" });
+      if (kind === "pdf" && exported < total) alert(`PDF limité aux ${exported} premières lignes. Utilisez Excel pour les ${total} restaurants.`);
+    } catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); console.error(e); }
+    setExporting(null);
   };
 
   const allChecked = data.length > 0 && selected.size === data.length;
@@ -145,12 +148,17 @@ export default function Restaurateurs() {
                   style={{ paddingLeft: 28, paddingRight: 10, height: 32, border: "0.5px solid #eee",
                     borderRadius: 8, fontSize: 12, outline: "none", color: "#333", width: 200 }} />
               </div>
-              <button onClick={handleExport} disabled={exporting}
+              <button onClick={() => handleExport("pdf")} disabled={!!exporting}
                 style={{ display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 12px",
                   border: "0.5px solid #e4dfd8", borderRadius: 8, background: "white",
-                  cursor: "pointer", fontSize: 12, color: "#666" }}>
-                <Download size={13} />
-                {exporting ? "…" : "CSV"}
+                  cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#666" }}>
+                <FileText size={13} />{exporting === "pdf" ? "…" : "PDF"}
+              </button>
+              <button onClick={() => handleExport("xls")} disabled={!!exporting}
+                style={{ display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 12px",
+                  border: "0.5px solid #e4dfd8", borderRadius: 8, background: "white",
+                  cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#666" }}>
+                <Sheet size={13} />{exporting === "xls" ? "…" : "Excel"}
               </button>
             </div>
           </div>

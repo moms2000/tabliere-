@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CalendarCheck, Search, Users, Pencil, Check, X, Download } from "lucide-react";
+import { CalendarCheck, Search, Users, Pencil, Check, X, FileText, Sheet } from "lucide-react";
+import { runAdminExport } from "../../services/adminExport.js";
 import { Card, SectionHeader, PageTitle, Badge, Table, DateFilter, Btn, Modal, FormField, Input, Select } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 
@@ -72,7 +73,7 @@ export default function Reservations() {
   const [page,     setPage]     = useState(1);
   const [editModal, setEditModal] = useState(null);
   const [editForm,  setEditForm]  = useState({});
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
   const LIMIT = 50;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
@@ -183,18 +184,22 @@ export default function Reservations() {
           <PageTitle title="Réservations" subtitle="Toutes les réservations de la plateforme" />
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <DateFilter value={dateMode} onChange={setDateMode} />
-            <button onClick={async () => {
-                setExporting(true);
-                try { await adminService.exportCSV("reservations"); }
-                catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); }
-                finally { setExporting(false); }
-              }}
-              disabled={exporting}
-              style={{ display: "flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px",
-                border: "0.5px solid #E4DFD8", borderRadius: 8, background: "white",
-                cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#555", fontFamily: FONT }}>
-              <Download size={13} /> {exporting ? "…" : "Exporter CSV"}
-            </button>
+            {[["pdf", FileText, "PDF"], ["xls", Sheet, "Excel"]].map(([kind, Icon, label]) => (
+              <button key={kind} onClick={async () => {
+                  setExporting(kind);
+                  try {
+                    const { total, exported } = await runAdminExport("reservations", kind, { title: "Réservations", filename: "reservations" });
+                    if (kind === "pdf" && exported < total) alert(`PDF limité aux ${exported} premières lignes. Utilisez Excel pour les ${total} réservations.`);
+                  } catch (e) { alert("Export impossible : " + (e?.response?.data?.message || e.message)); }
+                  finally { setExporting(null); }
+                }}
+                disabled={!!exporting}
+                style={{ display: "flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px",
+                  border: "0.5px solid #E4DFD8", borderRadius: 8, background: "white",
+                  cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#555", fontFamily: FONT }}>
+                <Icon size={13} /> {exporting === kind ? "…" : label}
+              </button>
+            ))}
           </div>
         </div>
       </motion.div>

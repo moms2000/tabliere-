@@ -672,6 +672,13 @@ export const exportCSV = asyncHandler(async (req, res) => {
     throw new AppError("type invalide : restaurants | users | reservations | contacts", 400);
   }
 
+  // ?format=json → renvoyer les données brutes pour un rendu client PDF/Excel
+  // brandé (au lieu d'un CSV brut). L'ordre des valeurs de chaque ligne suit
+  // l'ordre des colonnes du SELECT = l'ordre de `headers`.
+  if (req.query.format === "json") {
+    return res.status(200).json({ success: true, data: { headers, rows } });
+  }
+
   const escape = (v) => {
     if (v == null) return "";
     const s = String(v instanceof Date ? v.toISOString() : v);

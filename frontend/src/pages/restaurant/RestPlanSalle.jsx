@@ -6,6 +6,7 @@ import {
   Settings, QrCode, Download, X, Move, Clock, CalendarDays,
 } from "lucide-react";
 import { Card, PageTitle, Badge, Btn, Modal, FormField, Input, Select } from "../../components/ui";
+import { useNavigate } from "react-router-dom";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -309,6 +310,7 @@ function TableQR({ url, label }) {
 ══════════════════════════════════════════════════════════════════ */
 export default function RestPlanSalle() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canvasRef = useRef(null);
 
   const [tables,     setTables]     = useState([]);
@@ -351,20 +353,19 @@ export default function RestPlanSalle() {
   }, [user?.resto_id]);
 
   const CANCELLED = ["annule", "annulé", "cancelled"];
-  // Réservations de la table sélectionnée (hors annulées), triées par date/heure
+  const isSameDay = (d) => {
+    const x = new Date(d), n = new Date();
+    return x.getFullYear() === n.getFullYear() && x.getMonth() === n.getMonth() && x.getDate() === n.getDate();
+  };
+  // Réservations d'AUJOURD'HUI seulement pour la table sélectionnée (hors annulées),
+  // triées par heure. Le jour où on est lundi → uniquement les résas du lundi, etc.
   const tableResas = selected
     ? reservations
-        .filter(r => r.table_id === selected.id && !CANCELLED.includes(r.status))
+        .filter(r => r.table_id === selected.id && !CANCELLED.includes(r.status) && isSameDay(r.reserved_at))
         .sort((a, b) => new Date(a.reserved_at) - new Date(b.reserved_at))
     : [];
-  // Regroupées par jour (clé = date locale) pour un affichage "journée par journée"
-  const resasByDay = tableResas.reduce((acc, r) => {
-    const d = new Date(r.reserved_at);
-    const key = d.toLocaleDateString("fr-FR", { weekday: "long", day: "2-digit", month: "long" });
-    (acc[key] ||= []).push(r);
-    return acc;
-  }, {});
   const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—";
+  const todayLabel = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "2-digit", month: "long" });
 
   const updateStatus = async (tableId, newStatus) => {
     try {
@@ -668,53 +669,51 @@ export default function RestPlanSalle() {
                 </button>
               </div>
 
-              {/* Réservations de la table — journée par journée (12h, 15h, 21h…) */}
+              {/* Réservations d'AUJOURD'HUI pour cette table (12h, 15h, 21h…).
+                  Clic sur une résa → page Réservations, ligne ciblée surlignée. */}
               <div style={{ marginBottom: 22 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase",
-                  letterSpacing: "1px", marginBottom: 10 }}>
-                  Réservations {tableResas.length > 0 ? `(${tableResas.length})` : ""}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11,
+                  fontWeight: 700, color: DARK, marginBottom: 10, textTransform: "capitalize" }}>
+                  <CalendarDays size={13} color={P} /> {todayLabel}
+                  {tableResas.length > 0 && (
+                    <span style={{ color: MUTED, fontWeight: 500, textTransform: "none" }}>
+                      · {tableResas.length} réservation{tableResas.length > 1 ? "s" : ""}
+                    </span>
+                  )}
                 </div>
                 {tableResas.length === 0 ? (
                   <div style={{ fontSize: 12.5, color: MUTED, padding: "12px", background: BG,
                     borderRadius: 10, textAlign: "center" }}>
-                    Aucune réservation sur cette table.
+                    Aucune réservation aujourd'hui sur cette table.
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {Object.entries(resasByDay).map(([day, list]) => (
-                      <div key={day}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11,
-                          fontWeight: 700, color: DARK, marginBottom: 7, textTransform: "capitalize" }}>
-                          <CalendarDays size={12} color={P} /> {day}
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {list.map(r => {
-                            const v = r.status === "confirme" ? "green"
-                              : r.status === "en_attente" ? "amber" : "gray";
-                            return (
-                              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10,
-                                padding: "9px 12px", background: "white", border: `0.5px solid ${BORDER}`,
-                                borderRadius: 10 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13,
-                                  fontWeight: 800, color: P, minWidth: 54 }}>
-                                  <Clock size={12} /> {fmtTime(r.reserved_at)}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: DARK, overflow: "hidden",
-                                    textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {r.client_name || "Client"}
-                                  </div>
-                                  <div style={{ fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>
-                                    <Users size={10} /> {r.party_size} pers.
-                                  </div>
-                                </div>
-                                <Badge label={r.status} variant={v} />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {tableResas.map(r => {
+                      const v = r.status === "confirme" ? "green"
+                        : r.status === "en_attente" ? "amber" : "gray";
+                      return (
+                        <button key={r.id}
+                          onClick={() => navigate(`/restaurant/reservations?focus=${r.id}`)}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
+                            padding: "9px 12px", background: "white", border: `0.5px solid ${BORDER}`,
+                            borderRadius: 10, cursor: "pointer", fontFamily: FONT, textAlign: "left" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13,
+                            fontWeight: 800, color: P, minWidth: 54 }}>
+                            <Clock size={12} /> {fmtTime(r.reserved_at)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: DARK, overflow: "hidden",
+                              textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {r.client_name || "Client"}
+                            </div>
+                            <div style={{ fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>
+                              <Users size={10} /> {r.party_size} pers.
+                            </div>
+                          </div>
+                          <Badge label={r.status} variant={v} />
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -149,6 +149,9 @@ export default function HomeMobile() {
   const { user, logout } = useAuth();
 
   const [restaurants, setRestaurants] = useState([]);
+  const [total,       setTotal]       = useState(0);
+  const [page,        setPage]        = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState(false);
   const [view,        setView]        = useState("list"); // "list" | "map"
@@ -216,13 +219,28 @@ export default function HomeMobile() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const PAGE_SIZE = 50;
   const loadRestaurants = useCallback(() => {
-    setLoading(true); setLoadError(false);
-    restaurantsService.list({ limit: 50, sort: "rating" })
-      .then(res => setRestaurants(res.data || []))
+    setLoading(true); setLoadError(false); setPage(1);
+    restaurantsService.list({ limit: PAGE_SIZE, page: 1, sort: "rating" })
+      .then(res => { setRestaurants(res.data || []); setTotal(res.pagination?.total || 0); })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  // « Charger plus » : ajoute la page suivante à la suite
+  const loadMore = useCallback(() => {
+    const next = page + 1;
+    setLoadingMore(true);
+    restaurantsService.list({ limit: PAGE_SIZE, page: next, sort: "rating" })
+      .then(res => {
+        setRestaurants(prev => [...prev, ...(res.data || [])]);
+        setPage(next);
+        setTotal(res.pagination?.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  }, [page]);
 
   useEffect(() => {
     loadRestaurants();
@@ -889,6 +907,19 @@ export default function HomeMobile() {
           );
         }))}
       </div>
+
+      {/* ── Charger plus (pagination progressive) ── */}
+      {view === "list" && !loading && !loadError && restaurants.length > 0 && restaurants.length < total && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "4px 16px 8px" }}>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={loadMore} disabled={loadingMore}
+            style={{ width: "100%", maxWidth: 320, padding: "13px 0", borderRadius: 12,
+              border: `1.5px solid ${P}`, background: WHITE, color: "#C47D1A", fontSize: 14,
+              fontWeight: 700, cursor: loadingMore ? "default" : "pointer", fontFamily: FONT,
+              touchAction: "manipulation" }}>
+            {loadingMore ? "Chargement…" : `Charger plus (${restaurants.length}/${total})`}
+          </motion.button>
+        </div>
+      )}
 
       {/* ── Footer mobile ── */}
       <footer style={{ background: DARK, marginTop: 28, padding: "28px 20px 100px", fontFamily: FONT }}>

@@ -74,7 +74,7 @@ export default function Reservations() {
   const [editModal, setEditModal] = useState(null);
   const [editForm,  setEditForm]  = useState({});
   const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
-  const LIMIT = 50;
+  const LIMIT = 30;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   // Bornes de dates calculées côté client, filtrage effectué côté serveur

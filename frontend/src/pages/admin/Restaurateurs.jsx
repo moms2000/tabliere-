@@ -24,7 +24,7 @@ export default function Restaurateurs() {
   const [detailId,  setDetailId]  = useState(null);
   const [batching,  setBatching]  = useState(false);
   const [page,      setPage]      = useState(1);
-  const LIMIT = 50;
+  const LIMIT = 30;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   useEffect(() => { setPage(1); }, [search]);

@@ -139,12 +139,20 @@ export const listCheckin = asyncHandler(async (req, res) => {
             r.special_request, r.created_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
-            t.label AS table_label, t.kind AS table_kind, t.price AS table_price, t.capacity AS table_capacity
+            r.table_id,
+            t.label AS table_label, t.kind AS table_kind, t.price AS table_price, t.capacity AS table_capacity,
+            t.zone AS table_zone, t.pos_x AS table_pos_x, t.pos_y AS table_pos_y
      FROM event_reservations r
      LEFT JOIN users u ON u.id = r.client_id
      LEFT JOIN event_tables t ON t.id = r.table_id
      WHERE r.event_id = $1 AND r.status = 'confirme'
      ORDER BY r.checked_in_at NULLS FIRST, r.created_at DESC`,
+    [req.eventScope]
+  );
+  // Plan complet (pour situer la table du salon lors du check-in)
+  const { rows: tables } = await query(
+    `SELECT id, label, kind, capacity, zone, pos_x, pos_y, status
+     FROM event_tables WHERE event_id = $1 AND is_active = TRUE ORDER BY zone, label`,
     [req.eventScope]
   );
   const arrivedRows = rows.filter(r => r.checked_in_at);
@@ -155,6 +163,7 @@ export const listCheckin = asyncHandler(async (req, res) => {
   const capacity = ev?.capacity ?? null;
   return ok(res, {
     reservations: rows,
+    tables,
     totals: {
       total: rows.length,
       arrived: arrivedRows.length,

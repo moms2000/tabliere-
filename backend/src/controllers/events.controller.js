@@ -179,12 +179,13 @@ export const createTable = asyncHandler(async (req, res) => {
   const b = req.body || {};
   if (!b.label) throw new AppError("Libellé requis", 400);
   const kind = TABLE_KINDS.includes(b.kind) ? b.kind : "simple";
+  const nn = (v, d = 0) => Math.max(0, parseInt(v, 10) || d); // entier >= 0
   const { rows: [table] } = await query(
     `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     [
-      event.id, b.label, kind, b.capacity || 2, b.price || 0,
-      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, b.min_order || 0,
+      event.id, String(b.label).slice(0, 40), kind, Math.max(1, nn(b.capacity, 2)), nn(b.price),
+      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, nn(b.min_order),
     ]
   );
   return created(res, { table }, "Table ajoutée");
@@ -203,6 +204,8 @@ export const updateTable = asyncHandler(async (req, res) => {
     let val = req.body[f];
     if (f === "kind" && !TABLE_KINDS.includes(val)) throw new AppError("Type de table invalide", 400);
     if (f === "is_active") val = (val === true || val === "true" || val === 1);
+    if (f === "price" || f === "min_order") val = Math.max(0, parseInt(val, 10) || 0);
+    if (f === "capacity") val = Math.max(1, parseInt(val, 10) || 1);
     values.push(val);
     updates.push(`${f} = $${values.length}`);
   }
@@ -272,7 +275,7 @@ export const createBottle = asyncHandler(async (req, res) => {
   const { rows: [bottle] } = await query(
     `INSERT INTO event_bottles (event_id, name, category, price, description, position)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [event.id, b.name, b.category || "Bouteilles", b.price || 0, b.description || null, b.position || 0]
+    [event.id, String(b.name).slice(0, 80), b.category || "Bouteilles", Math.max(0, parseInt(b.price, 10) || 0), b.description || null, Math.max(0, parseInt(b.position, 10) || 0)]
   );
   return created(res, { bottle }, "Bouteille ajoutée");
 });
@@ -286,6 +289,7 @@ export const updateBottle = asyncHandler(async (req, res) => {
     if (req.body[f] === undefined) continue;
     let val = req.body[f];
     if (f === "is_active") val = (val === true || val === "true" || val === 1);
+    if (f === "price" || f === "position") val = Math.max(0, parseInt(val, 10) || 0);
     values.push(val); updates.push(`${f} = $${values.length}`);
   }
   if (!updates.length) throw new AppError("Aucun champ", 400);

@@ -7,9 +7,20 @@ import crypto from "crypto";
 import { query } from "../config/db.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { signOrderToken, verifyOrderToken } from "../middleware/eventAuth.js";
 
-// Code à 4 chiffres aléatoire (crypto) pour le responsable de salon
-const genOrderPin = () => String(crypto.randomInt(0, 10000)).padStart(4, "0");
+// Code à 4 chiffres UNIQUE pour l'événement (anti-collision : deux salons ne
+// doivent jamais partager le même code → sinon commande imputée au mauvais salon).
+async function genUniqueOrderPin(eventId) {
+  for (let i = 0; i < 60; i++) {
+    const pin = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+    const { rows } = await query(
+      "SELECT 1 FROM event_reservations WHERE event_id = $1 AND order_pin = $2 LIMIT 1", [eventId, pin]
+    );
+    if (!rows.length) return pin;
+  }
+  throw new AppError("Impossible de générer un code unique (trop de salons). Contactez le support.", 500);
+}
 
 const ORDER_STATUSES = ["en_attente", "servi", "paye", "annule"];
 
@@ -48,26 +59,15 @@ export const createOrder = asyncHandler(async (req, res) => {
   });
   const total = items.reduce((s, it) => s + it.price * it.qty, 0);
 
-  let tableLabel = b.table_label || null, tableId = null, guestName = b.guest_name || null;
+  let tableLabel = null, tableId = null, guestName = b.guest_name || null;
 
-  // Code responsable (Phase 2) : si un PIN est fourni, il DOIT correspondre à un
-  // salon arrivé (check-in). On rattache alors la commande à ce salon.
-  if (b.pin != null && String(b.pin).trim() !== "") {
-    const pin = String(b.pin).trim();
-    if (!/^\d{4}$/.test(pin)) throw new AppError("Code à 4 chiffres invalide", 400);
-    const { rows: [resa] } = await query(
-      `SELECT r.table_id, t.label AS table_label, COALESCE(r.guest_name, u.full_name) AS guest_name
-       FROM event_reservations r
-       LEFT JOIN event_tables t ON t.id = r.table_id
-       LEFT JOIN users u ON u.id = r.client_id
-       WHERE r.event_id = $1 AND r.order_pin = $2 AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
-      [event.id, pin]
-    );
-    if (!resa) throw new AppError("Code responsable invalide ou salon non arrivé.", 401);
-    tableId = resa.table_id; tableLabel = resa.table_label || tableLabel; guestName = guestName || resa.guest_name;
-  } else if (b.table_id) {
-    const { rows: [t] } = await query("SELECT id, label FROM event_tables WHERE id = $1 AND event_id = $2", [b.table_id, event.id]);
-    if (t) { tableId = t.id; tableLabel = tableLabel || t.label; }
+  // Rattachement à un salon UNIQUEMENT via le jeton responsable (émis après
+  // vérification du code à l'entrée). On n'accepte plus un table_id arbitraire
+  // du client → un invité ne peut pas imputer une commande à un salon tiers.
+  if (b.order_token) {
+    const d = verifyOrderToken(b.order_token);
+    if (!d || d.event_id !== event.id) throw new AppError("Session responsable expirée. Ressaisissez le code.", 401);
+    tableId = d.table_id || null; tableLabel = d.table_label || null; guestName = guestName || d.guest_name || null;
   }
 
   const { rows: [order] } = await query(
@@ -86,20 +86,24 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
   if (!/^\d{4}$/.test(pin)) throw new AppError("Code à 4 chiffres requis", 400);
   if (!b.slug && !b.event_id) throw new AppError("Événement requis", 400);
   const { rows: [event] } = await query(
-    `SELECT id, name FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
+    `SELECT id, status FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
   );
-  if (!event) return notFound(res, "Événement introuvable");
-  const { rows: [resa] } = await query(
-    `SELECT r.id, r.ref, r.table_id, t.label AS table_label,
-            COALESCE(r.guest_name, u.full_name) AS guest_name
+  if (!event || event.status !== "publie") return notFound(res, "Événement indisponible");
+  const { rows } = await query(
+    `SELECT r.table_id, t.label AS table_label, COALESCE(r.guest_name, u.full_name) AS guest_name
      FROM event_reservations r
      LEFT JOIN event_tables t ON t.id = r.table_id
      LEFT JOIN users u ON u.id = r.client_id
      WHERE r.event_id = $1 AND r.order_pin = $2 AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
     [event.id, pin]
   );
-  if (!resa) throw new AppError("Code invalide ou salon pas encore arrivé à l'entrée.", 401);
-  return ok(res, { reservation: resa }, "Accès responsable validé");
+  // Rejet strict : 0 ou (théoriquement) plusieurs correspondances → invalide
+  if (rows.length !== 1) throw new AppError("Code invalide ou salon pas encore arrivé à l'entrée.", 401);
+  const r = rows[0];
+  // Jeton court à la place du PIN pour les commandes suivantes ; on ne renvoie
+  // que le libellé du salon (pas le nom du client — anti-fuite de données tiers).
+  const token = signOrderToken({ event_id: event.id, table_id: r.table_id, table_label: r.table_label, guest_name: r.guest_name });
+  return ok(res, { token, table_label: r.table_label }, "Accès responsable validé");
 });
 
 // ── GET /event-orders?event_id= — tableau des commandes (organisateur/staff) ──
@@ -199,7 +203,7 @@ export const doCheckin = asyncHandler(async (req, res) => {
   const undo = req.body?.undo === true;
   const arrived = undo ? null : arrivedFromBody(req.body);
   if (!undo) await assertArrivedFits(req.params.resaId, arrived);
-  const pin = undo ? null : genOrderPin();
+  const pin = undo ? null : await genUniqueOrderPin(req.eventScope);
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
        SET checked_in_at = ${undo ? "NULL" : "NOW()"},
@@ -235,7 +239,7 @@ export const checkinByRef = asyncHandler(async (req, res) => {
     );
   }
   await assertArrivedFits(found.id, arrived);
-  const pin = genOrderPin();
+  const pin = await genUniqueOrderPin(req.eventScope);
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
        SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size),

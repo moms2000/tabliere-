@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ownerOrStaff } from "../middleware/eventAuth.js";
-import { authLimiter, orderLimiter } from "../middleware/rateLimiter.js";
+import { authLimiter, orderLimiter, pinLimiter } from "../middleware/rateLimiter.js";
 import * as ops from "../controllers/eventOps.controller.js";
 import { staffLogin } from "../controllers/events.controller.js";
 
@@ -10,7 +10,7 @@ const router = Router();
 router.post("/event-staff/login", authLimiter, staffLogin);
 
 // Commandes de bouteilles
-router.post ("/event-orders/verify-pin",  authLimiter,  ops.verifyOrderPin); // responsable : PIN → accès
+router.post ("/event-orders/verify-pin",  pinLimiter,   ops.verifyOrderPin); // responsable : PIN → jeton (strict anti-brute-force)
 router.post ("/event-orders",             orderLimiter, ops.createOrder);   // invité (public, scan QR)
 router.get  ("/event-orders",             ownerOrStaff, ops.listOrders);    // ?event_id= (organisateur/staff)
 router.patch("/event-orders/:id/status",  ownerOrStaff, ops.updateOrderStatus);

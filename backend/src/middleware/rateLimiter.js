@@ -18,6 +18,9 @@ export const reservationLimiter = limiter(10 * 60 * 1000, 20, "Limite de réserv
 // Commandes QR (route publique, sans auth) : 30 / 5 min par IP — anti-spam cuisine
 export const orderLimiter = limiter(5 * 60 * 1000, 30, "Trop de commandes envoyées, patientez quelques minutes");
 
+// Vérification du code responsable (4 chiffres) : strict, anti-brute-force
+export const pinLimiter = limiter(10 * 60 * 1000, 8, "Trop d'essais de code, réessayez dans 10 minutes");
+
 // Webhooks paiement (public) : 120 / min par IP — tolère les retries fournisseur
 export const webhookLimiter = limiter(60 * 1000, 120, "Trop de requêtes webhook");
 

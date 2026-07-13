@@ -29,6 +29,11 @@ export const adminService = {
     return res.data;
   },
 
+  async getRestaurantDetail(id) {
+    const res = await api.get(`/admin/restaurants/${id}/detail`);
+    return res.data.data;
+  },
+
   async setRestaurantStatus(id, status) {
     const res = await api.patch(`/admin/restaurants/${id}/status`, { status });
     memCache.delPrefix("admin:"); // invalider stats + liste

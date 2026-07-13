@@ -19,6 +19,7 @@ router.post  ("/change-password",          ctrl.changeAdminPassword);
 
 // Restaurants
 router.get   ("/restaurants",              ctrl.listRestaurants);
+router.get   ("/restaurants/:id/detail",   ctrl.getRestaurantDetail);
 router.patch ("/restaurants/batch",        ctrl.batchRestaurantStatus);
 router.patch ("/restaurants/:id/status",   ctrl.setRestaurantStatus);
 router.patch ("/restaurants/:id/plan",     ctrl.setRestaurantPlan);

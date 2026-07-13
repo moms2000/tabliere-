@@ -4,6 +4,7 @@ import { Utensils, Search, FileText, Sheet, CheckSquare, Square, X } from "lucid
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 import { runAdminExport } from "../../services/adminExport.js";
+import RestaurateurDetail from "../../components/admin/RestaurateurDetail.jsx";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
@@ -20,6 +21,7 @@ export default function Restaurateurs() {
   const [search,    setSearch]    = useState("");
   const [selected,  setSelected]  = useState(new Set());
   const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
+  const [detailId,  setDetailId]  = useState(null);
   const [batching,  setBatching]  = useState(false);
   const [page,      setPage]      = useState(1);
   const LIMIT = 50;
@@ -88,7 +90,10 @@ export default function Restaurateurs() {
     },
     { key: "name",   label: "Restaurant", render: r => (
       <div>
-        <div style={{ fontWeight: 500, fontSize: 13 }}>{r.name}</div>
+        <button onClick={() => setDetailId(r.id)}
+          style={{ fontWeight: 600, fontSize: 13, color: "#C47D1A", background: "none", border: "none",
+            padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+          title="Voir la fiche complète">{r.name}</button>
         <div style={{ fontSize: 11, color: "#aaa" }}>{r.quartier ? `${r.quartier}, ` : ""}{r.ville}</div>
       </div>
     )},
@@ -223,6 +228,8 @@ export default function Restaurateurs() {
           )}
         </Card>
       </motion.div>
+
+      {detailId && <RestaurateurDetail id={detailId} onClose={() => setDetailId(null)} />}
     </motion.div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useCallback, createContext, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, CheckCircle, X, CalendarCheck } from "lucide-react";
+import { Bell, CheckCircle, X, CalendarCheck, AlertTriangle } from "lucide-react";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -18,12 +18,14 @@ export function useToast() {
 const ICONS = {
   success:     CheckCircle,
   reservation: CalendarCheck,
+  error:       AlertTriangle,
   info:        Bell,
 };
 
 const COLORS = {
   success:     S,
   reservation: P,
+  error:       "#DC2626",
   info:        "#185FA5",
 };
 

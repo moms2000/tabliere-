@@ -6,6 +6,7 @@ import {
   Crown, Armchair, Calendar, Users, Phone, Copy, CheckCheck,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
+import { useToast } from "../../components/ui/Toast.jsx";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
 import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab } from "./EventTabs2.jsx";
 
@@ -100,6 +101,7 @@ export default function EventEditor() {
 
 // ── Détails ──────────────────────────────────────────────────────────────────
 function DetailsTab({ event, onSaved, publicUrl }) {
+  const toast = useToast();
   const [f, setF] = useState({
     name: event.name || "", description: event.description || "",
     venue_name: event.venue_name || "", address: event.address || "",
@@ -119,8 +121,9 @@ function DetailsTab({ event, onSaved, publicUrl }) {
     try {
       await eventsService.update(event.id, { ...f, photos, cover_url: photos[0] || f.cover_url || "" });
       await onSaved();
+      toast("Modifications enregistrées avec succès.", "success");
     }
-    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    catch (e) { toast(e.response?.data?.message || "Échec de l'enregistrement. Réessayez.", "error"); }
     finally { setSaving(false); }
   };
   const setStatus = async (status) => {
@@ -128,8 +131,11 @@ function DetailsTab({ event, onSaved, publicUrl }) {
       : status === "brouillon" ? "Repasser en brouillon ? Il ne sera plus visible publiquement."
       : "Annuler cet événement ?";
     if (!window.confirm(msg)) return;
-    try { await eventsService.update(event.id, { status }); await onSaved(); }
-    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    try {
+      await eventsService.update(event.id, { status }); await onSaved();
+      toast(status === "publie" ? "Événement publié." : status === "brouillon" ? "Événement repassé en brouillon." : "Événement annulé.", "success");
+    }
+    catch (e) { toast(e.response?.data?.message || "Action impossible. Réessayez.", "error"); }
   };
   const copy = () => { navigator.clipboard.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1800); };
 

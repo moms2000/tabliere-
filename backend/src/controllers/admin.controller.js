@@ -113,7 +113,7 @@ export const getAnalytics = asyncHandler(async (_req, res) => {
 // GET /admin/restaurants
 // ---------------------------------------------------------------------------
 export const listRestaurants = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status, plan, search, deleted } = req.query;
+  const { page = 1, limit = 20, status, plan, search, deleted, sort } = req.query;
   const offset = (page - 1) * limit;
   const params = [];
   // Par défaut on masque les restaurants supprimés ; ?deleted=true affiche la « corbeille »
@@ -126,13 +126,17 @@ export const listRestaurants = asyncHandler(async (req, res) => {
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
+  // Tri : par défaut les plus récents ; ?sort=name pour un ordre alphabétique
+  // stable (utile pour parcourir/retrouver un restaurant par son nom).
+  const orderBy = sort === "name" ? "r.name ASC, r.created_at DESC" : "r.created_at DESC";
+
   const { rows } = await query(
     `SELECT r.*, u.full_name AS owner_name, u.email AS owner_email,
        (SELECT COUNT(*) FROM reservations WHERE restaurant_id = r.id) AS resa_count
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
      ${where}
-     ORDER BY r.created_at DESC
+     ORDER BY ${orderBy}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );

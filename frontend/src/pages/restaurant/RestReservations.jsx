@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarCheck, CheckCircle, XCircle, AlertTriangle,
-  Clock, Users, MessageCircle, X, Plus, LayoutTemplate,
+  Clock, Users, MessageCircle, X, Plus, LayoutTemplate, FileText, Sheet,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table, DateFilter, Modal, FormField, Input, Select } from "../../components/ui";
 import { reservationsService } from "../../services/reservations.service.js";
@@ -278,6 +278,9 @@ export default function RestReservations() {
   const [filter,    setFilter]    = useState("tous");
   const [dateMode,  setDateMode]  = useState("Tout"); // "Tout" | "Jour" | "Mois" | "Année"
   const [mainTab,   setMainTab]   = useState("reservations");
+  const [page,      setPage]      = useState(1);
+  const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
+  const PAGE_SIZE = 30;
   const [modalCreate, setModalCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     client_name: "", client_phone: "", client_email: "",
@@ -324,7 +327,7 @@ export default function RestReservations() {
   };
 
   useEffect(() => {
-    reservationsService.list({ limit: 100 })
+    reservationsService.list({ limit: 500 })
       .then(res => setData(res.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -457,7 +460,7 @@ export default function RestReservations() {
       console.error(e);
       const msg = e?.response?.data?.error?.message || e?.message || "Échec de la mise à jour";
       alert(`Mise à jour impossible : ${msg}`);
-      reservationsService.list({ limit: 100 })
+      reservationsService.list({ limit: 500 })
         .then(res => setData(res.data || []))
         .catch(() => {});
     }
@@ -509,7 +512,17 @@ export default function RestReservations() {
     reservationsService.updateWaitlist(id, "notified").catch(() => {});
     const w = waitlist.find(x => x.id === id);
     if (w?.phone) {
-      const msg = encodeURIComponent(`🍽️ Une table se libère chez votre restaurant ! Cliquez ici pour confirmer votre réservation : tabliereci.net`);
+      // Lien DIRECT vers la page de réservation du restaurant (onglet « Réserver »
+      // par défaut), avec le nombre de personnes prérempli — pas la page d'accueil.
+      const slug   = user?.resto_slug || "";
+      const guests = w.party ? `?guests=${w.party}` : "";
+      const link   = slug ? `${window.location.origin}/restaurant/${slug}${guests}` : window.location.origin;
+      const restoName = user?.resto_name || "notre restaurant";
+      const msg = encodeURIComponent(
+        `🍽️ Bonjour ${w.name || ""}, une table vient de se libérer à ${restoName} !\n\n` +
+        `Réservez tout de suite en ligne 👉 ${link}`
+      );
+      // wa.me ouvre WhatsApp (app ou web) du restaurateur avec le message prêt à envoyer
       window.open(`https://wa.me/${w.phone.replace(/\D/g,"")}?text=${msg}`, "_blank");
     }
   };
@@ -524,6 +537,29 @@ export default function RestReservations() {
   const filtered = filter === "tous"
     ? filteredByDate
     : filteredByDate.filter(r => r.status === filter || r.status === filter.replace(/_/g," "));
+
+  // Pagination (30/page) + retour page 1 au changement de filtre/période/onglet
+  useEffect(() => { setPage(1); }, [filter, dateMode, mainTab]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Export PDF / Excel de la liste filtrée
+  const EXPORT_COLS = ["Réf", "Client", "Date & heure", "Pers.", "Table", "Statut"];
+  const exportRows = (list) => list.map(r => [
+    r.ref || "", r.client_name || "", fmtDate(r.reserved_at), r.party_size, r.table_label || "—", r.status || "",
+  ]);
+  const doExport = async (kind) => {
+    setExporting(kind);
+    try {
+      const mod = await import("../../services/exports.js");
+      const restoName = user?.resto_name || "Mon restaurant";
+      const common = { title: "Réservations", subtitle: restoName, columns: EXPORT_COLS,
+        rows: exportRows(filtered), filename: `reservations-${user?.resto_slug || "resto"}` };
+      if (kind === "pdf") await mod.exportPDF(common);
+      else await mod.exportXLSX({ sheetName: "Réservations", ...common });
+    } catch (e) { alert("Export impossible"); console.error(e); }
+    finally { setExporting(null); }
+  };
 
   // No-show : clients avec 2+ annulations
   const clientCancels = {};
@@ -617,6 +653,12 @@ export default function RestReservations() {
           <PageTitle title="Réservations" subtitle="Gestion complète des réservations" />
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <DateFilter value={dateMode} onChange={setDateMode} />
+            <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={!!exporting || filtered.length === 0}>
+              {exporting === "pdf" ? "…" : "PDF"}
+            </Btn>
+            <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={!!exporting || filtered.length === 0}>
+              {exporting === "xls" ? "…" : "Excel"}
+            </Btn>
             <Btn variant="primary" icon={Plus} onClick={() => setModalCreate(true)}>
               Nouvelle réservation
             </Btn>
@@ -678,8 +720,19 @@ export default function RestReservations() {
             </div>
             {loading
               ? <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
-              : <Table columns={cols} rows={filtered} />
+              : <Table columns={cols} rows={paged} />
             }
+            {!loading && filtered.length > PAGE_SIZE && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16 }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                    cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.4 : 1, fontSize: 13 }}>← Préc.</button>
+                <span style={{ fontSize: 13, color: MUTED }}>Page {page} / {totalPages} · {filtered.length} réservations</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                    cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontSize: 13 }}>Suiv. →</button>
+              </div>
+            )}
           </Card>
         </motion.div>
       )}
@@ -733,12 +786,18 @@ export default function RestReservations() {
       {mainTab === "waitlist" && (
         <motion.div variants={fadeUp}>
           <Card>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <SectionHeader title="Liste d'attente" icon={Users} />
               <Btn onClick={() => setShowAddWait(true)} variant="primary" icon={Plus}
                 style={{ fontSize: 12, padding: "5px 12px" }}>
                 Ajouter
               </Btn>
+            </div>
+            <div style={{ fontSize: 11.5, color: MUTED, background: "#F0FBF6", border: "0.5px solid #CDEBDD",
+              borderRadius: 9, padding: "9px 12px", marginBottom: 14, lineHeight: 1.5 }}>
+              💬 « Notifier WhatsApp » ouvre WhatsApp (app ou web) avec un message prêt à envoyer au client —
+              aucune configuration requise, le message part de <strong>votre</strong> WhatsApp. Le lien inclus
+              mène directement à la page de réservation de votre restaurant (couverts préremplis).
             </div>
 
             <AnimatePresence>

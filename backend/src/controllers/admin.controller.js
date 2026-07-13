@@ -232,6 +232,56 @@ export const getRestaurantDetail = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/top-restaurants?period=week|month|year|all — classements + à surveiller
+// ---------------------------------------------------------------------------
+export const getTopRestaurants = asyncHandler(async (req, res) => {
+  const SINCE = {
+    week:  "now() - interval '7 days'",
+    month: "date_trunc('month', now())",
+    year:  "date_trunc('year', now())",
+    all:   null,
+  };
+  const period = Object.prototype.hasOwnProperty.call(SINCE, req.query.period) ? req.query.period : "month";
+  const since  = SINCE[period]; // expression SQL fixe (pas d'entrée utilisateur) → sûr
+  const resaJoin  = `JOIN reservations r ON r.restaurant_id = re.id AND r.archived_at IS NULL${since ? ` AND r.reserved_at >= ${since}` : ""}`;
+
+  const { rows: [{ has_orders }] } = await query("SELECT to_regclass('public.qr_orders') IS NOT NULL AS has_orders");
+
+  const [byReservations, byCovers, byRating, byRevenue, inactive] = await Promise.all([
+    query(`SELECT re.id, re.name, re.ville, COUNT(r.*)::int AS value
+           FROM restaurants re ${resaJoin}
+           WHERE re.deleted_at IS NULL GROUP BY re.id ORDER BY value DESC, re.name LIMIT 10`),
+    query(`SELECT re.id, re.name, re.ville, COALESCE(SUM(r.party_size) FILTER (WHERE r.status='confirme'),0)::int AS value
+           FROM restaurants re ${resaJoin}
+           WHERE re.deleted_at IS NULL GROUP BY re.id ORDER BY value DESC, re.name LIMIT 10`),
+    query(`SELECT id, name, ville, rating AS value, review_count
+           FROM restaurants WHERE deleted_at IS NULL AND rating > 0
+           ORDER BY rating DESC, review_count DESC LIMIT 10`),
+    has_orders
+      ? query(`SELECT re.id, re.name, re.ville, COALESCE(SUM(o.total),0)::int AS value
+               FROM restaurants re JOIN qr_orders o ON o.restaurant_id = re.id${since ? ` AND o.created_at >= ${since}` : ""}
+               WHERE re.deleted_at IS NULL GROUP BY re.id ORDER BY value DESC, re.name LIMIT 10`)
+      : Promise.resolve({ rows: [] }),
+    // Restos actifs sans AUCUNE réservation depuis 30 jours → à relancer
+    query(`SELECT re.id, re.name, re.ville, re.created_at,
+                  (SELECT MAX(reserved_at) FROM reservations WHERE restaurant_id = re.id) AS last_resa
+           FROM restaurants re
+           WHERE re.deleted_at IS NULL AND re.status = 'actif'
+             AND NOT EXISTS (SELECT 1 FROM reservations WHERE restaurant_id = re.id AND reserved_at >= now() - interval '30 days')
+           ORDER BY re.created_at ASC LIMIT 10`),
+  ]);
+
+  return ok(res, {
+    period,
+    by_reservations: byReservations.rows,
+    by_covers:       byCovers.rows,
+    by_rating:       byRating.rows,
+    by_revenue:      byRevenue.rows,
+    inactive:        inactive.rows,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /admin/restaurants/:id/status
 // ---------------------------------------------------------------------------
 export const setRestaurantStatus = asyncHandler(async (req, res) => {

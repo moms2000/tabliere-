@@ -17,6 +17,7 @@ const AdminOverview     = lazy(() => import("./pages/admin/AdminOverview"));
 const Restaurateurs     = lazy(() => import("./pages/admin/Restaurateurs"));
 const Utilisateurs      = lazy(() => import("./pages/admin/Utilisateurs"));
 const Reservations      = lazy(() => import("./pages/admin/Reservations"));
+const Contacts          = lazy(() => import("./pages/admin/Contacts"));
 const Finances          = lazy(() => import("./pages/admin/Finances"));
 const Systeme           = lazy(() => import("./pages/admin/Systeme"));
 const Parametres        = lazy(() => import("./pages/admin/Parametres"));
@@ -254,6 +255,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="restaurateurs" element={<Restaurateurs />} />
                     <Route path="utilisateurs"  element={<Utilisateurs />} />
                     <Route path="reservations"  element={<Reservations />} />
+                    <Route path="base-donnees"  element={<Contacts />} />
                     {/* Paiements retirés du lancement (soumission App/Play Store) :
                         route Finances désactivée, réactivable plus tard. */}
                     <Route path="systeme"       element={<Systeme />} />

@@ -529,7 +529,92 @@ export const batchUserStatus = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /admin/export?type=restaurants|users|reservations — CSV download
+// Base de données « contacts » — vue unifiée & dédoublonnée de TOUS les
+// interlocuteurs de la plateforme : clients inscrits + invités ayant réservé
+// (walk-in) + invités ayant commandé via QR. Dédoublonnage par email → tél → nom.
+// Renvoie { cte, params } : le CTE se termine par la table `grouped`.
+// ---------------------------------------------------------------------------
+async function buildContactsCTE(search) {
+  // qr_orders est créée à la volée (1re commande) : peut ne pas exister encore
+  const { rows: [{ has_orders }] } = await query(
+    "SELECT to_regclass('public.qr_orders') IS NOT NULL AS has_orders"
+  );
+
+  const unions = [
+    `SELECT full_name AS name, phone, email, NULL::text AS notes, 'client' AS source, created_at
+       FROM users WHERE role = 'client'`,
+    `SELECT walk_in_name, walk_in_phone, walk_in_email,
+            COALESCE(NULLIF(notes,''), NULLIF(special_request,'')), 'réservation', created_at
+       FROM reservations
+      WHERE walk_in_name IS NOT NULL OR walk_in_phone IS NOT NULL OR walk_in_email IS NOT NULL`,
+  ];
+  if (has_orders) {
+    unions.push(
+      `SELECT client_name, client_phone, client_email, note, 'commande', created_at
+         FROM qr_orders
+        WHERE client_name IS NOT NULL OR client_phone IS NOT NULL OR client_email IS NOT NULL`
+    );
+  }
+
+  const params = [];
+  let searchCond = "";
+  if (search) {
+    params.push(`%${search}%`);
+    searchCond = `WHERE (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length})`;
+  }
+
+  const cte = `
+    WITH contacts AS (${unions.join(" UNION ALL ")}),
+    keyed AS (
+      SELECT *,
+        COALESCE(NULLIF(lower(trim(email)), ''),
+                 NULLIF(regexp_replace(COALESCE(phone,''), '\\D', '', 'g'), ''),
+                 NULLIF(lower(trim(name)), '')) AS ckey
+      FROM contacts
+      WHERE COALESCE(name, phone, email) IS NOT NULL
+    ),
+    filtered AS (SELECT * FROM keyed ${searchCond}),
+    grouped AS (
+      SELECT
+        MAX(name)  FILTER (WHERE name  IS NOT NULL) AS name,
+        MAX(phone) FILTER (WHERE phone IS NOT NULL) AS phone,
+        MAX(email) FILTER (WHERE email IS NOT NULL) AS email,
+        MAX(notes) FILTER (WHERE notes IS NOT NULL) AS notes,
+        string_agg(DISTINCT source, ', ') AS sources,
+        COUNT(*)::int AS interactions,
+        MAX(created_at) AS last_seen
+      FROM filtered
+      WHERE ckey IS NOT NULL
+      GROUP BY ckey
+    )`;
+
+  return { cte, params };
+}
+
+// ---------------------------------------------------------------------------
+// GET /admin/contacts — base de données complète des contacts (paginée + recherche)
+// ---------------------------------------------------------------------------
+export const getContacts = asyncHandler(async (req, res) => {
+  const page   = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const offset = (page - 1) * limit;
+
+  const { cte, params } = await buildContactsCTE(req.query.search);
+  const { rows } = await query(
+    `${cte}
+     SELECT *, COUNT(*) OVER()::int AS total_count
+     FROM grouped
+     ORDER BY last_seen DESC NULLS LAST
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  const total = rows[0]?.total_count || 0;
+  const data  = rows.map(({ total_count, ...r }) => r);
+  return paginated(res, data, total, page, limit);
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/export?type=restaurants|users|reservations|contacts — CSV download
 // ---------------------------------------------------------------------------
 export const exportCSV = asyncHandler(async (req, res) => {
   const { type = "restaurants" } = req.query;
@@ -573,8 +658,18 @@ export const exportCSV = asyncHandler(async (req, res) => {
                "Restaurant", "Client", "Email client", "Créé le"];
     filename = "reservations.csv";
 
+  } else if (type === "contacts") {
+    const { cte, params } = await buildContactsCTE(null);
+    ({ rows } = await query(
+      `${cte}
+       SELECT name, phone, email, notes, sources, interactions, last_seen
+       FROM grouped ORDER BY last_seen DESC NULLS LAST`, params
+    ));
+    headers = ["Nom", "Téléphone", "Email", "Notes", "Sources", "Interactions", "Dernière activité"];
+    filename = "base-clients.csv";
+
   } else {
-    throw new AppError("type invalide : restaurants | users | reservations", 400);
+    throw new AppError("type invalide : restaurants | users | reservations | contacts", 400);
   }
 
   const escape = (v) => {

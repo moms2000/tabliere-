@@ -56,6 +56,11 @@ export const adminService = {
     return res.data;
   },
 
+  async listContacts(params = {}) {
+    const res = await api.get("/admin/contacts", { params });
+    return res.data;
+  },
+
   async updateReservation(id, fields) {
     const res = await api.patch(`/admin/reservations/${id}`, fields);
     return res.data.data;

@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Utensils, Users, CalendarCheck, CreditCard,
-  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe, PartyPopper, BarChart3,
+  Activity, Settings, QrCode, Bell, RefreshCw, ChevronRight, X, LogOut, Menu, KeyRound, Globe, PartyPopper, BarChart3, Database,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
@@ -38,6 +38,7 @@ const NAV = [
   { to: "/admin/restaurateurs", label: "Restaurateurs",   icon: Utensils },
   { to: "/admin/utilisateurs",  label: "Utilisateurs",    icon: Users },
   { to: "/admin/reservations",  label: "Réservations",    icon: CalendarCheck },
+  { to: "/admin/base-donnees",  label: "Base de données", icon: Database },
   { to: "/admin/qr-themes",     label: "QR & Thèmes",     icon: QrCode },
   { to: "/admin/codes",         label: "Codes accès",     icon: KeyRound },
   { to: "/admin/codes-organisateurs", label: "Codes organisateurs", icon: PartyPopper },

@@ -88,7 +88,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 export const listCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   const { rows } = await query(
-    `SELECT r.id, r.ref, r.party_size, r.status, r.checked_in_at, r.promoter_code,
+    `SELECT r.id, r.ref, r.party_size, r.arrived_size, r.status, r.checked_in_at, r.promoter_code,
             r.special_request, r.created_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
@@ -101,29 +101,54 @@ export const listCheckin = asyncHandler(async (req, res) => {
     [req.eventScope]
   );
   const arrivedRows = rows.filter(r => r.checked_in_at);
+  // Personnes réellement arrivées = arrived_size si saisi, sinon party_size
+  const arrivedPax = (r) => (r.arrived_size != null ? r.arrived_size : (r.party_size || 0));
   const { rows: [ev] } = await query("SELECT capacity FROM events WHERE id = $1", [req.eventScope]);
+  const arrivedCovers = arrivedRows.reduce((a, c) => a + arrivedPax(c), 0);
+  const capacity = ev?.capacity ?? null;
   return ok(res, {
     reservations: rows,
     totals: {
       total: rows.length,
       arrived: arrivedRows.length,
-      arrived_covers: arrivedRows.reduce((a, c) => a + (c.party_size || 0), 0),
+      arrived_covers: arrivedCovers,
       covers: rows.reduce((a, c) => a + (c.party_size || 0), 0),
-      capacity: ev?.capacity ?? null,
+      capacity,
+      remaining: capacity != null ? Math.max(0, capacity - arrivedCovers) : null,
     },
   });
 });
+
+// Marque (ou libère) la table d'une réservation à l'arrivée
+async function syncTableStatus(resaId, occupied) {
+  await query(
+    `UPDATE event_tables SET status = $1, updated_at = NOW()
+     WHERE id = (SELECT table_id FROM event_reservations WHERE id = $2) AND status <> $1`,
+    [occupied ? "occupe" : "reserve", resaId]
+  ).catch(() => {});
+}
+// Nombre de personnes arrivées (saisi au check-in), borné ; défaut = party_size
+const arrivedFromBody = (body, fallback) => {
+  const n = parseInt(body?.arrived_size, 10);
+  return Number.isFinite(n) && n >= 0 ? n : (fallback ?? null);
+};
 
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────
 export const doCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   const undo = req.body?.undo === true;
+  const arrived = undo ? null : arrivedFromBody(req.body);
   const { rows: [resa] } = await query(
-    `UPDATE event_reservations SET checked_in_at = ${undo ? "NULL" : "NOW()"}, updated_at = NOW()
-     WHERE id = $1 AND event_id = $2 RETURNING id, ref, checked_in_at`,
-    [req.params.resaId, req.eventScope]
+    `UPDATE event_reservations
+       SET checked_in_at = ${undo ? "NULL" : "NOW()"},
+           arrived_size  = ${undo ? "NULL" : "COALESCE($3, party_size)"},
+           updated_at = NOW()
+     WHERE id = $1 AND event_id = $2
+     RETURNING id, ref, party_size, arrived_size, checked_in_at, table_id`,
+    undo ? [req.params.resaId, req.eventScope] : [req.params.resaId, req.eventScope, arrived]
   );
   if (!resa) return notFound(res, "Réservation introuvable");
+  if (resa.table_id) await syncTableStatus(resa.id, !undo);
   return ok(res, { reservation: resa }, undo ? "Check-in annulé" : "Arrivée confirmée");
 });
 
@@ -132,12 +157,17 @@ export const checkinByRef = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   const ref = String(req.body?.ref || "").trim().toUpperCase();
   if (!ref) throw new AppError("Référence requise", 400);
+  const arrived = arrivedFromBody(req.body);
   const { rows: [resa] } = await query(
-    `UPDATE event_reservations SET checked_in_at = NOW(), updated_at = NOW()
+    `UPDATE event_reservations
+       SET checked_in_at = NOW(),
+           arrived_size  = COALESCE($3, party_size),
+           updated_at = NOW()
      WHERE ref = $1 AND event_id = $2 AND status <> 'annule'
-     RETURNING id, ref, party_size, checked_in_at`,
-    [ref, req.eventScope]
+     RETURNING id, ref, party_size, arrived_size, checked_in_at, table_id`,
+    [ref, req.eventScope, arrived]
   );
   if (!resa) return notFound(res, "Réservation introuvable pour cet événement");
+  if (resa.table_id) await syncTableStatus(resa.id, true);
   return ok(res, { reservation: resa }, "Arrivée confirmée");
 });

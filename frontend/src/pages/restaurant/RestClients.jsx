@@ -18,6 +18,8 @@ export default function RestClients() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
 
   useEffect(() => {
     reservationsService.clients()
@@ -34,6 +36,16 @@ export default function RestClients() {
       (c.phone || "").toLowerCase().includes(s) ||
       (c.email || "").toLowerCase().includes(s));
   }, [clients, q]);
+
+  // Pagination client (les données + la recherche sont déjà côté client ;
+  // les exports PDF/Excel restent sur l'ensemble filtré, pas la page courante).
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [q]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const paged = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
 
   const restoName = user?.resto_name || "Mon restaurant";
   const COLS = ["Nom", "Téléphone", "Email", "Visites", "Couverts", "Confirmées", "No-show", "1ʳᵉ visite", "Dernière visite"];
@@ -124,7 +136,7 @@ export default function RestClients() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c, i) => (
+                  {paged.map((c, i) => (
                     <tr key={i} style={{ borderTop: `0.5px solid ${BG}` }}>
                       <td style={td}>
                         <div style={{ fontWeight: 600, color: DARK }}>{c.name}</div>
@@ -142,6 +154,19 @@ export default function RestClients() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination (client) */}
+          {!loading && filtered.length > PAGE_SIZE && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.4 : 1, fontSize: 13, fontFamily: FONT }}>← Préc.</button>
+              <span style={{ fontSize: 13, color: MUTED }}>Page {page} / {totalPages} · {filtered.length} clients</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "6px 14px", background: "white",
+                  cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontSize: 13, fontFamily: FONT }}>Suiv. →</button>
             </div>
           )}
         </Card>

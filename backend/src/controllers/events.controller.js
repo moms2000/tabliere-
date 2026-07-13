@@ -150,6 +150,14 @@ export const updateEvent = asyncHandler(async (req, res) => {
     if (f === "status" && !EVENT_STATUSES.includes(val)) throw new AppError("Statut invalide", 400);
     if (f === "capacity") val = (val === null || val === "" ) ? null : (parseInt(val, 10) || null);
     if (f === "photos") val = JSON.stringify(Array.isArray(val) ? val.slice(0, 5) : []);
+    // Dates : une chaîne vide n'est pas un TIMESTAMPTZ valide → NULL (ou on ignore
+    // starts_at qui est obligatoire, pour ne pas le vider par erreur).
+    if (f === "starts_at" || f === "ends_at") {
+      if (val === "" || val === null) {
+        if (f === "starts_at") continue; // requis : ne jamais écraser avec vide
+        val = null;
+      }
+    }
     values.push(val);
     updates.push(`${f} = $${values.length}`);
   }

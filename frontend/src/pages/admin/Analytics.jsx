@@ -4,6 +4,7 @@ import { BarChart3, UtensilsCrossed, Store, CalendarDays, FileText, Sheet, Trend
 import { Card, SectionHeader, PageTitle, Btn } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 import Classements from "../../components/admin/Classements.jsx";
+import PlatformStats from "../../components/admin/PlatformStats.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", GREEN = "#1D9E75", MUTED = "#9BA89F", BORDER = "#eee", BG = "#F8F5EF";
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -77,6 +78,11 @@ export default function Analytics() {
             <span style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.val}</span>
           </div>
         ))}
+      </motion.div>
+
+      {/* Statistiques plateforme (croissance, géo, adoption) */}
+      <motion.div variants={fadeUp} style={{ marginBottom: 12 }}>
+        <PlatformStats />
       </motion.div>
 
       {/* Classements (période + métriques + à relancer) */}

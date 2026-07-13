@@ -22,6 +22,11 @@ export const adminService = {
     return res.data.data;
   },
 
+  async getPlatformStats() {
+    const res = await api.get("/admin/platform-stats");
+    return res.data.data;
+  },
+
   async listRestaurants(params = {}) {
     // Cache uniquement si pas de filtres dynamiques.
     // La clé inclut `sort` : sinon la page QR (sort=name) et la page

@@ -11,6 +11,7 @@ router.get   ("/stats",                    ctrl.getStats);
 router.get   ("/analytics",                ctrl.getAnalytics);
 router.get   ("/contacts",                 ctrl.getContacts);
 router.get   ("/top-restaurants",          ctrl.getTopRestaurants);
+router.get   ("/platform-stats",           ctrl.getPlatformStats);
 router.get   ("/export",                   ctrl.exportCSV);
 
 // Paramètres plateforme

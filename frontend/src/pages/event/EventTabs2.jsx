@@ -259,16 +259,24 @@ export function PromotersTab({ event }) {
 }
 
 // ═══ STAFF ═════════════════════════════════════════════════════════════════════
-export function StaffTab({ event }) {
+export function StaffTab({ event, tables = [], onChanged }) {
   const [list, setList] = useState([]);
   const [modal, setModal] = useState(false);
   const [f, setF] = useState({ name: "", role: "all" });
+  const [assignBusy, setAssignBusy] = useState(null);
   const load = () => eventsService.listStaff(event.id).then(d => setList(d?.staff || [])).catch(console.error);
   useEffect(() => { load(); }, [event.id]);
   const create = async () => { if (!f.name) return; try { await eventsService.createStaff(event.id, f); setModal(false); setF({ name: "", role: "all" }); load(); } catch { alert("Erreur"); } };
   const del = async (s) => { if (!window.confirm(`Retirer ${s.name} ?`)) return; try { await eventsService.deleteStaff(event.id, s.id); load(); } catch { alert("Erreur"); } };
   const staffUrl = `${window.location.origin}/staff`;
-  const roleLabel = { all: "Tout", checkin: "Check-in", bar: "Bar" };
+  const roleLabel = { all: "Tout", checkin: "Check-in", bar: "Bar", serveur: "Serveur" };
+  const servers = list.filter(s => s.role === "serveur" || s.role === "all");
+  const assign = async (tableId, serverId) => {
+    setAssignBusy(tableId);
+    try { await eventsService.updateTable(event.id, tableId, { server_id: serverId || "none" }); onChanged && await onChanged(); }
+    catch { alert("Erreur lors de l'assignation"); }
+    finally { setAssignBusy(null); }
+  };
 
   return (
     <Card>
@@ -298,10 +306,10 @@ export function StaffTab({ event }) {
       <Modal open={modal} title="Nouveau staff" onClose={() => setModal(false)}>
         <FormField label="Nom"><Input value={f.name} onChange={e => setF(p => ({ ...p, name: e.target.value }))} placeholder="Awa (accueil)" /></FormField>
         <FormField label="Rôle">
-          <div style={{ display: "flex", gap: 8 }}>
-            {[["all", "Tout"], ["checkin", "Check-in"], ["bar", "Bar"]].map(([k, label]) => (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[["all", "Tout"], ["checkin", "Check-in"], ["bar", "Bar"], ["serveur", "Serveur"]].map(([k, label]) => (
               <button key={k} onClick={() => setF(p => ({ ...p, role: k }))}
-                style={{ flex: 1, border: `1.5px solid ${f.role === k ? P : BORDER}`, borderRadius: 10, padding: "9px 0",
+                style={{ flex: 1, minWidth: 78, border: `1.5px solid ${f.role === k ? P : BORDER}`, borderRadius: 10, padding: "9px 0",
                   background: f.role === k ? "#FEF6EC" : "white", cursor: "pointer", fontFamily: FONT, color: f.role === k ? "#C47D1A" : DARK, fontSize: 13, fontWeight: 600 }}>{label}</button>
             ))}
           </div>
@@ -312,6 +320,38 @@ export function StaffTab({ event }) {
           <Btn variant="primary" onClick={create} disabled={!f.name}>Ajouter</Btn>
         </div>
       </Modal>
+
+      {/* Assignation serveur ↔ table (Phase 3) */}
+      <div style={{ marginTop: 22, borderTop: `0.5px solid ${BORDER}`, paddingTop: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+          <Armchair size={16} color={P} /> Assignation des tables
+        </div>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+          Attribuez chaque table à un serveur. Le serveur ne verra et ne commandera que pour <strong>ses</strong> tables.
+        </div>
+        {servers.length === 0 ? (
+          <Empty text="Créez d'abord un staff avec le rôle « Serveur » pour pouvoir assigner des tables." />
+        ) : tables.length === 0 ? (
+          <Empty text="Ajoutez des tables dans l'onglet « Plan & Tables »." />
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {tables.map(t => (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", border: `0.5px solid ${BORDER}`, borderRadius: 10 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, color: DARK, fontWeight: 600 }}>
+                  {t.kind === "vip" ? <Crown size={13} color={P} /> : <Armchair size={13} color={MUTED} />} {t.label}
+                </div>
+                <select value={t.server_id || ""} disabled={assignBusy === t.id}
+                  onChange={e => assign(t.id, e.target.value)}
+                  style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 10px", fontFamily: FONT,
+                    fontSize: 13, color: t.server_id ? DARK : MUTED, background: "white", cursor: "pointer", maxWidth: 180 }}>
+                  <option value="">— Aucun serveur —</option>
+                  {servers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

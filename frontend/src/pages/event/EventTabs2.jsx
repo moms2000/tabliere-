@@ -3,7 +3,7 @@ import QRCode from "react-qr-code";
 import {
   Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
   QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
-  Phone, ChevronDown, ChevronUp, AlertTriangle, MapPin,
+  Phone, ChevronDown, ChevronUp, AlertTriangle, MapPin, Wallet, TrendingUp, RefreshCw, DoorOpen,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
@@ -18,14 +18,23 @@ const fmtInt = (n) => Number(n || 0).toLocaleString("fr-FR");
 export function DashboardTab({ event }) {
   const [d, setD] = useState(null);
   const [busy, setBusy] = useState(null);
-  useEffect(() => { eventsService.dashboard(event.id).then(setD).catch(console.error); }, [event.id]);
+  const [live, setLive] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const load = () => eventsService.dashboard(event.id).then(dd => { setD(dd); setUpdatedAt(new Date()); }).catch(console.error);
+  useEffect(() => { load(); }, [event.id]);
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(load, 15000); // rafraîchissement live toutes les 15 s
+    return () => clearInterval(t);
+  }, [live, event.id]);
   if (!d) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
 
-  const r = d.reservations || {}, o = d.orders || {}, v = d.vip || {};
-  const stat = (label, val, color = DARK) => (
+  const r = d.reservations || {}, o = d.orders || {}, v = d.vip || {}, c = d.cash || {}, servers = d.servers || [];
+  const stat = (label, val, color = DARK, sub) => (
     <div style={{ flex: 1, minWidth: 130, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
       <div style={{ fontSize: 11.5, color: MUTED }}>{label}</div>
       <div style={{ fontSize: 21, fontWeight: 700, color }}>{val}</div>
+      {sub ? <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{sub}</div> : null}
     </div>
   );
   const doExport = async (kind) => {
@@ -35,9 +44,21 @@ export function DashboardTab({ event }) {
       const cols = ["Indicateur", "Valeur"];
       const rows = [
         ["Réservations", fmtInt(r.total)], ["Confirmées", fmtInt(r.confirmed)],
-        ["Arrivées (check-in)", fmtInt(r.checked_in)], ["Couverts", fmtInt(r.covers)],
-        ["Packs VIP vendus", fmtInt(v.vip_sold)], ["Revenu VIP", fmt(v.vip_revenue)],
-        ["Commandes bouteilles", fmtInt(o.count)], ["Total commandes", fmt(o.total)], ["Encaissé", fmt(o.paid)],
+        ["Arrivées (check-in)", fmtInt(r.checked_in)], ["Couverts réservés", fmtInt(r.covers)],
+        ["Personnes arrivées", fmtInt(c.arrived_covers)],
+        ["— RÉCONCILIATION CAISSE —", ""],
+        ["Jauge d'entrées gratuites", c.capacity != null ? fmtInt(c.capacity) : "non définie"],
+        ["Entrées gratuites utilisées", fmtInt(c.free_used)],
+        ["Entrées payantes (surplus)", fmtInt(c.paid_entries)],
+        ["Prix d'entrée", fmt(c.entry_price)],
+        ["Espèces entrées attendues", fmt(c.entry_cash_due)],
+        ["Bar encaissé", fmt(c.bar_cashed)], ["Bar en attente", fmt(c.bar_pending)],
+        ["Revenu VIP", fmt(c.vip_revenue)],
+        ["TOTAL ESPÈCES ATTENDU", fmt(c.total_expected)],
+        ["— DÉTAIL —", ""],
+        ["Packs VIP vendus", fmtInt(v.vip_sold)],
+        ["Commandes bouteilles", fmtInt(o.count)], ["Total commandes", fmt(o.total)],
+        ...servers.map(s => [`Serveur · ${s.name}`, `${fmtInt(s.orders_count)} cmd · ${fmt(s.revenue)}`]),
         ...(d.top_bottles || []).map(b => [`Bouteille · ${b.name}`, `${b.qty}`]),
         ...(d.promoters || []).map(p => [`Promoteur · ${p.name} (${p.code})`, `${p.reservations} résa`]),
       ];
@@ -46,25 +67,104 @@ export function DashboardTab({ event }) {
     } catch (e) { alert("Export impossible"); } finally { setBusy(null); }
   };
 
+  // Barre de progression des arrivées vs jauge
+  const cap = c.capacity, arrived = c.arrived_covers || 0;
+  const pct = cap ? Math.min(100, Math.round((arrived / cap) * 100)) : 0;
+  const over = cap != null && arrived > cap;
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={busy}>{busy === "pdf" ? "…" : "PDF"}</Btn>
-        <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={busy}>{busy === "xls" ? "…" : "Excel"}</Btn>
+      {/* Barre live + exports */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => setLive(l => !l)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 7, border: `0.5px solid ${BORDER}`, background: "white",
+            borderRadius: 20, padding: "6px 13px", cursor: "pointer", fontFamily: FONT, fontSize: 12.5, color: DARK }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: live ? GREEN : MUTED,
+            boxShadow: live ? `0 0 0 3px ${GREEN}33` : "none" }} />
+          {live ? "En direct" : "En pause"}
+          <span style={{ color: MUTED, fontSize: 11 }}>
+            {updatedAt ? `· ${updatedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}
+          </span>
+        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn icon={RefreshCw} onClick={load}>Actualiser</Btn>
+          <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={busy}>{busy === "pdf" ? "…" : "PDF"}</Btn>
+          <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={busy}>{busy === "xls" ? "…" : "Excel"}</Btn>
+        </div>
       </div>
+
+      {/* Affluence en direct */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}>
+            <DoorOpen size={16} color={P} /> Affluence en direct
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: over ? "#DC2626" : DARK }}>
+            {fmtInt(arrived)}{cap != null ? ` / ${fmtInt(cap)}` : ""} pers.
+          </div>
+        </div>
+        {cap != null ? (
+          <>
+            <div style={{ height: 12, borderRadius: 8, background: BG, overflow: "hidden", position: "relative" }}>
+              <div style={{ position: "absolute", inset: 0, width: `${pct}%`, background: over ? "#DC2626" : GREEN, borderRadius: 8, transition: "width .4s" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11.5, color: MUTED }}>
+              <span>{over ? `${fmtInt(c.paid_entries)} au-delà de la jauge (payants)` : `${fmtInt(c.free_remaining)} entrées gratuites restantes`}</span>
+              <span>{pct}%</span>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: MUTED }}>Définissez la jauge d'entrées dans « Détails » pour suivre l'affluence et les entrées payantes.</div>
+        )}
+      </Card>
+
+      {/* Réconciliation caisse */}
+      <Card>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+          <Wallet size={16} color={P} /> Réconciliation caisse
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          {stat("Entrées payantes", fmtInt(c.paid_entries), over ? "#DC2626" : DARK, c.entry_price ? `× ${fmt(c.entry_price)}` : "prix non défini")}
+          {stat("Espèces entrées", fmt(c.entry_cash_due), "#C47D1A", "à encaisser à la porte")}
+          {stat("Bar encaissé", fmt(c.bar_cashed), GREEN, `${fmtInt(o.n_paid)} cmd payées`)}
+          {stat("Bar en attente", fmt(c.bar_pending), MUTED, `${fmtInt((o.n_pending || 0) + (o.n_served || 0))} cmd`)}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FEF6EC",
+          border: "0.5px solid #F3E4CB", borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#7a5a1a" }}>Total espèces attendu (entrées + bar encaissé)</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#C47D1A" }}>{fmt(c.total_expected)}</div>
+        </div>
+      </Card>
+
+      {/* Chiffres clés */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {stat("Réservations", fmtInt(r.total))}
         {stat("Confirmées", fmtInt(r.confirmed), GREEN)}
-        {stat("Arrivées", fmtInt(r.checked_in), P)}
-        {stat("Couverts", fmtInt(r.covers))}
+        {stat("Arrivées", fmtInt(r.checked_in), P, `${fmtInt(arrived)} pers.`)}
+        {stat("Packs VIP", fmtInt(v.vip_sold), DARK, fmt(v.vip_revenue))}
       </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {stat("Packs VIP vendus", fmtInt(v.vip_sold))}
-        {stat("Revenu VIP", fmt(v.vip_revenue), GREEN)}
-        {stat("Commandes", fmtInt(o.count))}
-        {stat("Encaissé", fmt(o.paid), GREEN)}
-      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))", gap: 12 }}>
+        {/* Performance serveurs (Phase 4) */}
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+            <TrendingUp size={15} color={P} /> Performance serveurs
+          </div>
+          {servers.length === 0 ? <Empty text="Aucun serveur assigné." /> :
+            servers.map((s, i) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 9px", background: "#fafafa", borderRadius: 8, marginBottom: 5 }}>
+                <span style={{ fontSize: 11, color: MUTED, width: 14 }}>{i + 1}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, color: DARK, fontWeight: 600 }}>{s.name}</div>
+                  <div style={{ fontSize: 10.5, color: MUTED }}>{fmtInt(s.tables_count)} table(s) · {fmtInt(s.orders_count)} cmd</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{fmt(s.revenue)}</div>
+                  <div style={{ fontSize: 10.5, color: GREEN }}>{fmt(s.cashed)} encaissé</div>
+                </div>
+              </div>
+            ))}
+        </Card>
         <Card>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10 }}>Top bouteilles</div>
           {(d.top_bottles || []).length === 0 ? <Empty /> :

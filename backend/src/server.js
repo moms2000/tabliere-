@@ -338,6 +338,7 @@ async function runEventsPhase2Migration() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS bottles_enabled BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS ordering_mode   VARCHAR(10) DEFAULT 'per_order'`, // per_order | tab
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS capacity INTEGER`,               // jauge d'entrées (gratuites)
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS entry_price INTEGER DEFAULT 0`,  // prix d'entrée payé en espèces au-delà de la jauge (Phase 4)
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`,      // galerie (max 5)
     `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS min_order INTEGER DEFAULT 0`, // minimum de commande pour le salon
     // Réservations : code promoteur + check-in

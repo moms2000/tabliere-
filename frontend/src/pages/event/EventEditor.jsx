@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, ExternalLink, Save, Plus, Pencil, Trash2, Check, X,
-  Crown, Armchair, Calendar, Users, Phone, Copy, CheckCheck,
+  Crown, Armchair, Calendar, Users, Phone, Copy, CheckCheck, FileText, Sheet, Mail,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { useToast } from "../../components/ui/Toast.jsx";
@@ -92,7 +92,7 @@ export default function EventEditor() {
       {tab === "details"   && <DetailsTab event={event} onSaved={load} publicUrl={publicUrl} />}
       {tab === "plan"      && <PlanTab event={event} tables={tables} onChanged={load} />}
       {tab === "bottles"   && <BottlesTab event={event} tables={tables} onChanged={load} />}
-      {tab === "resa"      && <ResaTab eventId={event.id} />}
+      {tab === "resa"      && <ResaTab eventId={event.id} eventName={event.name} />}
       {tab === "checkin"   && <CheckinTab eventId={event.id} />}
       {tab === "promoters" && <PromotersTab event={event} />}
       {tab === "staff"     && <StaffTab event={event} />}
@@ -253,9 +253,10 @@ function TableGroup({ title, icon: Icon, items, onEdit, onDel }) {
 }
 
 // ── Réservations ─────────────────────────────────────────────────────────────
-function ResaTab({ eventId }) {
+function ResaTab({ eventId, eventName }) {
   const [resas, setResas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
   const load = () => eventReservationsService.listForEvent(eventId).then(d => setResas(d?.reservations || [])).catch(console.error).finally(() => setLoading(false));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [eventId]);
 
@@ -264,11 +265,46 @@ function ResaTab({ eventId }) {
     catch (e) { alert("Erreur"); }
   };
 
+  // Export de la base clients de CET événement (PDF / Excel)
+  const doExport = async (kind) => {
+    setBusy(kind);
+    try {
+      const mod = await import("../../services/exports.js");
+      const COLS = ["Réf", "Nom", "Téléphone", "Email", "Couverts", "Table", "Statut", "Date"];
+      const rows = resas.map(r => [
+        r.ref || "", r.client_name || r.guest_name || "", r.client_phone || r.guest_phone || "", r.client_email || "",
+        r.party_size, r.table_label || "—",
+        (RESA_STATUS[r.status]?.label || r.status), r.created_at ? new Date(r.created_at).toLocaleDateString("fr-FR") : "",
+      ]);
+      const common = { title: `Base clients — ${eventName || "événement"}`, subtitle: "TablièreCI — Événements",
+        columns: COLS, rows, filename: `clients-evenement`,
+        summary: [{ label: "Réservations", value: resas.length },
+          { label: "Confirmées", value: resas.filter(r => r.status === "confirme").length }] };
+      if (kind === "pdf") await mod.exportPDF(common);
+      else await mod.exportXLSX({ sheetName: "Clients", ...common });
+    } catch (e) { alert("Export impossible"); console.error(e); }
+    finally { setBusy(null); }
+  };
+
   if (loading) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
-  if (!resas.length) return <Card><div style={{ textAlign: "center", padding: "38px 0", color: MUTED, fontSize: 13 }}>Aucune réservation pour le moment.</div></Card>;
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Base clients de l'événement</div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+              {resas.length} réservation{resas.length > 1 ? "s" : ""} · {resas.filter(r => r.status === "confirme").length} confirmée{resas.filter(r => r.status === "confirme").length > 1 ? "s" : ""}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={!!busy || !resas.length}>{busy === "pdf" ? "…" : "PDF"}</Btn>
+            <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={!!busy || !resas.length}>{busy === "xls" ? "…" : "Excel"}</Btn>
+          </div>
+        </div>
+      </Card>
+      {!resas.length && <Card><div style={{ textAlign: "center", padding: "38px 0", color: MUTED, fontSize: 13 }}>Aucune réservation pour le moment.</div></Card>}
       {resas.map(r => {
         const st = RESA_STATUS[r.status] || RESA_STATUS.en_attente;
         return (
@@ -286,6 +322,7 @@ function ResaTab({ eventId }) {
                     {r.table_kind === "vip" ? <Crown size={12} color={P} /> : <Armchair size={12} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}
                   </span>}
                   {(r.client_phone || r.guest_phone) && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={12} /> {r.client_phone || r.guest_phone}</span>}
+                  {r.client_email && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Mail size={12} /> {r.client_email}</span>}
                 </div>
                 {r.special_request && <div style={{ fontSize: 12, color: MUTED, marginTop: 4, fontStyle: "italic" }}>« {r.special_request} »</div>}
               </div>

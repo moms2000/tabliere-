@@ -82,7 +82,10 @@ export const listForEvent = asyncHandler(async (req, res) => {
   assertOwner(req, event);
 
   const { rows } = await query(
-    `SELECT r.*, u.full_name AS client_name, u.phone AS client_phone,
+    `SELECT r.*,
+            COALESCE(r.guest_name, u.full_name) AS client_name,
+            COALESCE(r.guest_phone, u.phone)    AS client_phone,
+            u.email AS client_email,
             t.label AS table_label, t.kind AS table_kind, t.price AS table_price
      FROM event_reservations r
      JOIN users u ON u.id = r.client_id

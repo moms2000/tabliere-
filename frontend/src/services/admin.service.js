@@ -17,6 +17,11 @@ export const adminService = {
     return res.data.data;
   },
 
+  async getTopRestaurants(period = "month") {
+    const res = await api.get("/admin/top-restaurants", { params: { period } });
+    return res.data.data;
+  },
+
   async listRestaurants(params = {}) {
     // Cache uniquement si pas de filtres dynamiques.
     // La clé inclut `sort` : sinon la page QR (sort=name) et la page

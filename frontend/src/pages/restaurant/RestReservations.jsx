@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -280,6 +281,7 @@ export default function RestReservations() {
   const [mainTab,   setMainTab]   = useState("reservations");
   const [page,      setPage]      = useState(1);
   const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
+  const [searchParams, setSearchParams] = useSearchParams();
   const PAGE_SIZE = 30;
   const [modalCreate, setModalCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -543,6 +545,19 @@ export default function RestReservations() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // Arrivée depuis le Plan de salle (?focus=<id>) : ouvrir l'onglet Réservations,
+  // sauter à la page contenant la réservation, et la surligner qq secondes.
+  const focusId = searchParams.get("focus");
+  useEffect(() => {
+    if (!focusId || loading || !data.length) return;
+    setMainTab("reservations");
+    const idx = filtered.findIndex(r => r.id === focusId);
+    if (idx >= 0) setPage(Math.floor(idx / PAGE_SIZE) + 1);
+    const t = setTimeout(() => setSearchParams({}, { replace: true }), 4500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, loading, data.length]);
+
   // Export PDF / Excel de la liste filtrée
   const EXPORT_COLS = ["Réf", "Client", "Date & heure", "Pers.", "Table", "Statut"];
   const exportRows = (list) => list.map(r => [
@@ -720,7 +735,7 @@ export default function RestReservations() {
             </div>
             {loading
               ? <div style={{ textAlign: "center", padding: "30px 0", color: "#bbb", fontSize: 13 }}>Chargement…</div>
-              : <Table columns={cols} rows={paged} />
+              : <Table columns={cols} rows={paged} highlightId={focusId} />
             }
             {!loading && filtered.length > PAGE_SIZE && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16 }}>

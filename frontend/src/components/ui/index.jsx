@@ -126,7 +126,21 @@ export function PageTitle({ title, subtitle }) {
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
-export function Table({ columns, rows, onRowClick }) {
+export function Table({ columns, rows, onRowClick, highlightId }) {
+  // Surlignage + défilement vers une ligne ciblée (ex. arrivée depuis le plan
+  // de salle). Rétrocompatible : sans highlightId, comportement identique.
+  const hiRef = React.useRef(null);
+  const scrolledFor = React.useRef(null);
+  React.useEffect(() => {
+    // On défile UNE fois par highlightId, dès que la ligne ciblée est montée
+    // (elle peut n'apparaître qu'après le saut de page). deps incluent `rows`
+    // pour re-tenter quand la page change, le garde `scrolledFor` évite les répétitions.
+    if (highlightId != null && hiRef.current && scrolledFor.current !== highlightId) {
+      hiRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      scrolledFor.current = highlightId;
+    }
+    if (highlightId == null) scrolledFor.current = null;
+  }, [highlightId, rows]);
   return (
     <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
     <table style={{ width: "100%", minWidth: 520, borderCollapse: "collapse", fontSize: 13, fontFamily: FONT }}>
@@ -140,12 +154,17 @@ export function Table({ columns, rows, onRowClick }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, i) => (
+        {rows.map((row, i) => {
+          const isHi = highlightId != null && row.id === highlightId;
+          return (
           <motion.tr key={row.id || i}
+            ref={isHi ? hiRef : undefined}
             whileHover={{ background: PL }}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             style={{ borderBottom: `0.5px solid ${BG}`,
-              cursor: onRowClick ? "pointer" : "default" }}>
+              cursor: onRowClick ? "pointer" : "default",
+              background: isHi ? "#FDECCB" : undefined,
+              boxShadow: isHi ? `inset 3px 0 0 ${P}` : undefined }}>
             {columns.map(c => (
               <td key={c.key} style={{ padding: "9px 8px", textAlign: c.align || "left",
                 verticalAlign: "middle" }}>
@@ -153,7 +172,8 @@ export function Table({ columns, rows, onRowClick }) {
               </td>
             ))}
           </motion.tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
     </div>

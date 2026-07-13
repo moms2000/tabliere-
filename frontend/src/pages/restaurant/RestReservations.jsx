@@ -241,7 +241,7 @@ function CreateResaModal({ onClose, onCreate, form, setForm, error }) {
         {!selectedSlot && (
           <div style={{ marginTop: 8, padding: "8px 12px", background: "#FEF6EC",
             borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
-            ⚡ Sélectionnez un créneau ci-dessus pour continuer
+            Sélectionnez un créneau ci-dessus pour continuer
           </div>
         )}
       </div>
@@ -521,8 +521,8 @@ export default function RestReservations() {
       const link   = slug ? `${window.location.origin}/restaurant/${slug}${guests}` : window.location.origin;
       const restoName = user?.resto_name || "notre restaurant";
       const msg = encodeURIComponent(
-        `🍽️ Bonjour ${w.name || ""}, une table vient de se libérer à ${restoName} !\n\n` +
-        `Réservez tout de suite en ligne 👉 ${link}`
+        `Bonjour ${w.name || ""}, une table vient de se libérer à ${restoName} !\n\n` +
+        `Réservez tout de suite en ligne ${link}`
       );
       // wa.me ouvre WhatsApp (app ou web) du restaurateur avec le message prêt à envoyer
       window.open(`https://wa.me/${w.phone.replace(/\D/g,"")}?text=${msg}`, "_blank");
@@ -607,7 +607,7 @@ export default function RestReservations() {
     { key: "client",  label: "Client", render: r => (
       <div>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{r.client_name || "—"}</div>
-        {r.is_noshow && <span style={{ fontSize: 10, color: "#DC2626", fontWeight: 600 }}>⚠ No-show</span>}
+        {r.is_noshow && <span style={{ fontSize: 10, color: "#DC2626", fontWeight: 600 }}>No-show</span>}
       </div>
     )},
     { key: "date",    label: "Date",   render: r => <span style={{ fontSize: 12 }}>{fmtDate(r.reserved_at)}</span> },
@@ -810,7 +810,7 @@ export default function RestReservations() {
             </div>
             <div style={{ fontSize: 11.5, color: MUTED, background: "#F0FBF6", border: "0.5px solid #CDEBDD",
               borderRadius: 9, padding: "9px 12px", marginBottom: 14, lineHeight: 1.5 }}>
-              💬 « Notifier WhatsApp » ouvre WhatsApp (app ou web) avec un message prêt à envoyer au client —
+              « Notifier WhatsApp » ouvre WhatsApp (app ou web) avec un message prêt à envoyer au client —
               aucune configuration requise, le message part de <strong>votre</strong> WhatsApp. Le lien inclus
               mène directement à la page de réservation de votre restaurant (couverts préremplis).
             </div>
@@ -933,7 +933,7 @@ export default function RestReservations() {
             </div>
             <div style={{ marginTop: 14, padding: "10px 12px", background: "#f8f8f8",
               borderRadius: 8, fontSize: 12, color: "#888" }}>
-              💡 Les clients avec 3+ annulations peuvent être marqués comme "bloqués" dans la prochaine version.
+              Les clients avec 3+ annulations peuvent être marqués comme "bloqués" dans la prochaine version.
             </div>
           </Card>
         </motion.div>

@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown, LayoutGrid, Clock, ShoppingBag } from "lucide-react";
+import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown, LayoutGrid, Clock, ShoppingBag, Utensils } from "lucide-react";
 import { menuService }   from "../../services/menu.service.js";
 import { ordersService } from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
@@ -66,8 +66,8 @@ function ProductCard({ item, qty, onAdd, onRemove, color }) {
       ) : (
         <div style={{ height: 72, background: qty > 0 ? color + "18" : BG,
           display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "background .15s", fontSize: 24 }}>
-          🍽️
+          transition: "background .15s" }}>
+          <Utensils size={24} color="#9BA89F" />
         </div>
       )}
 
@@ -610,7 +610,7 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 14px" }}>
         {cartItems.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: MUTED, fontSize: 13 }}>
-            <div style={{ fontSize: 30, marginBottom: 10 }}>🛒</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ShoppingBag size={30} /></div>
             Aucun article sélectionné
           </div>
         ) : cartItems.map(({ item, qty }) => (

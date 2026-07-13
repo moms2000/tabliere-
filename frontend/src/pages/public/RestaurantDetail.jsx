@@ -356,7 +356,7 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
             <div style={{ background: "#FFF9F0", border: `0.5px solid ${P}44`,
               borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 3 }}>
-                📋 Vos coordonnées
+                Vos coordonnées
               </div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
                 Ces infos restent confidentielles. Aucun compte créé.
@@ -380,7 +380,7 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
               </div>
               <div style={{ marginTop: 10, padding: "8px 10px", background: PL,
                 borderRadius: 7, fontSize: 11, color: "#C47D1A" }}>
-                💡 <strong>Créez un compte gratuitement</strong> pour suivre vos réservations, les annuler facilement et cumuler des points.{" "}
+                <strong>Créez un compte gratuitement</strong> pour suivre vos réservations, les annuler facilement et cumuler des points.{" "}
                 <span onClick={() => navigate("/inscription")}
                   style={{ textDecoration: "underline", cursor: "pointer", fontWeight: 600 }}>
                   S'inscrire →

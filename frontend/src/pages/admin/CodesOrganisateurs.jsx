@@ -117,7 +117,7 @@ export default function CodesOrganisateurs() {
           </div>
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#FEF6EC",
             borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
-            💡 L'organisateur utilise ce code <strong>ORG-XXXX-XXXX</strong> lors de son inscription pour accéder à l'espace Événements.
+            L'organisateur utilise ce code <strong>ORG-XXXX-XXXX</strong> lors de son inscription pour accéder à l'espace Événements.
           </div>
         </Card>
       </motion.div>

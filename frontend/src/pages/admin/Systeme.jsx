@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Activity, Server, Cpu, HardDrive, Wifi, CheckCircle, RefreshCw } from "lucide-react";
+import { Activity, Server, Cpu, HardDrive, Wifi, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge } from "../../components/ui";
 import axios from "axios";
 
@@ -155,8 +155,8 @@ export default function Systeme() {
               fontSize: 12, fontWeight: 600,
               color: apiStatus === "opérationnel" && dbStatus === "opérationnel" ? "#1D9E75" : "#854F0B" }}>
               {apiStatus === "opérationnel" && dbStatus === "opérationnel"
-                ? "✓ Tous les services sont opérationnels"
-                : "⚠ Certains services présentent des dégradations"}
+                ? "Tous les services sont opérationnels"
+                : "Certains services présentent des dégradations"}
             </div>
           </Card>
         </motion.div>
@@ -231,7 +231,7 @@ export default function Systeme() {
         return (
           <motion.div variants={fadeUp} style={{ marginTop: 14 }}>
             <Card>
-              <SectionHeader title={`⚠ ${alerts.length} alerte${alerts.length > 1 ? "s" : ""} système`} />
+              <SectionHeader title={`${alerts.length} alerte${alerts.length > 1 ? "s" : ""} système`} />
               {alerts.map((a, i) => (
                 <div key={i} style={{ display: "flex", gap: 10, padding: "9px 0",
                   borderBottom: i < alerts.length - 1 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>
@@ -262,7 +262,7 @@ export default function Systeme() {
           ].map((r, i) => (
             <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0",
               borderBottom: i < 4 ? "0.5px solid #f8f8f8" : "none", alignItems: "flex-start" }}>
-              <span style={{ fontSize: 14, flexShrink: 0 }}>{r.ok ? "✅" : "⚠️"}</span>
+              <span style={{ flexShrink: 0, display: "flex" }}>{r.ok ? <CheckCircle size={14} color="#1D9E75" /> : <AlertTriangle size={14} color="#C47D1A" />}</span>
               <div>
                 <div style={{ fontSize: 12, color: r.ok ? "#1e2e28" : "#993C1D", fontWeight: r.ok ? 400 : 500 }}>{r.msg}</div>
                 {!r.ok && r.tip && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{r.tip}</div>}

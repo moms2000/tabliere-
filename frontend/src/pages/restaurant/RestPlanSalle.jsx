@@ -4,6 +4,7 @@ import QRCode from "react-qr-code";
 import {
   LayoutTemplate, Users, Plus, Pencil, Trash2,
   Settings, QrCode, Download, X, Move, Clock, CalendarDays,
+  Armchair, Trees, Wine, Star,
 } from "lucide-react";
 import { Card, PageTitle, Badge, Btn, Modal, FormField, Input, Select } from "../../components/ui";
 import { useNavigate } from "react-router-dom";
@@ -43,10 +44,10 @@ const canonStatus = (s) => ({
 }[s] || "libre");
 
 const ZONE_META = {
-  interieur: { label: "Salle intérieure", icon: "🪑", floor: "#EDE0CB" },
-  terrasse:  { label: "Terrasse",          icon: "🌿", floor: "#D8EADC" },
-  bar:        { label: "Bar / Comptoir",    icon: "🍸", floor: "#E4D9CC" },
-  vip:        { label: "Espace VIP",       icon: "⭐", floor: "#E8E0EF" },
+  interieur: { label: "Salle intérieure", icon: Armchair, floor: "#EDE0CB" },
+  terrasse:  { label: "Terrasse",          icon: Trees, floor: "#D8EADC" },
+  bar:        { label: "Bar / Comptoir",    icon: Wine, floor: "#E4D9CC" },
+  vip:        { label: "Espace VIP",       icon: Star, floor: "#E8E0EF" },
 };
 
 /* ── Parquet SVG background (inline data URI) ─────────────────── */
@@ -466,7 +467,8 @@ export default function RestPlanSalle() {
       {/* ── Zone tabs ── */}
       <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
         {zones.map(z => {
-          const m = ZONE_META[z] || { label: z, icon: "🪑" };
+          const m = ZONE_META[z] || { label: z, icon: Armchair };
+          const ZoneIcon = m.icon;
           const active = z === activeZone;
           return (
             <button key={z}
@@ -480,7 +482,7 @@ export default function RestPlanSalle() {
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                 transition: "all .15s",
               }}>
-              <span>{m.icon}</span>
+              <ZoneIcon size={13} />
               {m.label}
               <span style={{
                 background: active ? "rgba(255,255,255,.2)" : BG,
@@ -509,7 +511,7 @@ export default function RestPlanSalle() {
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>{zm.icon}</span>
+              {(() => { const ZI = zm.icon; return <ZI size={16} color="white" />; })()}
               <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{zm.label}</span>
               <span style={{
                 background: "rgba(255,255,255,.12)", borderRadius: 8,

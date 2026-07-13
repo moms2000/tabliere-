@@ -446,21 +446,42 @@ export function CheckinTab({ eventId, staffToken }) {
             <span style={{ fontFamily: "monospace" }}>{confirm.resa.ref}</span>
             {confirm.resa.table_label ? ` · ${confirm.resa.table_label}` : ""} · réservé {confirm.resa.party_size} pers.
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
-            Personnes réellement arrivées
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
+              Personnes réellement arrivées
+            </div>
+            {confirm.resa.table_capacity ? (
+              <span style={{ fontSize: 11, color: MUTED }}>Salon : {confirm.resa.table_capacity} places max</span>
+            ) : null}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginBottom: 8 }}>
-            <button onClick={() => setConfirm(c => ({ ...c, count: Math.max(0, c.count - 1) }))}
-              style={stepBtn}>−</button>
-            <span style={{ fontSize: 30, fontWeight: 800, color: DARK, minWidth: 44, textAlign: "center" }}>{confirm.count}</span>
-            <button onClick={() => setConfirm(c => ({ ...c, count: c.count + 1 }))} style={stepBtn}>+</button>
-          </div>
-          {remaining != null && (
+          {(() => {
+            const cap = confirm.resa.table_capacity || 0;
+            const atMax = cap > 0 && confirm.count >= cap;
+            return (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginBottom: 8 }}>
+                <button onClick={() => setConfirm(c => ({ ...c, count: Math.max(0, c.count - 1) }))} style={stepBtn}>−</button>
+                <span style={{ fontSize: 30, fontWeight: 800, color: atMax ? "#DC2626" : DARK, minWidth: 44, textAlign: "center" }}>{confirm.count}</span>
+                <button onClick={() => setConfirm(c => ({ ...c, count: cap > 0 ? Math.min(cap, c.count + 1) : c.count + 1 }))}
+                  disabled={atMax} style={{ ...stepBtn, opacity: atMax ? 0.4 : 1, cursor: atMax ? "default" : "pointer" }}>+</button>
+              </div>
+            );
+          })()}
+          {confirm.resa.table_capacity && confirm.count >= confirm.resa.table_capacity && (
+            <div style={{ fontSize: 11.5, color: "#DC2626", textAlign: "center", marginBottom: 10, display: "flex",
+              alignItems: "center", justifyContent: "center", gap: 5 }}>
+              <AlertTriangle size={13} /> Capacité maximale du salon atteinte
+            </div>
+          )}
+          {remaining != null ? (
             <div style={{ fontSize: 11.5, color: confirm.count > remaining ? "#DC2626" : MUTED, textAlign: "center",
               marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
               {confirm.count > remaining
                 ? <><AlertTriangle size={13} /> {confirm.count - remaining} au-delà de la jauge — surplus payant en caisse</>
                 : `Entrées gratuites restantes après : ${remaining - confirm.count}`}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: MUTED, textAlign: "center", marginBottom: 14 }}>
+              Astuce : renseignez la « jauge d'entrées » dans l'onglet Détails pour suivre les entrées gratuites restantes.
             </div>
           )}
           <Btn variant="primary" icon={Check} onClick={doConfirm} disabled={busy}

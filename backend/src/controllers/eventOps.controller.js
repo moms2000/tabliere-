@@ -92,7 +92,7 @@ export const listCheckin = asyncHandler(async (req, res) => {
             r.special_request, r.created_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
-            t.label AS table_label, t.kind AS table_kind, t.price AS table_price
+            t.label AS table_label, t.kind AS table_kind, t.price AS table_price, t.capacity AS table_capacity
      FROM event_reservations r
      LEFT JOIN users u ON u.id = r.client_id
      LEFT JOIN event_tables t ON t.id = r.table_id
@@ -133,11 +133,29 @@ const arrivedFromBody = (body, fallback) => {
   return Number.isFinite(n) && n >= 0 ? n : (fallback ?? null);
 };
 
+// Capacité du salon/table d'une réservation (null = pas de table / pas de limite)
+async function tableCapacityForResa(resaId) {
+  const { rows: [r] } = await query(
+    `SELECT t.capacity FROM event_reservations er
+     JOIN event_tables t ON t.id = er.table_id WHERE er.id = $1`, [resaId]
+  );
+  return r?.capacity ?? null;
+}
+// Refuse un nombre d'arrivées supérieur à la capacité du salon
+async function assertArrivedFits(resaId, arrived) {
+  if (arrived == null) return;
+  const cap = await tableCapacityForResa(resaId);
+  if (cap && arrived > cap) {
+    throw new AppError(`Ce salon accueille au maximum ${cap} personnes (vous avez saisi ${arrived}).`, 400);
+  }
+}
+
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────
 export const doCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   const undo = req.body?.undo === true;
   const arrived = undo ? null : arrivedFromBody(req.body);
+  if (!undo) await assertArrivedFits(req.params.resaId, arrived);
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
        SET checked_in_at = ${undo ? "NULL" : "NOW()"},
@@ -171,6 +189,7 @@ export const checkinByRef = asyncHandler(async (req, res) => {
       400
     );
   }
+  await assertArrivedFits(found.id, arrived);
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
        SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size), updated_at = NOW()

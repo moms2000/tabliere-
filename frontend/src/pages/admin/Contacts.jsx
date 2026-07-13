@@ -21,7 +21,7 @@ export default function Contacts() {
   const [search,   setSearch]   = useState("");
   const [page,     setPage]     = useState(1);
   const [exporting, setExporting] = useState(null); // "pdf" | "xls" | null
-  const LIMIT = 40;
+  const LIMIT = 30;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   // Débounce recherche (300 ms) → filtre serveur

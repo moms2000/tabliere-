@@ -667,7 +667,7 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const PAGE_SIZE = 24;
+  const PAGE_SIZE = 30;
   const buildParams = useCallback(() => {
     const params = { ...TABS[activeTab].params, limit: PAGE_SIZE };
     if (search) params.search = search;

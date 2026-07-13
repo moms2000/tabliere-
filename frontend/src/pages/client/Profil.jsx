@@ -8,6 +8,7 @@ import {
   Camera, Mail, Phone, ArrowLeft, MessageCircle, Bell,
   Globe, CheckCircle, Award, LogOut, X, Share2,
   Clock, ChevronRight, Loader2, QrCode, PartyPopper, MapPin,
+  Gift, Settings, Info,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import api from "../../services/api.js";
@@ -48,11 +49,18 @@ const STATUS_LABEL = {
 };
 
 const NOTIF_ICON = {
-  reservation: "🗓️",
-  message:     "💬",
-  promo:       "🎁",
-  system:      "⚙️",
-  info:        "ℹ️",
+  reservation: CalendarCheck,
+  message:     MessageCircle,
+  promo:       Gift,
+  system:      Settings,
+  info:        Info,
+};
+const NOTIF_ICON_COLOR = {
+  reservation: "#1D9E75",
+  message:     "#185FA5",
+  promo:       "#C47D1A",
+  system:      "#6B7A70",
+  info:        "#6B7A70",
 };
 const NOTIF_COLOR = {
   reservation: "#E1F5EE",
@@ -244,7 +252,7 @@ export default function Profil() {
 
   // Partage réservation via WhatsApp
   const shareReservation = (r) => {
-    const text = `🗓️ J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi ! 🍽️\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliereci.net`;
+    const text = `J'ai réservé une table chez ${r.restaurant_name || r.resto_name} pour le ${fmtDate(r.reserved_at)} (${r.party_size} pers.). Rejoins-moi !\n\nRéf. : ${r.ref}\nVia TablièreCI — tabliereci.net`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
     setShareToast("Lien WhatsApp ouvert !");
@@ -662,7 +670,7 @@ export default function Profil() {
                       <button onClick={resetResaFilters}
                         style={{ fontSize: 11, color: G, border: "none", background: "transparent",
                           cursor: "pointer", fontWeight: 600 }}>
-                        ✕ Réinitialiser
+                        Réinitialiser
                       </button>
                     )}
                   </div>
@@ -857,9 +865,8 @@ export default function Profil() {
                       display: "flex", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10,
                       background: NOTIF_COLOR[n.type] || "#f5f5f5",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 17, flexShrink: 0 }}>
-                      {NOTIF_ICON[n.type] || "📣"}
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {(() => { const Ic = NOTIF_ICON[n.type] || Bell; return <Ic size={18} color={NOTIF_ICON_COLOR[n.type] || "#6B7A70"} />; })()}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600 }}>{n.title}</div>

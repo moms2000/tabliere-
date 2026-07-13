@@ -17,7 +17,7 @@ const THEMES = [
 ];
 
 const PLAN_BADGE = { premium: "green", standard: "blue", gratuit: "gray" };
-const LIMIT = 30;
+const LIMIT = 50;
 
 export default function QRThemes() {
   const [restos,     setRestos]     = useState([]);

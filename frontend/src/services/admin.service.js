@@ -18,9 +18,11 @@ export const adminService = {
   },
 
   async listRestaurants(params = {}) {
-    // Cache uniquement si pas de filtres dynamiques
+    // Cache uniquement si pas de filtres dynamiques.
+    // La clé inclut `sort` : sinon la page QR (sort=name) et la page
+    // Restaurateurs (tri par défaut) — mêmes page/limit — se marcheraient dessus.
     const hasFilters = params.search || params.status || params.plan;
-    const cKey = hasFilters ? null : `admin:restaurants:${params.page || 1}:${params.limit || 20}`;
+    const cKey = hasFilters ? null : `admin:restaurants:${params.page || 1}:${params.limit || 20}:${params.sort || "default"}`;
     if (cKey) { const hit = memCache.get(cKey); if (hit) return hit; }
     const res = await api.get("/admin/restaurants", { params });
     if (cKey) memCache.set(cKey, res.data, 2 * 60_000); // 2 min

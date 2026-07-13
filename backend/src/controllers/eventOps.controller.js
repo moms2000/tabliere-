@@ -24,6 +24,26 @@ async function genUniqueOrderPin(eventId) {
 
 const ORDER_STATUSES = ["en_attente", "servi", "paye", "annule"];
 
+// Recalcule le panier avec les prix SERVEUR (jamais confiance au client).
+// Retourne { items, total }. Lève si panier vide.
+async function priceItems(eventId, rawItems) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) throw new AppError("Panier vide", 400);
+  const ids = [...new Set(rawItems.map(it => it.id).filter(Boolean))];
+  const { rows: bRows } = ids.length
+    ? await query("SELECT id, name, price FROM event_bottles WHERE event_id = $1 AND id = ANY($2) AND is_active = TRUE", [eventId, ids])
+    : { rows: [] };
+  const bMap = new Map(bRows.map(x => [String(x.id), x]));
+  const items = rawItems.map(it => {
+    const m = bMap.get(String(it.id));
+    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+    return m
+      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty }
+      : { name: String(it.name || "Article").slice(0, 120), price: 0, qty };
+  });
+  const total = items.reduce((s, it) => s + it.price * it.qty, 0);
+  return { items, total };
+}
+
 // Le propriétaire (req.user, pas de req.staff) a tous les droits.
 // Un staff est limité à son rôle : 'all' partout, 'bar' = commandes, 'checkin' = entrées.
 function assertStaffRole(req, allowed) {
@@ -42,22 +62,8 @@ export const createOrder = asyncHandler(async (req, res) => {
   );
   if (!event) return notFound(res, "Événement introuvable");
   if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
-  if (!Array.isArray(b.items) || b.items.length === 0) throw new AppError("Panier vide", 400);
 
-  // Prix SERVEUR depuis la carte (jamais confiance au prix envoyé par le client)
-  const ids = [...new Set(b.items.map(it => it.id).filter(Boolean))];
-  const { rows: bRows } = ids.length
-    ? await query("SELECT id, name, price FROM event_bottles WHERE event_id = $1 AND id = ANY($2) AND is_active = TRUE", [event.id, ids])
-    : { rows: [] };
-  const bMap = new Map(bRows.map(x => [String(x.id), x]));
-  const items = b.items.map(it => {
-    const m = bMap.get(String(it.id));
-    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
-    return m
-      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty }
-      : { name: String(it.name || "Article").slice(0, 120), price: 0, qty };
-  });
-  const total = items.reduce((s, it) => s + it.price * it.qty, 0);
+  const { items, total } = await priceItems(event.id, b.items);
 
   let tableLabel = null, tableId = null, guestName = b.guest_name || null;
 
@@ -110,12 +116,89 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
 export const listOrders = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["bar"]);
   const { rows } = await query(
-    `SELECT o.*, t.kind AS table_kind FROM event_orders o
+    `SELECT o.*, t.kind AS table_kind, srv.name AS server_name FROM event_orders o
      LEFT JOIN event_tables t ON t.id = o.table_id
+     LEFT JOIN event_staff srv ON srv.id = t.server_id
      WHERE o.event_id = $1 ORDER BY o.created_at DESC LIMIT 300`,
     [req.eventScope]
   );
   return ok(res, { orders: rows });
+});
+
+// ── GET /event-server/tables — les tables assignées au serveur connecté ───────
+// Chaque serveur (rôle 'serveur') ne voit QUE ses tables + leurs commandes.
+export const listServerTables = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["serveur"]);
+  // L'organisateur (pas de req.staff) voit toutes les tables assignées ; un
+  // serveur ne voit que les siennes.
+  const staffId = req.staff?.staff_id || null;
+  const scoped = staffId ? "AND t.server_id = $2" : "";
+  const params = staffId ? [req.eventScope, staffId] : [req.eventScope];
+  const { rows: tables } = await query(
+    `SELECT t.id, t.label, t.kind, t.capacity, t.price, t.min_order, t.zone, t.status,
+            t.server_id, srv.name AS server_name,
+            r.id AS resa_id, r.ref AS resa_ref, r.party_size, r.arrived_size, r.checked_in_at,
+            COALESCE(r.guest_name, u.full_name) AS client_name
+     FROM event_tables t
+     LEFT JOIN event_staff srv ON srv.id = t.server_id
+     LEFT JOIN event_reservations r ON r.table_id = t.id AND r.status = 'confirme'
+     LEFT JOIN users u ON u.id = r.client_id
+     WHERE t.event_id = $1 AND t.is_active = TRUE ${scoped}
+     ORDER BY t.zone, t.label`,
+    params
+  );
+  // Commandes récentes des tables concernées
+  const tableIds = tables.map(t => t.id);
+  let ordersByTable = {};
+  if (tableIds.length) {
+    const { rows: ords } = await query(
+      `SELECT id, ref, table_id, items, total, status, note, created_at
+       FROM event_orders WHERE event_id = $1 AND table_id = ANY($2)
+       ORDER BY created_at DESC LIMIT 200`,
+      [req.eventScope, tableIds]
+    );
+    for (const o of ords) (ordersByTable[o.table_id] ||= []).push(o);
+  }
+  const enriched = tables.map(t => ({ ...t, orders: ordersByTable[t.id] || [] }));
+  // Carte des bouteilles (pour composer une commande côté serveur)
+  const { rows: bottles } = await query(
+    "SELECT id, name, category, price FROM event_bottles WHERE event_id = $1 AND is_active = TRUE ORDER BY category, position, name",
+    [req.eventScope]
+  );
+  return ok(res, { tables: enriched, bottles });
+});
+
+// ── POST /event-server/orders — le serveur passe une commande pour SA table ───
+export const createServerOrder = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["serveur"]);
+  const b = req.body || {};
+  if (!b.table_id) throw new AppError("Table requise", 400);
+  const { rows: [event] } = await query(
+    "SELECT id, status, bottles_enabled FROM events WHERE id = $1", [req.eventScope]
+  );
+  if (!event) return notFound(res, "Événement introuvable");
+  if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
+
+  // La table doit exister dans l'événement ET, pour un serveur, lui être assignée.
+  const staffId = req.staff?.staff_id || null;
+  const { rows: [table] } = await query(
+    `SELECT id, label, server_id FROM event_tables WHERE id = $1 AND event_id = $2 AND is_active = TRUE`,
+    [b.table_id, event.id]
+  );
+  if (!table) return notFound(res, "Table introuvable");
+  if (staffId && String(table.server_id) !== String(staffId)) {
+    throw new AppError("Cette table ne vous est pas assignée", 403);
+  }
+
+  const { items, total } = await priceItems(event.id, b.items);
+  const guestName = req.staff?.name ? `Serveur ${req.staff.name}` : (b.guest_name || null);
+  const { rows: [order] } = await query(
+    `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, note)
+     VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7)
+     RETURNING *`,
+    [event.id, table.id, table.label, guestName, JSON.stringify(items), total, b.note || null]
+  );
+  return created(res, { order }, "Commande envoyée");
 });
 
 // ── PATCH /event-orders/:id/status ────────────────────────────────────────────

@@ -46,6 +46,9 @@ export const eventOpsService = {
   async listCheckin(eventId, auth)               { return (await api.get("/event-checkin", { params: { event_id: eventId }, ...authCfg(auth) })).data.data; },
   async checkin(resaId, undo, auth, eventId, arrivedSize) { return (await api.post(`/event-checkin/${resaId}`, { undo, event_id: eventId, arrived_size: arrivedSize }, authCfg(auth))).data.data; },
   async checkinByRef(ref, auth, eventId, arrivedSize)     { return (await api.post(`/event-checkin/by-ref`, { ref, event_id: eventId, arrived_size: arrivedSize }, authCfg(auth))).data.data; },
+  // Phase 3 — interface serveur
+  async listServerTables(eventId, auth)          { return (await api.get("/event-server/tables", { params: { event_id: eventId }, ...authCfg(auth) })).data.data; },
+  async createServerOrder(data, auth)            { return (await api.post("/event-server/orders", data, authCfg(auth))).data.data; },
 };
 
 // Connexion staff (public) → renvoie un token à passer en Authorization

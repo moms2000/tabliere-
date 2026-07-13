@@ -197,7 +197,15 @@ export const updateTable = asyncHandler(async (req, res) => {
   if (!event) return notFound(res, "Événement introuvable");
   assertOwner(req, event);
 
-  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order"];
+  // Assignation d'un serveur : on vérifie qu'il appartient bien à CET événement
+  if (req.body.server_id) {
+    const { rows } = await query(
+      "SELECT 1 FROM event_staff WHERE id = $1 AND event_id = $2 AND is_active = TRUE", [req.body.server_id, event.id]
+    );
+    if (!rows.length) throw new AppError("Serveur introuvable pour cet événement", 400);
+  }
+
+  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order", "server_id"];
   const updates = [], values = [];
   for (const f of ALLOWED) {
     if (req.body[f] === undefined) continue;
@@ -206,6 +214,7 @@ export const updateTable = asyncHandler(async (req, res) => {
     if (f === "is_active") val = (val === true || val === "true" || val === 1);
     if (f === "price" || f === "min_order") val = Math.max(0, parseInt(val, 10) || 0);
     if (f === "capacity") val = Math.max(1, parseInt(val, 10) || 1);
+    if (f === "server_id" && (val === "" || val === "none")) val = null;
     values.push(val);
     updates.push(`${f} = $${values.length}`);
   }
@@ -327,7 +336,7 @@ export const createStaff = asyncHandler(async (req, res) => {
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const b = req.body || {};
   if (!b.name) throw new AppError("Nom requis", 400);
-  const role = ["all", "checkin", "bar"].includes(b.role) ? b.role : "all";
+  const role = ["all", "checkin", "bar", "serveur"].includes(b.role) ? b.role : "all";
   // PIN aléatoire (crypto), unique dans l'événement
   let pin = b.pin && /^\d{6}$/.test(b.pin) ? b.pin : genPin();
   for (let k = 0; k < 20; k++) {

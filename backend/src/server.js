@@ -396,6 +396,9 @@ async function runEventsPhase2Migration() {
     `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt  ON event_orders(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_staff_evt   ON event_staff(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_promoters_evt ON event_promoters(event_id)`,
+    // Phase 3 : rôle serveur + assignation serveur ↔ table (après création de event_staff)
+    `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS server_id UUID REFERENCES event_staff(id) ON DELETE SET NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_tables_server ON event_tables(server_id)`,
   ];
   let okc = 0, failc = 0;
   for (const sql of stmts) {

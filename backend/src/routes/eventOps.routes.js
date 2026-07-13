@@ -15,6 +15,10 @@ router.post ("/event-orders",             orderLimiter, ops.createOrder);   // i
 router.get  ("/event-orders",             ownerOrStaff, ops.listOrders);    // ?event_id= (organisateur/staff)
 router.patch("/event-orders/:id/status",  ownerOrStaff, ops.updateOrderStatus);
 
+// Interface serveur : ses tables assignées + commande directe (Phase 3)
+router.get ("/event-server/tables",       ownerOrStaff, ops.listServerTables); // ?event_id=
+router.post("/event-server/orders",       orderLimiter, ownerOrStaff, ops.createServerOrder);
+
 // Check-in à l'entrée
 router.get ("/event-checkin",             ownerOrStaff, ops.listCheckin);   // ?event_id=
 router.post("/event-checkin/by-ref",      ownerOrStaff, ops.checkinByRef);

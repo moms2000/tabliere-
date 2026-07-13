@@ -95,7 +95,7 @@ export default function EventEditor() {
       {tab === "resa"      && <ResaTab eventId={event.id} eventName={event.name} />}
       {tab === "checkin"   && <CheckinTab eventId={event.id} />}
       {tab === "promoters" && <PromotersTab event={event} />}
-      {tab === "staff"     && <StaffTab event={event} />}
+      {tab === "staff"     && <StaffTab event={event} tables={tables} onChanged={load} />}
     </motion.div>
   );
 }

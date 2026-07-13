@@ -294,26 +294,31 @@ export default function RestReservations() {
   const [tables,       setTables]       = useState([]);   // tables libres du resto
   const [selectedTable, setSelectedTable] = useState("");
   const [loadingTables, setLoadingTables] = useState(false);
+  const [tablesErr,    setTablesErr]    = useState(false); // échec de chargement (≠ « aucune table »)
   const [modalError,   setModalError]   = useState("");
   // Modale changement de table (résa déjà confirmée)
   const [assignModal, setAssignModal] = useState(null); // { resa }
 
-  // Charger toutes les tables du resto (pour assignation)
+  // Charger toutes les tables du resto (pour assignation).
+  // On NE vide PAS la liste existante en cas d'échec (cold-start Render, réseau) :
+  // un échec transitoire ne doit pas transformer l'affichage en « aucune table ».
   const loadTables = async () => {
     const restoId = user?.resto_id;
     if (!restoId) {
       console.warn("loadTables: resto_id manquant dans user", user);
+      setTablesErr(true);
       return;
     }
     setLoadingTables(true);
-    setModalError("");
+    setTablesErr(false);
     try {
       const d = await restaurantsService.getManage(restoId);
       const ts = d?.restaurant?.tables || d?.tables || [];
       setTables(ts);
+      setTablesErr(false);
     } catch (err) {
       console.error("loadTables error", err);
-      setModalError("Impossible de charger les tables : " + (err.response?.data?.message || err.message));
+      setTablesErr(true); // on garde les tables déjà chargées si dispo
     }
     setLoadingTables(false);
   };
@@ -323,6 +328,10 @@ export default function RestReservations() {
       .then(res => setData(res.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Précharger les tables dès le montage : elles sont prêtes quand on ouvre la
+    // modale d'assignation (évite un échec cold-start pile au moment du clic).
+    loadTables();
 
     chatService.getConversations()
       .then(setConversations)
@@ -895,8 +904,18 @@ export default function RestReservations() {
                     Choisir une table {isConfirm && "(optionnel)"}
                   </label>
 
-                  {loadingTables ? (
+                  {loadingTables && tables.length === 0 ? (
                     <div style={{ fontSize: 12, color: "#bbb", padding: "10px 0" }}>Chargement des tables…</div>
+                  ) : tablesErr && tables.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#993C1D", padding: "10px 0", display: "flex",
+                      alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span>Impossible de charger les tables (connexion / serveur qui redémarre).</span>
+                      <button onClick={loadTables}
+                        style={{ border: `0.5px solid ${G}`, color: G, background: "white", borderRadius: 7,
+                          padding: "4px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                        Réessayer
+                      </button>
+                    </div>
                   ) : tables.length === 0 ? (
                     <div style={{ fontSize: 12, color: "#bbb", padding: "10px 0" }}>
                       Aucune table disponible. Configurez vos tables dans Plan de salle.

@@ -110,7 +110,7 @@ const TRANSLATIONS = {
     // ── Saved ─────────────────────────────────────────────────────────────────
     saved_title:     "Restaurants favoris",
     saved_empty:     "Aucun restaurant sauvegardé",
-    saved_empty_sub: "Cliquez sur ♡ sur la fiche d'un restaurant pour l'ajouter ici.",
+    saved_empty_sub: "Cliquez sur le cœur sur la fiche d'un restaurant pour l'ajouter ici.",
 
     // ── Reservations ──────────────────────────────────────────────────────────
     reserv_title:     "Mes réservations",
@@ -273,7 +273,7 @@ const TRANSLATIONS = {
 
     saved_title:     "Favourite restaurants",
     saved_empty:     "No saved restaurants yet",
-    saved_empty_sub: "Tap ♡ on a restaurant page to save it here.",
+    saved_empty_sub: "Tap the heart on a restaurant page to save it here.",
 
     reserv_title:     "My bookings",
     reserv_empty:     "No bookings yet",
@@ -431,7 +431,7 @@ const TRANSLATIONS = {
 
     saved_title:     "المطاعم المفضلة",
     saved_empty:     "لا توجد مطاعم محفوظة",
-    saved_empty_sub: "انقر على ♡ في صفحة أي مطعم لحفظه هنا.",
+    saved_empty_sub: "انقر على القلب في صفحة أي مطعم لحفظه هنا.",
 
     reserv_title:     "حجوزاتي",
     reserv_empty:     "لا توجد حجوزات بعد",

@@ -1,6 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+import { Camera } from "lucide-react";
 import api from "../../services/api.js";
 
 /* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
@@ -349,7 +350,7 @@ export function PhotoUpload({ value, onChange, label = "Photo", height = 120, ty
           <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <div style={{ textAlign: "center", color: MUTED }}>
-            <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Camera size={22} /></div>
             <div style={{ fontSize: 11 }}>Choisir une photo</div>
           </div>
         )}

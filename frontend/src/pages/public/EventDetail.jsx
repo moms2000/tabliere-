@@ -152,7 +152,7 @@ export default function EventDetail() {
               style={{ ...inp, resize: "vertical" }} />
 
             <div style={{ fontSize: 11.5, color: MUTED, margin: "12px 0", background: BG, borderRadius: 8, padding: "9px 12px" }}>
-              💵 Paiement en <strong>cash sur place</strong>. Votre demande sera confirmée par l'organisateur.
+              Paiement en <strong>cash sur place</strong>. Votre demande sera confirmée par l'organisateur.
             </div>
 
             <button onClick={reserve} disabled={submitting}
@@ -184,7 +184,7 @@ function Group({ title, icon: Icon, items, onPick }) {
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
                   <Users size={12} /> {t.capacity} pers. · {fmt(t.price)}
                 </div>
-                {t.description && <div style={{ fontSize: 11.5, color: "#4a5a52", marginTop: 4, whiteSpace: "pre-wrap" }}>🍾 {t.description}</div>}
+                {t.description && <div style={{ fontSize: 11.5, color: "#4a5a52", marginTop: 4, whiteSpace: "pre-wrap" }}>{t.description}</div>}
                 {t.min_order > 0 && (
                   <div style={{ fontSize: 11.5, color: "#C47D1A", marginTop: 3, fontWeight: 600 }}>
                     Minimum de commande : {fmt(t.min_order)}

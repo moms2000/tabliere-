@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, ShoppingCart, Search, ArrowLeft, Check, AlertTriangle, History, RefreshCw, ChevronRight } from "lucide-react";
+import { Plus, Minus, ShoppingCart, Search, ArrowLeft, Check, AlertTriangle, History, RefreshCw, ChevronRight, Utensils } from "lucide-react";
 import { menuService }        from "../../services/menu.service.js";
 import { ordersService }      from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
@@ -595,7 +595,7 @@ export default function ClientMenu() {
                       onError={e => { e.target.style.display = "none"; }} />
                   ) : (
                     <div style={{ width: 72, height: 72, borderRadius: 8, background: SAND,
-                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🍽️</div>
+                      display: "flex", alignItems: "center", justifyContent: "center" }}><Utensils size={24} color={BROWN} /></div>
                   )}
                 </div>
 
@@ -708,7 +708,7 @@ export default function ClientMenu() {
               onError={e => { e.target.style.display = "none"; }} />
           ) : (
             <div style={{ width: "100%", height: "100%", background: SAND,
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 60 }}>🍽️</div>
+              display: "flex", alignItems: "center", justifyContent: "center" }}><Utensils size={46} color={BROWN} /></div>
           )}
 
           {/* Dégradé bas */}
@@ -1177,7 +1177,7 @@ export default function ClientMenu() {
         </h2>
         {localOrders.length === 0 ? (
           <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🛒</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><ShoppingCart size={30} color={MUTED} /></div>
             <div>Aucune commande dans cette session</div>
           </div>
         ) : localOrders.map((o, i) => (

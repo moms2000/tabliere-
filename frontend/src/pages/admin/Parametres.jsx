@@ -27,7 +27,7 @@ function Toast({ msg, type = "success" }) {
         background: type === "success" ? "#f0f6f2" : "#faece7",
         color:      type === "success" ? "#1D9E75"  : "#993C1D",
         border: `0.5px solid ${type === "success" ? "#1D9E7555" : "#993C1D44"}` }}>
-      {type === "success" ? "✓ " : "⚠ "}{msg}
+      {msg}
     </motion.div>
   ) : null;
 }

@@ -286,8 +286,8 @@ const RestaurateursView = () => {
                 <div style={{ fontSize: 10, color: "#aaa" }}>résa</div>
               </div>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 13, color: "#EF9F27", fontWeight: 500 }}>
-                  {r.rating > 0 ? `★ ${r.rating}` : "—"}
+                <div style={{ fontSize: 13, color: "#EF9F27", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                  {r.rating > 0 ? <><Star size={11} fill="#EF9F27" color="#EF9F27" /> {r.rating}</> : "—"}
                 </div>
               </div>
               <div><StatusBadge s={r.status} /></div>

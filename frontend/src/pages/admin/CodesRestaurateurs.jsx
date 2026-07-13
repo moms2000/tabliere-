@@ -135,7 +135,7 @@ export default function CodesRestaurateurs() {
 
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#FEF6EC",
             borderRadius: 8, fontSize: 12, color: "#C47D1A" }}>
-            💡 Les restaurateurs utiliseront ce code lors de leur inscription pour être automatiquement validés comme restaurateurs.
+            Les restaurateurs utiliseront ce code lors de leur inscription pour être automatiquement validés comme restaurateurs.
           </div>
         </Card>
       </motion.div>

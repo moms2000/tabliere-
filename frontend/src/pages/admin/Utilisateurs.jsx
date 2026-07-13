@@ -197,8 +197,8 @@ export default function Utilisateurs() {
           {/* Onglets principaux Clients / Restaurants */}
           <div style={{ display: "flex", borderBottom: "0.5px solid #eee", marginBottom: 14 }}>
             {[
-              { key: "clients",      label: "Clients",      icon: "👤" },
-              { key: "restaurants",  label: "Restaurants",  icon: "🍽" },
+              { key: "clients",      label: "Clients" },
+              { key: "restaurants",  label: "Restaurants" },
             ].map(tab => (
               <button key={tab.key} onClick={() => switchTab(tab.key)}
                 style={{ padding: "10px 20px", fontSize: 13, cursor: "pointer",

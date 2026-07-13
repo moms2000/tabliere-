@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import QRCode from "react-qr-code";
 import {
   UtensilsCrossed, User, CalendarCheck, Star, Heart,
   Camera, Mail, Phone, ArrowLeft, MessageCircle, Bell,
   Globe, CheckCircle, Award, LogOut, X, Share2,
-  Clock, ChevronRight, Loader2,
+  Clock, ChevronRight, Loader2, QrCode, PartyPopper, MapPin,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import api from "../../services/api.js";
 import { useLang } from "../../context/LanguageContext.jsx";
 import { reservationsService } from "../../services/reservations.service.js";
+import { eventReservationsService } from "../../services/events.service.js";
 import { usersService } from "../../services/users.service.js";
 import { notificationsService, chatService } from "../../services/chat.service.js";
 import Chat from "../../components/Chat.jsx";
@@ -113,6 +116,8 @@ export default function Profil() {
   const [deleting,     setDeleting]     = useState(false);
   const [delError,     setDelError]     = useState("");
   const [reservations, setReservations] = useState([]);
+  const [eventResas,   setEventResas]   = useState([]);
+  const [qrResa,       setQrResa]       = useState(null); // réservation dont on affiche le QR
   const [loadingR,     setLoadingR]     = useState(true);
   const [favorites,    setFavorites]    = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
@@ -135,6 +140,13 @@ export default function Profil() {
   const [fltResto, setFltResto] = useState("");
   const [resaPage, setResaPage] = useState(1);
   const RESA_PER_PAGE = 10;
+
+  // Charger réservations d'événement (tables / packs VIP) — avec QR de check-in
+  useEffect(() => {
+    eventReservationsService.listMine()
+      .then(d => setEventResas(d?.reservations || []))
+      .catch(() => {});
+  }, []);
 
   // Charger réservations
   useEffect(() => {
@@ -571,6 +583,43 @@ export default function Profil() {
         {/* ── RÉSERVATIONS ───────────────────────────────────────────────── */}
         {tab === "reservations" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            {/* ── Réservations d'événement (tables / VIP) avec QR de check-in ── */}
+            {eventResas.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: DARK, marginBottom: 10 }}>
+                  <PartyPopper size={15} color={G} /> Mes événements
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {eventResas.map(r => {
+                    const stColor = r.status === "confirme" ? "#1D9E75" : r.status === "annule" ? "#DC2626" : r.status === "termine" ? "#9BA89F" : "#C47D1A";
+                    const stLabel = r.status === "confirme" ? "Confirmée" : r.status === "annule" ? "Annulée" : r.status === "termine" ? "Terminée" : "En attente";
+                    return (
+                      <div key={r.id} style={{ background: "white", borderRadius: 14, border: "0.5px solid #eee", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{r.event_name}</div>
+                          <div style={{ fontSize: 12, color: "#888", display: "flex", gap: 10, flexWrap: "wrap", marginTop: 3, alignItems: "center" }}>
+                            <span style={{ fontFamily: "monospace" }}>{r.ref}</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><Clock size={11} /> {fmtDateTime(r.starts_at)}</span>
+                            {r.table_label && <span>{r.table_kind === "vip" ? "VIP · " : ""}{r.table_label}</span>}
+                            <span>{r.party_size} pers.</span>
+                          </div>
+                          <span style={{ display: "inline-block", marginTop: 7, fontSize: 10.5, fontWeight: 700, color: stColor,
+                            background: stColor + "18", borderRadius: 6, padding: "2px 8px" }}>{stLabel}</span>
+                        </div>
+                        {r.status !== "annule" && (
+                          <button onClick={() => setQrResa(r)}
+                            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, border: "0.5px solid #eee",
+                              borderRadius: 10, padding: "8px 12px", background: "#FEF6EC", color: "#C47D1A", cursor: "pointer",
+                              fontSize: 10.5, fontWeight: 700, touchAction: "manipulation" }}>
+                            <QrCode size={20} /> QR
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t("reserv_title")}</div>
             {loadingR ? (
               <Loading />
@@ -936,6 +985,35 @@ export default function Profil() {
           </motion.div>
         )}
       </div>
+
+      {/* ── Modale QR de check-in événement ── */}
+      {qrResa && createPortal(
+        <div onClick={() => setQrResa(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 4000, background: "rgba(30,46,40,.55)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "white", borderRadius: 18, padding: "26px 24px", width: "100%", maxWidth: 340,
+              textAlign: "center", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>{qrResa.event_name}</div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 3, marginBottom: 18 }}>
+              {fmtDateTime(qrResa.starts_at)}{qrResa.table_label ? ` · ${qrResa.table_label}` : ""}
+            </div>
+            <div style={{ display: "inline-block", background: "white", padding: 12, borderRadius: 12, border: "0.5px solid #eee" }}>
+              <QRCode value={qrResa.ref} size={200} fgColor={DARK} />
+            </div>
+            <div style={{ fontSize: 13, color: "#4a5a52", marginTop: 16, lineHeight: 1.5 }}>
+              Présentez ce QR à l'entrée pour votre <strong>check-in</strong>.
+            </div>
+            <div style={{ fontSize: 12, color: "#999", marginTop: 6, fontFamily: "monospace" }}>{qrResa.ref}</div>
+            <button onClick={() => setQrResa(null)}
+              style={{ marginTop: 18, width: "100%", padding: "11px 0", borderRadius: 11, border: "none",
+                background: G, color: "#1A1000", fontSize: 14, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>
+              Fermer
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

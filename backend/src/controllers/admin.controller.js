@@ -156,6 +156,82 @@ export const listRestaurants = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/restaurants/:id/detail — fiche complète d'un restaurant
+// (infos + KPIs réservations/commandes + séries pour graphiques + listes récentes)
+// ---------------------------------------------------------------------------
+export const getRestaurantDetail = asyncHandler(async (req, res) => {
+  const id = req.params.id;
+
+  const { rows: [resto] } = await query(
+    `SELECT r.*, u.full_name AS owner_name, u.email AS owner_email, u.phone AS owner_phone
+     FROM restaurants r JOIN users u ON u.id = r.owner_id WHERE r.id = $1`, [id]
+  );
+  if (!resto) return notFound(res, "Restaurant introuvable");
+
+  // qr_orders peut ne pas exister (aucune commande jamais passée sur la plateforme)
+  const { rows: [{ has_orders }] } = await query(
+    "SELECT to_regclass('public.qr_orders') IS NOT NULL AS has_orders"
+  );
+
+  const [resaStats, orderStats, counts, byMonth, byHour, recentResas, recentOrders] = await Promise.all([
+    query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE reserved_at >= date_trunc('month', now()))::int AS this_month,
+         COUNT(*) FILTER (WHERE status = 'confirme')::int AS confirmed,
+         COUNT(*) FILTER (WHERE status = 'annule')::int  AS cancelled,
+         COUNT(*) FILTER (WHERE status = 'no_show')::int AS no_show,
+         COALESCE(SUM(party_size) FILTER (WHERE status = 'confirme'), 0)::int AS covers,
+         COALESCE(ROUND(AVG(party_size), 1), 0) AS avg_party
+       FROM reservations WHERE restaurant_id = $1 AND archived_at IS NULL`, [id]
+    ),
+    has_orders
+      ? query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(total),0)::int AS revenue,
+                       COALESCE(ROUND(AVG(total)),0)::int AS avg_basket
+                FROM qr_orders WHERE restaurant_id = $1`, [id])
+      : Promise.resolve({ rows: [{ count: 0, revenue: 0, avg_basket: 0 }] }),
+    query(
+      `SELECT (SELECT COUNT(*) FROM restaurant_tables WHERE restaurant_id = $1)::int AS tables,
+              (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = $1 AND is_active = TRUE)::int AS menu_items`, [id]
+    ),
+    query(
+      `SELECT to_char(date_trunc('month', reserved_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+       FROM reservations
+       WHERE restaurant_id = $1 AND archived_at IS NULL
+         AND reserved_at >= date_trunc('month', now()) - interval '5 months'
+       GROUP BY 1 ORDER BY 1`, [id]
+    ),
+    query(
+      `SELECT EXTRACT(HOUR FROM reserved_at)::int AS hour, COUNT(*)::int AS count
+       FROM reservations WHERE restaurant_id = $1 AND archived_at IS NULL
+       GROUP BY 1 ORDER BY 1`, [id]
+    ),
+    query(
+      `SELECT r.ref, r.reserved_at, r.party_size, r.status,
+              COALESCE(r.walk_in_name, u.full_name) AS client_name
+       FROM reservations r LEFT JOIN users u ON u.id = r.client_id
+       WHERE r.restaurant_id = $1 AND r.archived_at IS NULL
+       ORDER BY r.reserved_at DESC LIMIT 8`, [id]
+    ),
+    has_orders
+      ? query(`SELECT id, client_name, total, status, created_at
+               FROM qr_orders WHERE restaurant_id = $1 ORDER BY created_at DESC LIMIT 8`, [id])
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  return ok(res, {
+    restaurant: resto,
+    reservations: resaStats.rows[0],
+    orders: orderStats.rows[0],
+    counts: counts.rows[0],
+    by_month: byMonth.rows,
+    by_hour: byHour.rows,
+    recent_reservations: recentResas.rows,
+    recent_orders: recentOrders.rows,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /admin/restaurants/:id/status
 // ---------------------------------------------------------------------------
 export const setRestaurantStatus = asyncHandler(async (req, res) => {

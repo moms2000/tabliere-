@@ -23,6 +23,21 @@ export default function EventOrder() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);
+  // Accès responsable : code à 4 chiffres remis à l'entrée (Phase 2)
+  const [pin, setPin] = useState("");
+  const [verified, setVerified] = useState(null); // réservation (salon) une fois le code validé
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinErr, setPinErr] = useState("");
+
+  const verifyPin = async () => {
+    if (!/^\d{4}$/.test(pin)) { setPinErr("Entrez le code à 4 chiffres."); return; }
+    setPinBusy(true); setPinErr("");
+    try {
+      const d = await eventOpsService.verifyOrderPin({ slug, pin });
+      setVerified(d.reservation);
+    } catch (e) { setPinErr(e.response?.data?.message || "Code invalide."); }
+    finally { setPinBusy(false); }
+  };
 
   useEffect(() => {
     eventsService.cartePublic(slug)
@@ -49,8 +64,10 @@ export default function EventOrder() {
     setSubmitting(true);
     try {
       const order = await eventOpsService.createOrder({
-        slug, table_id: tableId || undefined, table_label: tableLabel || undefined,
-        guest_name: guest || undefined, note: note || undefined,
+        slug, pin,
+        table_id: verified?.table_id || tableId || undefined,
+        table_label: verified?.table_label || tableLabel || undefined,
+        guest_name: guest || verified?.guest_name || undefined, note: note || undefined,
         items: lines.map(l => ({ id: l.id, name: l.name, price: l.price, qty: l.qty })),
       });
       setDone(order.ref); setCart({}); setNote("");
@@ -71,6 +88,35 @@ export default function EventOrder() {
         Réf <strong>{done}</strong>. {mode === "tab" ? "Elle sera ajoutée à votre note (paiement en fin de soirée)." : "Un serveur vous l'apporte, paiement cash sur place."}
       </div>
       <button onClick={() => setDone(null)} style={{ ...primaryBtn, marginTop: 18 }}>Commander à nouveau</button>
+    </Center>
+  );
+
+  // Accès responsable : tant que le code à 4 chiffres n'est pas validé, on
+  // n'affiche pas la carte (seul le responsable du salon, muni du code remis à
+  // l'entrée, peut commander).
+  if (!verified) return (
+    <Center>
+      <div style={{ width: "100%", maxWidth: 320, textAlign: "center" }}>
+        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#F0F6F2", display: "flex",
+          alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+          <Wine size={28} color={P} />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: DARK }}>{data.event?.name}</div>
+        <div style={{ fontSize: 13, color: MUTED, marginTop: 6, marginBottom: 20, lineHeight: 1.5 }}>
+          Entrez le <strong>code à 4 chiffres</strong> remis au responsable du salon à l'entrée pour commander.
+        </div>
+        <input value={pin} onChange={e => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinErr(""); }}
+          onKeyDown={e => e.key === "Enter" && verifyPin()}
+          inputMode="numeric" placeholder="••••" maxLength={4}
+          style={{ width: 180, textAlign: "center", fontSize: 34, letterSpacing: 14, fontWeight: 800,
+            padding: "12px 0", borderRadius: 12, border: `1.5px solid ${pinErr ? "#DC2626" : BORDER}`,
+            background: "white", color: DARK, outline: "none", fontFamily: "monospace" }} />
+        {pinErr && <div style={{ fontSize: 12.5, color: "#DC2626", marginTop: 10 }}>{pinErr}</div>}
+        <button onClick={verifyPin} disabled={pinBusy}
+          style={{ ...primaryBtn, width: "100%", marginTop: 18, justifyContent: "center" }}>
+          {pinBusy ? "Vérification…" : "Accéder à la carte"}
+        </button>
+      </div>
     </Center>
   );
 

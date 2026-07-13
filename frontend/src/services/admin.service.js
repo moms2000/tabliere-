@@ -71,6 +71,7 @@ export const adminService = {
 
   async batchRestaurantStatus(ids, status) {
     const res = await api.patch("/admin/restaurants/batch", { ids, status });
+    memCache.delPrefix("admin:"); // invalider la liste en cache
     return res.data.data;
   },
 
@@ -91,6 +92,7 @@ export const adminService = {
 
   async toggleRestaurantQR(id, active) {
     const res = await api.patch(`/admin/restaurants/${id}/qr`, { active });
+    memCache.delPrefix("admin:"); // invalider la liste en cache (sinon l'état QR "revient" en changeant de page)
     return res.data.data;
   },
 

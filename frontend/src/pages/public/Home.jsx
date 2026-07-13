@@ -565,17 +565,25 @@ export default function Home() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
+  // État de navigation sauvegardé (retour depuis une fiche restaurant)
+  const savedRef = useRef(undefined);
+  if (savedRef.current === undefined) {
+    try { savedRef.current = JSON.parse(sessionStorage.getItem("tci_home_state_d") || "null") || {}; }
+    catch { savedRef.current = {}; }
+  }
+  const saved = savedRef.current;
+  const pendingScroll = useRef(saved.scrollY || 0);
+
   const [restaurants, setRestaurants] = useState([]);
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page,        setPage]        = useState(1);
+  const [page,        setPage]        = useState(saved.page || 1);
   const [loadError,   setLoadError]   = useState(false);
   const [view,        setView]        = useState("list"); // "list" | "map"
-  const [search,      setSearch]      = useState("");
-  const [activeTab,   setActiveTab]   = useState(0);
-  const [sort,        setSort]        = useState("rating");
-  const [checkedC,    setCheckedC]    = useState({});
+  const [search,      setSearch]      = useState(saved.search || "");
+  const [activeTab,   setActiveTab]   = useState(saved.tab || 0);
+  const [sort,        setSort]        = useState(saved.sort || "rating");
+  const [checkedC,    setCheckedC]    = useState(saved.checkedC || {});
   const [favorites,   setFavorites]   = useState(() => {
     try { return JSON.parse(localStorage.getItem("tci_favorites") || "[]"); } catch { return []; }
   });
@@ -589,7 +597,7 @@ export default function Home() {
   const todayStr = new Date().toISOString().split("T")[0];
   const [resaDate,   setResaDate]   = useState(todayStr);
   const [resaTime,   setResaTime]   = useState("19:00");
-  const [resaGuests, setResaGuests] = useState(2);
+  const [resaGuests, setResaGuests] = useState(saved.guests || 2);
   const [openFilter, setOpenFilter] = useState(null); // "date" | "time" | "guests" | null
   const [locating,   setLocating]   = useState(false);
   const [locCity,    setLocCity]    = useState("");
@@ -671,28 +679,53 @@ export default function Home() {
     return params;
   }, [search, sort, checkedC, activeTab, resaGuests]);
 
-  // Charge une page ; append=true ajoute à la suite (« Charger plus »)
-  const loadPage = useCallback((pageArg, append) => {
-    (append ? setLoadingMore : setLoading)(true);
-    if (!append) setLoadError(false);
+  // Charge une page (remplace la liste — pagination numérotée)
+  const loadPage = useCallback((pageArg) => {
+    setLoading(true); setLoadError(false);
     restaurantsService.list({ ...buildParams(), page: pageArg })
       .then(res => {
-        const rows = res.data || [];
-        setRestaurants(prev => append ? [...prev, ...rows] : rows);
+        setRestaurants(res.data || []);
         setTotal(res.pagination?.total || 0);
         setPage(pageArg);
+        if (pendingScroll.current) {
+          const y = pendingScroll.current; pendingScroll.current = 0;
+          requestAnimationFrame(() => setTimeout(() => window.scrollTo(0, y), 30));
+        }
       })
-      .catch(() => { if (!append) { setRestaurants([]); setLoadError(true); } })
-      .finally(() => (append ? setLoadingMore : setLoading)(false));
+      .catch(() => { setRestaurants([]); setLoadError(true); })
+      .finally(() => setLoading(false));
   }, [buildParams]);
 
-  const loadRestaurants = useCallback(() => loadPage(1, false), [loadPage]);
-  // Reset à la page 1 quand un filtre/onglet/recherche change
-  useEffect(() => { loadPage(1, false); }, [buildParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadRestaurants = useCallback(() => loadPage(page), [loadPage, page]);
+
+  // Un seul effet : au 1er rendu on charge la page restaurée ; si un filtre
+  // change ensuite, on repart page 1. (Le changement de page passe par
+  // les boutons de pagination qui appellent loadPage directement.)
+  const filterKey = JSON.stringify(buildParams());
+  const prevKey   = useRef(filterKey);
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; loadPage(saved.page || 1); return; }
+    if (prevKey.current !== filterKey) { prevKey.current = filterKey; loadPage(1); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
+  // L'état sauvegardé n'est restauré qu'une fois
+  useEffect(() => { try { sessionStorage.removeItem("tci_home_state_d"); } catch {} }, []);
+
+  // Sauvegarde de l'état avant d'ouvrir une fiche restaurant
+  const saveHomeState = useCallback(() => {
+    try {
+      sessionStorage.setItem("tci_home_state_d", JSON.stringify({
+        tab: activeTab, search, sort, checkedC, guests: resaGuests, page, scrollY: window.scrollY,
+      }));
+    } catch {}
+  }, [activeTab, search, sort, checkedC, resaGuests, page]);
 
   // Ouvre une fiche restaurant en transmettant le contexte de réservation
   // (date/heure/couverts) pour pré-remplir le formulaire de réservation.
   const openRestaurant = (slug) => {
+    saveHomeState();
     const qs = new URLSearchParams({
       date: resaDate || "", time: resaTime || "", guests: String(resaGuests || 2),
     }).toString();
@@ -701,6 +734,7 @@ export default function Home() {
 
   // Ouvre la fiche resto ET pré-ouvre la réservation sur le créneau choisi
   const openRestaurantAtSlot = (slug, slot) => {
+    saveHomeState();
     const qs = new URLSearchParams({
       date: resaDate || "", guests: String(resaGuests || 2), slot,
     }).toString();
@@ -1423,18 +1457,45 @@ export default function Home() {
               </motion.div>
             )}
 
-            {/* Charger plus (pagination progressive) */}
-            {!loading && restaurants.length > 0 && restaurants.length < total && (
-              <div style={{ textAlign: "center", marginTop: 22 }}>
-                <motion.button whileTap={{ scale: 0.97 }}
-                  onClick={() => loadPage(page + 1, true)} disabled={loadingMore}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 26px",
-                    background: "white", color: DARK, fontSize: 13.5, fontWeight: 600,
-                    cursor: loadingMore ? "default" : "pointer", fontFamily: FONT }}>
-                  {loadingMore ? "Chargement…" : `Charger plus (${restaurants.length}/${total})`}
-                </motion.button>
-              </div>
-            )}
+            {/* Pagination numérotée (24 restos / page, filtres serveur) */}
+            {!loading && total > PAGE_SIZE && (() => {
+              const totalPages = Math.ceil(total / PAGE_SIZE);
+              const goTo = (p) => {
+                const np = Math.min(totalPages, Math.max(1, p));
+                if (np === page) return;
+                loadPage(np);
+                listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              };
+              const nums = [];
+              const add = (n) => { if (n >= 1 && n <= totalPages && !nums.includes(n)) nums.push(n); };
+              add(1); add(page - 1); add(page); add(page + 1); add(totalPages);
+              nums.sort((a, b) => a - b);
+              const items = [];
+              nums.forEach((n, i) => { if (i > 0 && n - nums[i - 1] > 1) items.push("…"); items.push(n); });
+              const cell = (content, opts = {}) => (
+                <button onClick={opts.onClick} disabled={opts.disabled}
+                  style={{ minWidth: 40, height: 40, borderRadius: 10, cursor: opts.disabled ? "default" : "pointer",
+                    border: opts.active ? "none" : `1px solid ${BORDER}`, background: opts.active ? P : "white",
+                    color: opts.active ? "#1A1000" : opts.disabled ? "#ccc" : DARK,
+                    fontWeight: opts.active ? 800 : 500, fontSize: 14, fontFamily: FONT }}>
+                  {content}
+                </button>
+              );
+              return (
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, flexWrap: "wrap" }}>
+                    {cell("‹", { onClick: () => goTo(page - 1), disabled: page === 1 })}
+                    {items.map((it, i) => it === "…"
+                      ? <span key={`e${i}`} style={{ color: MUTED, padding: "0 2px" }}>…</span>
+                      : cell(it, { onClick: () => goTo(it), active: it === page }))}
+                    {cell("›", { onClick: () => goTo(page + 1), disabled: page === totalPages })}
+                  </div>
+                  <div style={{ textAlign: "center", fontSize: 12.5, color: MUTED, marginTop: 10 }}>
+                    Page {page} sur {totalPages} · {total} restaurants
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

@@ -25,7 +25,7 @@ export default function EventOrder() {
   const [done, setDone] = useState(null);
   // Accès responsable : code à 4 chiffres remis à l'entrée (Phase 2)
   const [pin, setPin] = useState("");
-  const [verified, setVerified] = useState(null); // réservation (salon) une fois le code validé
+  const [verified, setVerified] = useState(null); // { token, table_label } une fois le code validé
   const [pinBusy, setPinBusy] = useState(false);
   const [pinErr, setPinErr] = useState("");
 
@@ -34,7 +34,7 @@ export default function EventOrder() {
     setPinBusy(true); setPinErr("");
     try {
       const d = await eventOpsService.verifyOrderPin({ slug, pin });
-      setVerified(d.reservation);
+      setVerified(d); // { token, table_label }
     } catch (e) { setPinErr(e.response?.data?.message || "Code invalide."); }
     finally { setPinBusy(false); }
   };
@@ -64,10 +64,8 @@ export default function EventOrder() {
     setSubmitting(true);
     try {
       const order = await eventOpsService.createOrder({
-        slug, pin,
-        table_id: verified?.table_id || tableId || undefined,
-        table_label: verified?.table_label || tableLabel || undefined,
-        guest_name: guest || verified?.guest_name || undefined, note: note || undefined,
+        slug, order_token: verified?.token,
+        guest_name: guest || undefined, note: note || undefined,
         items: lines.map(l => ({ id: l.id, name: l.name, price: l.price, qty: l.qty })),
       });
       setDone(order.ref); setCart({}); setNote("");

@@ -3,7 +3,7 @@ import QRCode from "react-qr-code";
 import {
   Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
   QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
-  Phone, ChevronDown, ChevronUp, AlertTriangle,
+  Phone, ChevronDown, ChevronUp, AlertTriangle, MapPin,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
@@ -317,6 +317,69 @@ export function StaffTab({ event }) {
 }
 
 // ═══ CHECK-IN ══════════════════════════════════════════════════════════════════
+// ── Mini-plan : situe la table d'un salon (lecture seule, auto-cadré) ─────────
+function TablePlanMini({ tables, highlightId, onClose }) {
+  const list = (tables || []).map(t => ({
+    ...t,
+    x: t.pos_x ?? 20, y: t.pos_y ?? 20,
+    w: t.kind === "vip" ? 104 : (t.capacity || 2) <= 2 ? 74 : (t.capacity || 2) <= 4 ? 90 : 104,
+    h: t.kind === "vip" ? 78 : (t.capacity || 2) <= 2 ? 62 : 74,
+  }));
+  const target = list.find(t => String(t.id) === String(highlightId));
+  // Cadrage : bornes de toutes les tables
+  const pad = 24;
+  const minX = Math.min(...list.map(t => t.x), 0) - pad;
+  const minY = Math.min(...list.map(t => t.y), 0) - pad;
+  const maxX = Math.max(...list.map(t => t.x + t.w), 200) + pad;
+  const maxY = Math.max(...list.map(t => t.y + t.h), 160) + pad;
+  const worldW = maxX - minX, worldH = maxY - minY;
+  const viewW = 320, scale = Math.min(1, viewW / worldW);
+  const viewH = Math.max(180, worldH * scale);
+
+  return (
+    <Modal open title="Emplacement de la table" width={368} onClose={onClose}>
+      {target ? (
+        <div style={{ fontSize: 13, color: DARK, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+          <MapPin size={15} color={P} />
+          <strong>{target.label}</strong>
+          {target.zone && target.zone !== "general" ? <span style={{ color: MUTED }}>· zone {target.zone}</span> : null}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 10 }}>Aucune table attribuée à ce salon.</div>
+      )}
+      <div style={{ position: "relative", width: viewW, height: viewH, margin: "0 auto",
+        background: "linear-gradient(135deg,#FbF9F5,#F2EEE6)", border: `0.5px solid ${BORDER}`,
+        borderRadius: 12, overflow: "hidden" }}>
+        {list.map(t => {
+          const on = target && String(t.id) === String(target.id);
+          return (
+            <div key={t.id} style={{ position: "absolute",
+              left: (t.x - minX) * scale, top: (t.y - minY) * scale,
+              width: t.w * scale, height: t.h * scale,
+              borderRadius: t.kind === "vip" ? 8 : 6,
+              background: on ? P : (t.kind === "vip" ? "#F3E4CB" : "white"),
+              border: `${on ? 2 : 1}px solid ${on ? DARK : BORDER}`,
+              boxShadow: on ? `0 0 0 4px ${P}55, 0 6px 16px rgba(0,0,0,.18)` : "0 1px 3px rgba(0,0,0,.06)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: on ? 5 : 1, transition: "box-shadow .2s" }}>
+              <span style={{ fontSize: Math.max(7, 10 * scale), fontWeight: 800,
+                color: on ? "white" : DARK, fontFamily: FONT, textAlign: "center",
+                overflow: "hidden", whiteSpace: "nowrap" }}>{t.label}</span>
+            </div>
+          );
+        })}
+        {target && (
+          <div style={{ position: "absolute", left: (target.x - minX) * scale + (target.w * scale) / 2 - 9,
+            top: (target.y - minY) * scale - 20, zIndex: 6, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.25))" }}>
+            <MapPin size={19} color={P} fill={P} />
+          </div>
+        )}
+      </div>
+      <Btn variant="ghost" onClick={onClose} style={{ width: "100%", justifyContent: "center", marginTop: 14 }}>Fermer</Btn>
+    </Modal>
+  );
+}
+
 export function CheckinTab({ eventId, staffToken }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
@@ -324,6 +387,7 @@ export function CheckinTab({ eventId, staffToken }) {
   const [scanning, setScanning] = useState(false);
   const [confirm, setConfirm] = useState(null); // { resa, count, byScan }
   const [pinResult, setPinResult] = useState(null); // { pin, name, table } après check-in
+  const [planTable, setPlanTable] = useState(null); // id de table à situer sur le plan
   const [busy, setBusy] = useState(false);
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
   useEffect(() => { load(); }, [eventId]);
@@ -347,7 +411,7 @@ export function CheckinTab({ eventId, staffToken }) {
         ? await eventOpsService.checkinByRef(confirm.resa.ref, staffToken, eventId, confirm.count)
         : await eventOpsService.checkin(confirm.resa.id, false, staffToken, eventId, confirm.count);
       const pin = r?.reservation?.order_pin;
-      const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label };
+      const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label, table_id: confirm.resa.table_id };
       setConfirm(null); await load();
       if (pin) setPinResult(info);
     } catch (e) { alert(e.response?.data?.message || "Erreur"); }
@@ -426,8 +490,12 @@ export function CheckinTab({ eventId, staffToken }) {
                 <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 5 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <Users size={13} color={MUTED} /> Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong></div>
-                  {r.table_label && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {r.table_kind === "vip" ? <Crown size={13} color={P} /> : <Armchair size={13} color={MUTED} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</div>}
+                  {r.table_label && <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {r.table_kind === "vip" ? <Crown size={13} color={P} /> : <Armchair size={13} color={MUTED} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}
+                    {r.table_id && <button onClick={() => setPlanTable(r.table_id)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${BORDER}`, borderRadius: 7,
+                        padding: "2px 8px", background: "white", cursor: "pointer", fontFamily: FONT, fontSize: 11.5, color: P, fontWeight: 600 }}>
+                      <MapPin size={12} /> Voir sur plan</button>}</div>}
                   {r.client_phone && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={13} color={MUTED} /> {r.client_phone}</div>}
                   {r.promoter_code && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Megaphone size={13} color={MUTED} /> promoteur : {r.promoter_code}</div>}
                   {r.special_request && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} color={MUTED} /> « {r.special_request} »</div>}
@@ -443,14 +511,25 @@ export function CheckinTab({ eventId, staffToken }) {
 
       {scanning && <QrScanner onScan={onScan} onClose={() => setScanning(false)} />}
 
+      {/* Emplacement de la table sur le plan */}
+      {planTable && (
+        <TablePlanMini tables={data.tables} highlightId={planTable} onClose={() => setPlanTable(null)} />
+      )}
+
       {/* Confirmation d'arrivée : saisie du nombre réel de personnes */}
       {confirm && (
         <Modal open title="Confirmer l'arrivée" width={360} onClose={() => setConfirm(null)}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{confirm.resa.client_name || "Client"}</div>
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>
             <span style={{ fontFamily: "monospace" }}>{confirm.resa.ref}</span>
             {confirm.resa.table_label ? ` · ${confirm.resa.table_label}` : ""} · réservé {confirm.resa.party_size} pers.
           </div>
+          {confirm.resa.table_id && (
+            <button onClick={() => setPlanTable(confirm.resa.table_id)}
+              style={{ ...qrChip, display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+              <MapPin size={14} color={P} /> Voir la table sur le plan
+            </button>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "1px" }}>
               Personnes réellement arrivées
@@ -512,9 +591,15 @@ export function CheckinTab({ eventId, staffToken }) {
             </div>
             <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: 10, color: DARK,
               fontFamily: "monospace", marginBottom: 12 }}>{pinResult.pin}</div>
-            <div style={{ fontSize: 12.5, color: "#4a5a52", lineHeight: 1.55, marginBottom: 18 }}>
+            <div style={{ fontSize: 12.5, color: "#4a5a52", lineHeight: 1.55, marginBottom: 14 }}>
               Remettez ce code au responsable du salon. Il en aura besoin pour <strong>passer les commandes</strong> via le QR de sa table.
             </div>
+            {pinResult.table_id && (
+              <Btn variant="ghost" icon={MapPin} onClick={() => setPlanTable(pinResult.table_id)}
+                style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>
+                Voir la table sur le plan
+              </Btn>
+            )}
             <Btn variant="primary" onClick={() => setPinResult(null)} style={{ width: "100%", justifyContent: "center" }}>Terminé</Btn>
           </div>
         </Modal>

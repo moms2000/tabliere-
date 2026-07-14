@@ -16,6 +16,11 @@ export const reservationsService = {
     return res.data.data;
   },
 
+  async importClients(payload) {
+    const res = await api.post("/reservations/clients/import", payload);
+    return res.data.data;
+  },
+
   async getOne(id) {
     const res = await api.get(`/reservations/${id}`);
     return res.data.data;

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Users, FileText, Sheet, Search, Phone, Mail, Download } from "lucide-react";
+import { Users, FileText, Sheet, Search, Phone, Mail, Download, UploadCloud } from "lucide-react";
 import { Card, PageTitle, Btn } from "../../components/ui";
 import { reservationsService } from "../../services/reservations.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import ImportClientsModal from "./ImportClientsModal.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -19,14 +20,14 @@ export default function RestClients() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(null);
   const [page, setPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
   const PAGE_SIZE = 30;
 
-  useEffect(() => {
-    reservationsService.clients()
-      .then(d => { setClients(d?.clients || []); setTotals(d?.totals || { clients: 0, visits: 0, covers: 0 }); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const load = () => reservationsService.clients()
+    .then(d => { setClients(d?.clients || []); setTotals(d?.totals || { clients: 0, visits: 0, covers: 0 }); })
+    .catch(console.error)
+    .finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -98,7 +99,8 @@ export default function RestClients() {
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
       <motion.div variants={fadeUp} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <PageTitle title="Mes clients" subtitle="Votre base clients, issue de vos réservations" />
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn variant="primary" icon={UploadCloud} onClick={() => setShowImport(true)}>Importer</Btn>
           <Btn icon={FileText} onClick={exportPdf} disabled={busy || !clients.length}>{busy === "pdf" ? "…" : "PDF"}</Btn>
           <Btn icon={Sheet} onClick={exportXls} disabled={busy || !clients.length}>{busy === "xls" ? "…" : "Excel"}</Btn>
           <Btn icon={Download} onClick={exportCsv} disabled={busy || !clients.length}>{busy === "csv" ? "…" : "CSV"}</Btn>
@@ -151,7 +153,12 @@ export default function RestClients() {
                   {paged.map((c, i) => (
                     <tr key={i} style={{ borderTop: `0.5px solid ${BG}` }}>
                       <td style={td}>
-                        <div style={{ fontWeight: 600, color: DARK }}>{c.name}</div>
+                        <div style={{ fontWeight: 600, color: DARK, display: "flex", alignItems: "center", gap: 6 }}>
+                          {c.name}
+                          {c.imported && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#C47D1A", background: "#FEF6EC",
+                            border: "0.5px solid #F0C98A", borderRadius: 5, padding: "1px 5px", textTransform: "uppercase", letterSpacing: ".3px" }}>Importé</span>}
+                        </div>
+                        {c.imported && c.note && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{c.note}</div>}
                       </td>
                       <td style={td}>
                         {c.phone && <div style={{ display: "flex", alignItems: "center", gap: 5, color: DARK }}><Phone size={11} color={MUTED} /> {c.phone}</div>}
@@ -183,9 +190,11 @@ export default function RestClients() {
           )}
         </Card>
         <div style={{ fontSize: 11.5, color: MUTED, marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-          <Download size={12} /> Exports PDF & Excel brandés TablièreCI — {filtered.length} client(s) exporté(s).
+          <Download size={12} /> Exports PDF, Excel & CSV — {filtered.length} client(s). Importez votre base existante via « Importer ».
         </div>
       </motion.div>
+
+      <ImportClientsModal open={showImport} onClose={() => setShowImport(false)} onDone={load} />
     </motion.div>
   );
 }

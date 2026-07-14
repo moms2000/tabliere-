@@ -87,6 +87,25 @@ async function runBusinessMigrations() {
        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
        UNIQUE(restaurant_id, client_id)
      )`,
+
+    // Contacts clients importés (CRM propre au restaurant) — base clients externe
+    // (ex. migration depuis un autre service). Fusionnés avec les clients issus
+    // des réservations dans « Mes clients ». Dédoublonnage par téléphone normalisé.
+    `CREATE TABLE IF NOT EXISTS restaurant_contacts (
+       id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+       name          VARCHAR(160),
+       phone         VARCHAR(40),
+       phone_norm    VARCHAR(40),
+       email         VARCHAR(200),
+       note          TEXT,
+       source        VARCHAR(40) DEFAULT 'import',
+       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uidx_contacts_resto_phone
+       ON restaurant_contacts(restaurant_id, phone_norm) WHERE phone_norm IS NOT NULL AND phone_norm <> ''`,
+    `CREATE INDEX IF NOT EXISTS idx_contacts_resto ON restaurant_contacts(restaurant_id)`,
     `CREATE INDEX IF NOT EXISTS idx_reviews_restaurant ON reviews(restaurant_id)`,
     `CREATE INDEX IF NOT EXISTS idx_reviews_client     ON reviews(client_id)`,
 

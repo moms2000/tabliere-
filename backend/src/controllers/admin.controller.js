@@ -1,5 +1,6 @@
 import { query, withTransaction }  from "../config/db.js";
 import { seedLoad, cleanSeed, seedStats } from "../utils/seeder.js";
+import { purgeOwnerRestaurants } from "../utils/purgeOwnerRestaurants.js";
 import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -533,16 +534,9 @@ export const deleteUser = asyncHandler(async (req, res) => {
   //  - Codes d'accès (restaurateur + organisateur) utilisés par ce compte → LIBÉRÉS
   //    (redeviennent disponibles pour une nouvelle inscription).
   //  - Le compte lui-même → anonymisé + suspendu.
-  await withTransaction(async (client) => {
-    await client.query(
-      `UPDATE restaurants SET status = 'suspendu', deleted_at = NOW(), updated_at = NOW() WHERE owner_id = $1`,
-      [uid]
-    );
-    await client.query(
-      `UPDATE reservations SET archived_at = NOW(), updated_at = NOW()
-       WHERE restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = $1)`,
-      [uid]
-    );
+  const purge = await withTransaction(async (client) => {
+    // Restaurants : suppression définitive si vides, sinon masquage + libération du slug
+    const purgeRes = await purgeOwnerRestaurants(client, uid);
     await client.query(`UPDATE events SET status = 'annule', updated_at = NOW() WHERE owner_id = $1`, [uid]);
     await client.query(`UPDATE restaurateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
     await client.query(`UPDATE organisateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
@@ -557,10 +551,11 @@ export const deleteUser = asyncHandler(async (req, res) => {
        WHERE id = $1`,
       [uid]
     );
+    return purgeRes;
   });
 
   await cache.del(`user:${uid}`);
-  logger.info("Compte supprimé + cascade (resto masqué, résa archivées, code libéré)", { userId: uid });
+  logger.info("Compte supprimé + cascade", { userId: uid, restosSupprimes: purge?.hardDeleted, restosMasques: purge?.freed });
   return ok(res, null, "Compte supprimé");
 });
 

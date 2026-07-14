@@ -459,6 +459,11 @@ async function runDeletionCascadeMigration() {
     // Rattrapage : annuler les événements des organisateurs supprimés
     `UPDATE events SET status = 'annule', updated_at = NOW()
        WHERE status <> 'annule' AND owner_id IN (SELECT id FROM users WHERE ${DELETED_MARK})`,
+    // Rattrapage : LIBÉRER le slug des restaurants déjà supprimés (masqués) pour que
+    // leur nom redevienne disponible à une nouvelle inscription (fin du blocage
+    // « nom déjà pris »). Idempotent via le préfixe. N'affecte que les masqués.
+    `UPDATE restaurants SET slug = 'deleted-' || id, updated_at = NOW()
+       WHERE deleted_at IS NOT NULL AND slug NOT LIKE 'deleted-%'`,
   ];
   let okc = 0, failc = 0;
   for (const sql of stmts) {

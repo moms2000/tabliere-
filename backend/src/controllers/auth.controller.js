@@ -185,9 +185,18 @@ export const register = asyncHandler(async (req, res) => {
     );
 
     if (role === "restaurateur" && restaurant_name) {
-      const slug = restaurant_name.toLowerCase()
+      let slug = restaurant_name.toLowerCase()
         .normalize("NFD").replace(/[̀-ͯ]/g, "")
-        .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "restaurant";
+
+      // Slug UNIQUE : suffixe si déjà pris (resto existant OU masqué) → plus jamais
+      // d'erreur « nom déjà pris » due à un ancien restaurant. L'URL reste propre.
+      const base = slug;
+      for (let i = 2; i <= 60; i++) {
+        const { rows: taken } = await client.query("SELECT 1 FROM restaurants WHERE slug = $1", [slug]);
+        if (!taken.length) break;
+        slug = `${base}-${i}`;
+      }
 
       const { rows: [resto] } = await client.query(
         `INSERT INTO restaurants (owner_id, name, slug, status)

@@ -44,6 +44,44 @@ async function ensureTable() {
   tableReady = true;
 }
 
+// Résout le restaurant du user SANS IDOR : un non-admin ne peut agir que sur SON
+// restaurant (résolu par owner_id) ; le query param n'est accepté que pour un admin,
+// ou pour un restaurateur si le resto lui appartient réellement.
+async function resolveRestoId(req) {
+  if (req.user.role === "admin" && req.query.restaurant_id) return req.query.restaurant_id;
+  if (req.query.restaurant_id) {
+    const { rows } = await query(
+      "SELECT id FROM restaurants WHERE id = $1 AND owner_id = $2", [req.query.restaurant_id, req.user.id]
+    );
+    if (rows[0]) return rows[0].id;
+    throw new AppError("Accès refusé à ce restaurant", 403);
+  }
+  const { rows } = await query(
+    "SELECT id FROM restaurants WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1", [req.user.id]
+  );
+  if (rows[0]) return rows[0].id;
+  throw new AppError("Aucun restaurant associé à ce compte", 400);
+}
+
+// Re-tarification SERVEUR (jamais confiance au prix envoyé par le client, même
+// restaurateur : évite la falsification des chiffres de CA).
+async function repriceItems(restoId, items) {
+  const ids = [...new Set(items.map(it => it.id).filter(Boolean))];
+  const { rows: menuRows } = ids.length
+    ? await query("SELECT id, name, price FROM menu_items WHERE restaurant_id = $1 AND id = ANY($2)", [restoId, ids])
+    : { rows: [] };
+  const priceMap = new Map(menuRows.map(m => [String(m.id), m]));
+  const safeItems = items.map(it => {
+    const m = priceMap.get(String(it.id));
+    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+    return m
+      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty, options: it.options || undefined }
+      : { id: it.id || null, name: String(it.name || "Article").slice(0, 120), price: 0, qty };
+  });
+  const total = safeItems.reduce((s, it) => s + it.price * it.qty, 0);
+  return { safeItems, total };
+}
+
 // ── POST /orders — passer commande (client via QR) ─────────────────────────
 export const createOrder = asyncHandler(async (req, res) => {
   await ensureTable();
@@ -94,9 +132,8 @@ export const listOrders = asyncHandler(async (req, res) => {
   const { page = 1, limit = 50, status, date_from, date_to } = req.query;
   const offset = (page - 1) * limit;
 
-  // Récupérer le restaurant du restaurateur connecté
-  const restoId = req.user.restaurant_id || req.query.restaurant_id;
-  if (!restoId) throw new AppError("restaurant_id requis", 400);
+  // Récupérer le restaurant du restaurateur connecté (anti-IDOR)
+  const restoId = await resolveRestoId(req);
 
   const params = [restoId];
   const conds  = ["restaurant_id = $1"];
@@ -123,8 +160,7 @@ export const listOrders = asyncHandler(async (req, res) => {
 // ── GET /orders/stats — statistiques pour le restaurateur ──────────────────
 export const getStats = asyncHandler(async (req, res) => {
   await ensureTable();
-  const restoId = req.user.restaurant_id || req.query.restaurant_id;
-  if (!restoId) throw new AppError("restaurant_id requis", 400);
+  const restoId = await resolveRestoId(req); // anti-IDOR
 
   const { period = "month" } = req.query;
 
@@ -189,25 +225,18 @@ export const getStats = asyncHandler(async (req, res) => {
 export const createManualOrder = asyncHandler(async (req, res) => {
   await ensureTable();
   const { table_label, items, note, client_name, client_phone } = req.body;
-  const restoId = req.user.restaurant_id;
-  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  const restoId = await resolveRestoId(req);
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
 
-  // Coercition numérique stricte : un price/qty non numérique produirait NaN,
-  // rejeté par la colonne INTEGER (500). On borne à des entiers >= 0.
-  const total = items.reduce((sum, it) => {
-    const price = Number(it.price); const qty = Number(it.qty);
-    const p = Number.isFinite(price) && price > 0 ? price : 0;
-    const q = Number.isFinite(qty)   && qty   > 0 ? qty   : 1;
-    return sum + p * q;
-  }, 0);
+  // Prix recalculés côté serveur depuis la carte (jamais le prix envoyé par le client)
+  const { safeItems, total } = await repriceItems(restoId, items);
 
   const { rows: [order] } = await query(
     `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note, status)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'en_cours') RETURNING *`,
     [restoId, table_label || null, client_name || null, client_phone || null,
-     JSON.stringify(items), total, note || null]
+     JSON.stringify(safeItems), total, note || null]
   );
 
   logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
@@ -218,7 +247,7 @@ export const createManualOrder = asyncHandler(async (req, res) => {
 export const updateOrderItems = asyncHandler(async (req, res) => {
   await ensureTable();
   const { items, note } = req.body;
-  const restoId = req.user.restaurant_id;
+  const restoId = await resolveRestoId(req);
 
   const { rows: [existing] } = await query(
     "SELECT * FROM qr_orders WHERE id = $1 AND restaurant_id = $2",
@@ -227,12 +256,14 @@ export const updateOrderItems = asyncHandler(async (req, res) => {
   if (!existing) return notFound(res, "Commande introuvable");
   if (existing.status === "servi") throw new AppError("Impossible de modifier une commande servie", 400);
 
-  const total = (items || existing.items).reduce((sum, it) => sum + (it.price || 0) * (it.qty || 1), 0);
+  // Re-tarification serveur si de nouveaux articles sont fournis
+  let safeItems = existing.items, total = existing.total;
+  if (items && Array.isArray(items)) ({ safeItems, total } = await repriceItems(restoId, items));
 
   const { rows: [order] } = await query(
     `UPDATE qr_orders SET items = $1::jsonb, total = $2, note = COALESCE($3, note), updated_at = NOW()
-     WHERE id = $4 RETURNING *`,
-    [JSON.stringify(items || existing.items), total, note || null, req.params.id]
+     WHERE id = $4 AND restaurant_id = $5 RETURNING *`,
+    [JSON.stringify(safeItems), total, note || null, req.params.id, restoId]
   );
 
   return ok(res, { order }, "Commande modifiée");
@@ -257,7 +288,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
     : `UPDATE qr_orders SET status = $1, updated_at = NOW() WHERE id = $2 AND restaurant_id = $3 RETURNING *`;
   const params = isAdmin
     ? [status, req.params.id]
-    : [status, req.params.id, req.user.restaurant_id];
+    : [status, req.params.id, await resolveRestoId(req)];
 
   const { rows: [order] } = await query(sql, params);
   if (!order) return notFound(res, "Commande introuvable");

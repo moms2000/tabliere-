@@ -9,7 +9,7 @@ const router = Router();
 
 const initiateSchema = Joi.object({
   reservation_id: Joi.string().uuid().required(),
-  method:  Joi.string().valid("orange_money","mtn_momo","wave","carte","cash").required(),
+  method:  Joi.string().valid("orange_money","mtn_momo","wave","carte").required(),
   phone:   Joi.string().pattern(/^\+?[0-9]{8,15}$/).optional(),
 });
 

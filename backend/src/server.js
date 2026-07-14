@@ -500,11 +500,18 @@ async function runPerfIndexes() {
     `CREATE INDEX IF NOT EXISTS idx_reservations_table ON reservations(table_id) WHERE table_id IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_qr_orders_resto_date ON qr_orders(restaurant_id, created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_resa_table ON event_reservations(table_id) WHERE table_id IS NOT NULL`,
+    // Dashboards événement — filtres/agrégats par statut
+    `CREATE INDEX IF NOT EXISTS idx_evt_resa_evt_status  ON event_reservations(event_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_resa_checkin     ON event_reservations(event_id, checked_in_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt_status ON event_orders(event_id, status)`,
+    // Paiements — idempotence des webhooks : une référence fournisseur = un paiement
+    `CREATE UNIQUE INDEX IF NOT EXISTS uidx_payments_provider_ref ON payments(provider_ref) WHERE provider_ref IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_reservation ON payments(reservation_id)`,
   ];
 
   let ok = 0;
   for (const sql of indexes) {
-    try { await query(sql); ok++; } catch (_) {}
+    try { await query(sql); ok++; } catch (e) { logger.warn("Index ignoré", { error: e?.message }); }
   }
   logger.info(`Performance indexes : ${ok}/${indexes.length} prêts`);
 }
@@ -560,6 +567,11 @@ async function start() {
         url:  `http://localhost:${env.PORT}`,
       });
     });
+    // Timeouts HTTP : coupe les connexions lentes/hung (anti slow-loris). keepAlive
+    // > timeout du load-balancer Render pour éviter les 502 sur connexions ré-utilisées.
+    server.requestTimeout  = 30_000;
+    server.headersTimeout  = 35_000;
+    server.keepAliveTimeout = 65_000;
   } catch (err) {
     logger.error("Erreur fatale au démarrage", {
       error:   err?.message || String(err),
@@ -587,7 +599,12 @@ async function shutdown(signal) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT",  () => shutdown("SIGINT"));
-process.on("uncaughtException",  (err) => logger.error("uncaughtException",  { error: err.message, stack: err.stack }));
+// Après une uncaughtException, l'état du process peut être corrompu : on logue
+// puis on quitte pour laisser Render redémarrer proprement (fail-fast).
+process.on("uncaughtException",  (err) => {
+  logger.error("uncaughtException", { error: err.message, stack: err.stack });
+  process.exit(1);
+});
 process.on("unhandledRejection", (err) => logger.error("unhandledRejection", { error: err?.message }));
 
 start();

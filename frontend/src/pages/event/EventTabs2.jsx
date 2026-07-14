@@ -520,7 +520,7 @@ function TablePlanMini({ tables, highlightId, onClose }) {
   );
 }
 
-export function CheckinTab({ eventId, staffToken }) {
+export function CheckinTab({ eventId, staffToken, onAuthError }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);   // réservation dépliée
@@ -529,7 +529,7 @@ export function CheckinTab({ eventId, staffToken }) {
   const [pinResult, setPinResult] = useState(null); // { pin, name, table } après check-in
   const [planTable, setPlanTable] = useState(null); // id de table à situer sur le plan
   const [busy, setBusy] = useState(false);
-  const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(console.error);
+  const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(e => { if (!onAuthError?.(e)) console.error(e); });
   useEffect(() => { load(); }, [eventId]);
 
   // QR scanné → on isole la réf (EVT-1234) et on ouvre la confirmation d'arrivée
@@ -554,10 +554,10 @@ export function CheckinTab({ eventId, staffToken }) {
       const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label, table_id: confirm.resa.table_id };
       setConfirm(null); await load();
       if (pin) setPinResult(info);
-    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    } catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
     finally { setBusy(false); }
   };
-  const undo = async (r) => { try { await eventOpsService.checkin(r.id, true, staffToken, eventId); load(); } catch { alert("Erreur"); } };
+  const undo = async (r) => { try { await eventOpsService.checkin(r.id, true, staffToken, eventId); load(); } catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); } };
 
   if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
   const t = data.totals || {};
@@ -683,7 +683,7 @@ export function CheckinTab({ eventId, staffToken }) {
             const atMax = cap > 0 && confirm.count >= cap;
             return (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginBottom: 8 }}>
-                <button onClick={() => setConfirm(c => ({ ...c, count: Math.max(0, c.count - 1) }))} style={stepBtn}>−</button>
+                <button onClick={() => setConfirm(c => ({ ...c, count: Math.max(1, c.count - 1) }))} style={stepBtn}>−</button>
                 <span style={{ fontSize: 30, fontWeight: 800, color: atMax ? "#DC2626" : DARK, minWidth: 44, textAlign: "center" }}>{confirm.count}</span>
                 <button onClick={() => setConfirm(c => ({ ...c, count: cap > 0 ? Math.min(cap, c.count + 1) : c.count + 1 }))}
                   disabled={atMax} style={{ ...stepBtn, opacity: atMax ? 0.4 : 1, cursor: atMax ? "default" : "pointer" }}>+</button>

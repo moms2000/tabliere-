@@ -77,11 +77,14 @@ app.use(cors({
 }));
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
-app.use(express.json({
-  limit: "8mb", // 8mb : autorise l'envoi d'images (data URI base64)
-  verify: (req, _res, buf) => { req.rawBody = buf; }, // corps brut → vérif signature webhooks
-}));
-app.use(express.urlencoded({ extended: true }));
+const keepRawBody = (req, _res, buf) => { req.rawBody = buf; }; // corps brut → vérif signature webhooks
+// Corps large (8 Mo) UNIQUEMENT sur l'upload d'images (base64). Doit être monté
+// AVANT le parser global pour prendre le pas sur cette route.
+app.use("/api/v1/upload", express.json({ limit: "8mb", verify: keepRawBody }));
+// Partout ailleurs : 2 Mo (les images sont compressées côté client avant envoi).
+// Réduit la surface DoS/mémoire sur auth/réservations/etc.
+app.use(express.json({ limit: "2mb", verify: keepRawBody }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // ── Logs HTTP ───────────────────────────────────────────────────────────────
 app.use(morgan(env.isProd ? "combined" : "dev", {

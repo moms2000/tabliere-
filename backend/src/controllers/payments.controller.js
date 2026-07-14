@@ -18,7 +18,10 @@ export const initiate = asyncHandler(async (req, res) => {
   if (!reservation_id) throw new AppError("reservation_id requis", 400);
   if (!method)         throw new AppError("Méthode de paiement requise", 400);
 
-  const VALID_METHODS = ["orange_money", "mtn_momo", "wave", "carte", "cash"];
+  // 'cash' RETIRÉ du flux client : il confirmait la réservation sans aucun
+  // paiement réel. L'encaissement espèces sur place se fait via la confirmation
+  // restaurateur, pas via ce endpoint public.
+  const VALID_METHODS = ["orange_money", "mtn_momo", "wave", "carte"];
   if (!VALID_METHODS.includes(method)) {
     throw new AppError(`Méthode invalide. Valeurs: ${VALID_METHODS.join(", ")}`, 400);
   }
@@ -48,19 +51,6 @@ export const initiate = asyncHandler(async (req, res) => {
      RETURNING *`,
     [reservation_id, resa.restaurant_id, req.user.id, method, amount, commission]
   );
-
-  // Si cash → confirmer directement
-  if (method === "cash") {
-    await query(
-      "UPDATE payments SET status = 'succes', updated_at = NOW() WHERE id = $1",
-      [payment.id]
-    );
-    await query(
-      "UPDATE reservations SET status = 'confirme', confirmed_at = NOW() WHERE id = $1",
-      [reservation_id]
-    );
-    return ok(res, { payment: { ...payment, status: "succes" }, amount }, "Paiement cash enregistré");
-  }
 
   // Initier le paiement mobile
   let providerResult;
@@ -108,15 +98,15 @@ export const callback = asyncHandler(async (req, res) => {
     return res.status(401).json({ error: "invalid signature" });
   }
 
-  logger.info(`[Callback] ${method}`, { payload });
-
-  let providerRef, success;
+  let providerRef, success, amount, currency;
   try {
-    ({ providerRef, success } = await paymentService.parseCallback(method, payload));
+    ({ providerRef, success, amount, currency } = await paymentService.parseCallback(method, payload));
   } catch (err) {
     logger.warn(`[Callback] Parse error: ${err.message}`);
     return res.status(200).json({ received: true }); // toujours 200 pour les webhooks
   }
+  // On ne journalise que des champs non sensibles (pas le payload brut : PII/tokens)
+  logger.info(`[Callback] ${method}`, { providerRef, success, amount });
 
   const { rows: [payment] } = await query(
     "SELECT * FROM payments WHERE provider_ref = $1",
@@ -128,11 +118,22 @@ export const callback = asyncHandler(async (req, res) => {
   }
 
   if (success) {
+    // Intégrité du montant : le fournisseur doit confirmer EXACTEMENT le montant
+    // attendu. Sinon (paiement partiel / falsifié) on ne confirme pas.
+    if (amount != null && amount !== payment.amount) {
+      logger.error("[Callback] Montant incohérent — confirmation refusée", { paymentId: payment.id, expected: payment.amount, got: amount, currency });
+      return res.status(200).json({ received: true });
+    }
+    // Idempotence : ne transitionner QUE si le paiement n'est pas déjà 'succes'.
+    // Les effets de bord (confirmation résa, notif) ne tournent qu'une seule fois.
+    let transitioned = false;
     await withTransaction(async (client) => {
-      await client.query(
-        "UPDATE payments SET status = 'succes', updated_at = NOW() WHERE id = $1",
+      const { rowCount } = await client.query(
+        "UPDATE payments SET status = 'succes', updated_at = NOW() WHERE id = $1 AND status <> 'succes'",
         [payment.id]
       );
+      if (rowCount === 0) return; // déjà traité (rejeu webhook) → no-op
+      transitioned = true;
       if (payment.reservation_id) {
         await client.query(
           "UPDATE reservations SET status = 'confirme', confirmed_at = NOW() WHERE id = $1",
@@ -141,7 +142,12 @@ export const callback = asyncHandler(async (req, res) => {
       }
     });
 
-    // Notification client
+    if (!transitioned) {
+      logger.info("[Callback] Paiement déjà confirmé — rejeu ignoré", { paymentId: payment.id });
+      return res.status(200).json({ received: true });
+    }
+
+    // Notification client (une seule fois)
     await notificationQueue.add("payment_success", {
       userId: payment.user_id,
       amount: payment.amount,

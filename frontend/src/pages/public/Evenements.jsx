@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, ArrowLeft, PartyPopper } from "lucide-react";
 import { eventsService } from "../../services/events.service.js";
+import { LoadError } from "../../components/ui";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -12,13 +13,16 @@ export default function Evenements() {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true); setError(false);
     eventsService.listPublic({ limit: 50 })
       .then(r => setEvents(r?.data || []))
-      .catch(console.error)
+      .catch(e => { console.error(e); setError(true); })
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: FONT }}>
@@ -37,6 +41,8 @@ export default function Evenements() {
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "18px 16px 60px" }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>Chargement…</div>
+        ) : error ? (
+          <LoadError onRetry={load} message="Impossible de charger les événements. Vérifiez votre connexion." />
         ) : events.length === 0 ? (
           <div style={{ textAlign: "center", padding: "70px 20px", color: MUTED }}>
             <PartyPopper size={36} color={BORDER} style={{ marginBottom: 12 }} />

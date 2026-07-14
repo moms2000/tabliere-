@@ -1,5 +1,5 @@
 import bcrypt              from "bcryptjs";
-import { query }            from "../config/db.js";
+import { query, withTransaction } from "../config/db.js";
 import { cache }            from "../config/redis.js";
 import { ok, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -111,18 +111,34 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) throw new AppError("Mot de passe incorrect", 401);
 
-  // Anonymisation : on ne supprime pas les réservations passées pour des raisons légales
-  await query(
-    `UPDATE users SET
-       full_name     = 'Compte supprimé',
-       email         = $1,
-       phone         = NULL,
-       password_hash = '',
-       status        = 'suspendu',
-       updated_at    = NOW()
-     WHERE id = $2`,
-    [`deleted_${req.user.id}@tabliereci.ci`, req.user.id]
-  );
+  // Suppression = anonymisation + cascade RÉVERSIBLE atomique (identique à l'admin) :
+  // restaurants masqués, réservations archivées, événements annulés, codes d'accès
+  // libérés. Sans ça, un resto d'un compte supprimé resterait listé/QR actif et son
+  // code d'accès resterait consommé à vie.
+  const uid = req.user.id;
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE restaurants SET status = 'suspendu', deleted_at = NOW(), updated_at = NOW() WHERE owner_id = $1`, [uid]
+    );
+    await client.query(
+      `UPDATE reservations SET archived_at = NOW(), updated_at = NOW()
+       WHERE restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = $1)`, [uid]
+    );
+    await client.query(`UPDATE events SET status = 'annule', updated_at = NOW() WHERE owner_id = $1`, [uid]);
+    await client.query(`UPDATE restaurateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
+    await client.query(`UPDATE organisateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
+    await client.query(
+      `UPDATE users SET
+         full_name     = 'Compte supprimé',
+         email         = 'deleted_' || id || '@tabliereci.ci',
+         phone         = NULL,
+         password_hash = 'DELETED',
+         status        = 'suspendu',
+         updated_at    = NOW()
+       WHERE id = $1`,
+      [uid]
+    );
+  });
 
   // Invalider token JWT en cours
   const token = req.headers.authorization?.split(" ")[1];

@@ -22,6 +22,7 @@ export default function EventOrder() {
   const [guest, setGuest] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitErr, setSubmitErr] = useState("");
   const [done, setDone] = useState(null);
   // Accès responsable : code à 4 chiffres remis à l'entrée (Phase 2)
   const [pin, setPin] = useState("");
@@ -61,7 +62,7 @@ export default function EventOrder() {
 
   const submit = async () => {
     if (!count) return;
-    setSubmitting(true);
+    setSubmitting(true); setSubmitErr("");
     try {
       const order = await eventOpsService.createOrder({
         slug, order_token: verified?.token,
@@ -69,7 +70,7 @@ export default function EventOrder() {
         items: lines.map(l => ({ id: l.id, name: l.name, price: l.price, qty: l.qty })),
       });
       setDone(order.ref); setCart({}); setNote("");
-    } catch (e) { alert(e.response?.data?.message || "Erreur lors de la commande"); }
+    } catch (e) { setSubmitErr(e.response?.data?.message || "Erreur lors de la commande. Réessayez."); }
     finally { setSubmitting(false); }
   };
 
@@ -176,6 +177,10 @@ export default function EventOrder() {
         <motion.div initial={{ y: 60 }} animate={{ y: 0 }}
           style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: `0.5px solid ${BORDER}`,
             padding: "12px 16px calc(env(safe-area-inset-bottom,0px) + 12px)", zIndex: 50 }}>
+          {submitErr && (
+            <div style={{ maxWidth: 640, margin: "0 auto 8px", background: "#FEF2F2", border: "0.5px solid #FECACA",
+              color: "#DC2626", fontSize: 12.5, borderRadius: 8, padding: "8px 12px" }}>{submitErr}</div>
+          )}
           <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: MUTED }}>{count} article{count > 1 ? "s" : ""}</div>

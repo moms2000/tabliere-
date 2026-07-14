@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Camera } from "lucide-react";
+import { Camera, WifiOff, RefreshCw } from "lucide-react";
 import api from "../../services/api.js";
 
 /* ── Design tokens TablièreCI ────────────────────────────────────────────────── */
@@ -13,6 +13,27 @@ const BG   = "#F8F5EF";   // sable
 const BORDER = "#E4DFD8";
 const MUTED  = "#9BA89F";
 const FONT   = "'Avenir Next', 'Avenir', 'Century Gothic', 'Trebuchet MS', -apple-system, sans-serif";
+
+// ── LoadError : état d'erreur de chargement + bouton Réessayer ─────────────────
+export function LoadError({ onRetry, message = "Impossible de charger les données. Vérifiez votre connexion." }) {
+  return (
+    <div style={{ textAlign: "center", padding: "56px 20px", color: MUTED, fontFamily: FONT }}>
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: "#FEF2F2",
+        display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+        <WifiOff size={24} color="#DC2626" />
+      </div>
+      <div style={{ fontWeight: 600, color: DARK, marginBottom: 6, fontSize: 14.5 }}>Échec du chargement</div>
+      <div style={{ fontSize: 13, maxWidth: 320, margin: "0 auto 16px", lineHeight: 1.5 }}>{message}</div>
+      {onRetry && (
+        <button onClick={onRetry} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "none",
+          background: P, color: "#1A1000", borderRadius: 11, padding: "10px 18px", fontSize: 14, fontWeight: 700,
+          cursor: "pointer", fontFamily: FONT }}>
+          <RefreshCw size={15} /> Réessayer
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 export function Card({ children, style = {}, hover = false }) {

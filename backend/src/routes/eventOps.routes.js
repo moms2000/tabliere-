@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { ownerOrStaff } from "../middleware/eventAuth.js";
-import { authLimiter, orderLimiter, pinLimiter } from "../middleware/rateLimiter.js";
+import { orderLimiter, pinLimiter } from "../middleware/rateLimiter.js";
 import * as ops from "../controllers/eventOps.controller.js";
 import { staffLogin } from "../controllers/events.controller.js";
 
 const router = Router();
 
 // Connexion staff (public : slug + PIN → token staff) — rate-limité comme les autres logins
-router.post("/event-staff/login", authLimiter, staffLogin);
+router.post("/event-staff/login", pinLimiter, staffLogin);
 
 // Commandes de bouteilles
 router.post ("/event-orders/verify-pin",  pinLimiter,   ops.verifyOrderPin); // responsable : PIN → jeton (strict anti-brute-force)

@@ -238,12 +238,108 @@ export const getClients = asyncHandler(async (req, res) => {
     [restoId]
   );
 
+  // Fusion des contacts importés (CRM externe). On les ajoute UNIQUEMENT s'ils
+  // ne correspondent pas déjà à un client issu des réservations (dédoublonnage
+  // par téléphone normalisé). Les importés sans visite affichent 0.
+  const seenPhones = new Set(rows.map(r => normPhone(r.phone)).filter(Boolean));
+  let contacts = [];
+  try {
+    ({ rows: contacts } = await query(
+      `SELECT name, phone, phone_norm, email, note FROM restaurant_contacts WHERE restaurant_id = $1`, [restoId]
+    ));
+  } catch { contacts = []; }
+  const imported = [];
+  for (const c of contacts) {
+    const pn = c.phone_norm || normPhone(c.phone);
+    if (pn && seenPhones.has(pn)) continue; // déjà présent via une réservation
+    if (pn) seenPhones.add(pn);
+    imported.push({
+      name: c.name || "Client", phone: c.phone || null, email: c.email || null,
+      visits: 0, total_covers: 0, confirmed: 0, no_shows: 0,
+      first_visit: null, last_visit: null, imported: true, note: c.note || null,
+    });
+  }
+  const all = [...rows.map(r => ({ ...r, imported: false })), ...imported];
+
   const totals = {
-    clients: rows.length,
+    clients: all.length,
     visits: rows.reduce((a, c) => a + c.visits, 0),
     covers: rows.reduce((a, c) => a + c.total_covers, 0),
   };
-  return ok(res, { clients: rows, totals });
+  return ok(res, { clients: all, totals });
+});
+
+// Normalise un téléphone pour le dédoublonnage : chiffres uniquement.
+function normPhone(p) { return p ? String(p).replace(/\D/g, "") : ""; }
+
+// ── POST /reservations/clients/import — importer une base clients (restaurateur) ─
+export const importClients = asyncHandler(async (req, res) => {
+  const isAdmin = req.user.role === "admin";
+  const restoId = isAdmin ? req.body.restaurant_id : req.user.restaurant_id;
+  if (!restoId) throw new AppError("Aucun restaurant associé", 400);
+  // Anti-IDOR : un restaurateur ne peut importer que pour SON restaurant
+  if (!isAdmin) {
+    const { rows } = await query("SELECT 1 FROM restaurants WHERE id = $1 AND owner_id = $2", [restoId, req.user.id]);
+    if (!rows.length) return forbidden(res, "Accès refusé à ce restaurant");
+  }
+  if (req.body.consent !== true) throw new AppError("Consentement requis pour importer des données personnelles", 400);
+
+  const list = Array.isArray(req.body.contacts) ? req.body.contacts.slice(0, 5000) : [];
+  if (!list.length) throw new AppError("Aucun contact à importer", 400);
+
+  // Nettoyage + dédoublonnage interne au fichier (par téléphone normalisé)
+  const seen = new Set();
+  const clean = [];
+  let skipped = 0;
+  for (const c of list) {
+    const name = (c.name ? String(c.name).trim() : "").slice(0, 160) || null;
+    const phone = (c.phone ? String(c.phone).trim() : "").slice(0, 40) || null;
+    const email = (c.email ? String(c.email).trim().toLowerCase() : "").slice(0, 200) || null;
+    const note = (c.note ? String(c.note).trim() : "").slice(0, 500) || null;
+    const pn = normPhone(phone);
+    if (!pn && !email) { skipped++; continue; }          // fiche inexploitable
+    if (pn && seen.has(pn)) { skipped++; continue; }      // doublon dans le fichier
+    if (pn) seen.add(pn);
+    clean.push({ name, phone, pn, email, note });
+  }
+  if (!clean.length) return ok(res, { imported: 0, updated: 0, skipped }, "Aucun contact exploitable");
+
+  // Combien existent déjà (pour distinguer import vs mise à jour)
+  const phones = clean.map(c => c.pn).filter(Boolean);
+  let existing = new Set();
+  if (phones.length) {
+    const { rows } = await query(
+      `SELECT phone_norm FROM restaurant_contacts WHERE restaurant_id = $1 AND phone_norm = ANY($2)`, [restoId, phones]
+    );
+    existing = new Set(rows.map(r => r.phone_norm));
+  }
+
+  // Upsert par lots (ON CONFLICT sur (restaurant_id, phone_norm))
+  let processed = 0;
+  for (let i = 0; i < clean.length; i += 500) {
+    const batch = clean.slice(i, i + 500);
+    const vals = [];
+    const ph = batch.map((c, k) => {
+      const b = k * 6;
+      vals.push(restoId, c.name, c.phone, c.pn || null, c.email, c.note);
+      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6})`;
+    });
+    await query(
+      `INSERT INTO restaurant_contacts (restaurant_id, name, phone, phone_norm, email, note)
+       VALUES ${ph.join(",")}
+       ON CONFLICT (restaurant_id, phone_norm) WHERE phone_norm IS NOT NULL AND phone_norm <> ''
+       DO UPDATE SET name = COALESCE(EXCLUDED.name, restaurant_contacts.name),
+                     email = COALESCE(EXCLUDED.email, restaurant_contacts.email),
+                     note  = COALESCE(EXCLUDED.note, restaurant_contacts.note),
+                     updated_at = NOW()`,
+      vals
+    );
+    processed += batch.length;
+  }
+  const updated = clean.filter(c => c.pn && existing.has(c.pn)).length;
+  const importedN = processed - updated;
+  logger.info("Import clients", { restoId, imported: importedN, updated, skipped });
+  return ok(res, { imported: importedN, updated, skipped }, "Base clients importée");
 });
 
 // ── GET /reservations/:id ─────────────────────────────────────────────────────

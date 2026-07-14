@@ -529,7 +529,7 @@ export default function RestaurantDetail() {
         setResto(r);
         // Menu public : on le charge si le restaurant l'a activé
         if (r?.menu_public && r?.slug) {
-          menuService.getPublicMenu(r.slug)
+          menuService.getPublicMenu(r.slug, preview)
             .then(m => setMenu((m.categories || []).filter(c => (c.items || []).length > 0)))
             .catch(() => {});
         }

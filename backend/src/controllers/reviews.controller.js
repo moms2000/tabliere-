@@ -28,10 +28,11 @@ export const listReviews = asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
 
   const { rows: [resto] } = await query(
-    "SELECT id FROM restaurants WHERE slug = $1 AND deleted_at IS NULL",
+    "SELECT id FROM restaurants WHERE slug = $1 AND deleted_at IS NULL AND COALESCE(is_published, TRUE) = TRUE",
     [req.params.slug]
   );
-  if (!resto) return notFound(res, "Restaurant introuvable");
+  // Resto non publié / introuvable → liste vide (ne pas casser la page d'aperçu)
+  if (!resto) return paginated(res, [], 0, +page, +limit, { avg_rating: 0, total_reviews: 0 });
 
   const { rows } = await query(
     `SELECT rv.id, rv.rating, rv.comment, rv.created_at,
@@ -67,10 +68,10 @@ export const createReview = asyncHandler(async (req, res) => {
     throw new AppError("La note doit être entre 1 et 5", 400);
 
   const { rows: [resto] } = await query(
-    "SELECT id FROM restaurants WHERE slug = $1 AND status = 'actif'",
+    "SELECT id FROM restaurants WHERE slug = $1 AND status = 'actif' AND COALESCE(is_published, TRUE) = TRUE",
     [req.params.slug]
   );
-  if (!resto) return notFound(res, "Restaurant introuvable");
+  if (!resto) return notFound(res, "Restaurant indisponible");
 
   // Éligibilité : réservation passée confirmée/terminée, OU avis déjà existant
   // (pour permettre à l'auteur de modifier son propre avis).

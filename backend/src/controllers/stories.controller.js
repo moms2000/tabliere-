@@ -69,7 +69,7 @@ async function eligibleReservation(userId, restaurantId) {
 
 async function restoBySlug(slug) {
   const { rows } = await query(
-    "SELECT id, owner_id, stories_enabled FROM restaurants WHERE slug = $1", [slug]
+    "SELECT id, owner_id, stories_enabled, is_published FROM restaurants WHERE slug = $1", [slug]
   );
   return rows[0] || null;
 }
@@ -124,9 +124,12 @@ export const listStories = asyncHandler(async (req, res) => {
   await ensureStoriesSchema();
   const resto = await restoBySlug(req.params.slug);
   if (!resto) return notFound(res, "Restaurant introuvable");
+  // Resto « en préparation » (non publié) → aucun instant public
+  if (resto.is_published === false) return ok(res, { stories: [], can_post: false, remaining: 0, enabled: false });
 
   const { rows } = await query(
-    `SELECT s.id, s.photo_url, s.created_at, s.expires_at, s.client_id,
+    `SELECT s.id, s.photo_url, s.created_at, s.expires_at,
+            (s.client_id = $2) AS is_mine,
             u.full_name AS author_name, u.avatar_url AS author_avatar,
             COALESCE(r.cnt, 0)::int AS reactions,
             mine.emoji AS my_reaction
@@ -151,7 +154,7 @@ export const listStories = asyncHandler(async (req, res) => {
   }
 
   return ok(res, {
-    stories: rows.map(s => ({ ...s, is_mine: s.client_id === req.user.id })),
+    stories: rows, // is_mine calculé en SQL — plus d'exposition du client_id
     can_post: !!resa && remaining > 0,
     remaining,
     enabled: resto.stories_enabled !== false,

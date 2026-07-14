@@ -862,7 +862,10 @@ export const exportCSV = asyncHandler(async (req, res) => {
 
   const escape = (v) => {
     if (v == null) return "";
-    const s = String(v instanceof Date ? v.toISOString() : v);
+    let s = String(v instanceof Date ? v.toISOString() : v);
+    // Anti-injection de formule : une cellule commençant par = + - @ (ou tab/CR)
+    // est exécutée par Excel. On la neutralise avec une apostrophe de tête.
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     return s.includes(",") || s.includes('"') || s.includes("\n")
       ? `"${s.replace(/"/g, '""')}"` : s;
   };

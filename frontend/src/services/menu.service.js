@@ -2,8 +2,8 @@ import api from "./api.js";
 
 export const menuService = {
   // Public — QR
-  async getPublicMenu(slug) {
-    const res = await api.get(`/menu/${slug}`);
+  async getPublicMenu(slug, preview) {
+    const res = await api.get(`/menu/${slug}`, { params: preview ? { preview } : {} });
     return res.data.data;
   },
 

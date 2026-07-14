@@ -52,12 +52,13 @@ export const create = asyncHandler(async (req, res) => {
 
   // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status, auto_confirm, seating_duration FROM restaurants WHERE id = $1",
+    "SELECT id, name, capacity, status, auto_confirm, seating_duration, is_published FROM restaurants WHERE id = $1",
     [effectiveRestoId]
   );
   if (!resto) throw new AppError("Restaurant introuvable", 404);
-  if (req.user.role === "client" && resto.status !== "actif")
-    throw new AppError("Restaurant inactif", 404);
+  // Un client ne peut réserver que dans un resto actif ET publié (pas « en préparation »).
+  if (req.user.role === "client" && (resto.status !== "actif" || resto.is_published === false))
+    throw new AppError("Restaurant indisponible", 404);
   if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 
   // Anti-double-booking : la table est libre après la durée d'assise du restaurant.
@@ -609,10 +610,11 @@ export const createGuest = asyncHandler(async (req, res) => {
   }
 
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status, auto_confirm FROM restaurants WHERE id = $1 AND status IN ('actif','en_attente')",
+    `SELECT id, name, capacity, status, auto_confirm FROM restaurants
+     WHERE id = $1 AND status IN ('actif','en_attente') AND COALESCE(is_published, TRUE) = TRUE`,
     [restaurant_id]
   );
-  if (!resto) throw new AppError("Restaurant introuvable ou inactif", 404);
+  if (!resto) throw new AppError("Restaurant introuvable ou indisponible", 404);
   if (party_size > resto.capacity)
     throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 

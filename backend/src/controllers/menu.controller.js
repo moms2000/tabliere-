@@ -8,6 +8,7 @@ import { cache } from "../config/redis.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger }  from "../utils/logger.js";
+import { verifyPreviewToken } from "../utils/previewToken.js";
 
 // Migration automatique : ajouter la colonne options si elle n'existe pas
 let menuMigrated = false;
@@ -28,14 +29,20 @@ async function ensureMenuColumns() {
 
 // ── GET /menu/:slug — Public, après scan QR ───────────────────────────────────
 export const getPublicMenu = asyncHandler(async (req, res) => {
+  // Aperçu privé du propriétaire (resto non publié) : jeton valide → on lève le
+  // filtre de publication et on court-circuite le cache.
+  const previewOk = req.query.preview ? verifyPreviewToken(String(req.query.preview), req.params.slug) : false;
   const cacheKey = `menu:public:${req.params.slug}`;
-  const cached = await cache.get(cacheKey).catch(() => null);
-  if (cached) return ok(res, cached);
+  if (!previewOk) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached) return ok(res, cached);
+  }
 
   const { rows: [resto] } = await query(
     `SELECT id, name, slug, description, cuisine_type, address, quartier,
             opening_hours, phone, theme_color, qr_active
-     FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')`,
+     FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')
+       ${previewOk ? "" : "AND COALESCE(is_published, TRUE) = TRUE"}`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
@@ -64,7 +71,7 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
   );
 
   const data = { restaurant: resto, categories };
-  await cache.set(cacheKey, data, 600).catch(() => {}); // 10 min
+  if (!previewOk) await cache.set(cacheKey, data, 600).catch(() => {}); // 10 min (jamais l'aperçu)
   return ok(res, data);
 });
 

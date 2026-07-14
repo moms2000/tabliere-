@@ -102,7 +102,9 @@ export const getBySlug = asyncHandler(async (req, res) => {
      WHERE event_id = $1 AND is_active = TRUE
      ORDER BY kind DESC, label ASC`, [event.id]
   );
-  return ok(res, { event, tables });
+  // Endpoint public : ne pas exposer l'UUID interne du propriétaire
+  const { owner_id, ...publicEvent } = event;
+  return ok(res, { event: publicEvent, tables });
 });
 
 // ── GET /events/mine — événements de l'organisateur connecté ─────────────────

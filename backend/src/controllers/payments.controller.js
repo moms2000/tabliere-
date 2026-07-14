@@ -169,7 +169,8 @@ export const callback = asyncHandler(async (req, res) => {
 // ── GET /payments/status/:id ──────────────────────────────────────────────────
 export const getStatus = asyncHandler(async (req, res) => {
   const { rows: [payment] } = await query(
-    `SELECT p.*, r.ref AS resa_ref, r.status AS resa_status
+    `SELECT p.id, p.reservation_id, p.type, p.method, p.amount, p.status, p.created_at, p.updated_at,
+            r.ref AS resa_ref, r.status AS resa_status
      FROM payments p
      LEFT JOIN reservations r ON r.id = p.reservation_id
      WHERE p.id = $1 AND p.user_id = $2`,

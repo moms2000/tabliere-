@@ -3,26 +3,13 @@
  * CRUD restaurants + tables + QR
  */
 
-import jwt from "jsonwebtoken";
 import { query, withTransaction } from "../config/db.js";
 import { cache }  from "../config/redis.js";
-import { env }    from "../config/env.js";
 import { ok, created, notFound, forbidden, paginated } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { qrService }  from "../services/qr.service.js";
 import { logger }     from "../utils/logger.js";
-
-// Jeton de PRÉVISUALISATION privée : permet au propriétaire de voir sa page
-// exactement comme le public, même « en préparation » (non publiée). Signé,
-// lié au slug, courte durée. Ne donne accès qu'à la page publique (données déjà
-// destinées au public) — aucune donnée interne.
-function signPreviewToken(slug) {
-  return jwt.sign({ typ: "resto_preview", slug }, env.JWT_SECRET, { expiresIn: "24h" });
-}
-function verifyPreviewToken(token, slug) {
-  try { const d = jwt.verify(token, env.JWT_SECRET); return d.typ === "resto_preview" && d.slug === slug; }
-  catch { return false; }
-}
+import { signPreviewToken, verifyPreviewToken } from "../utils/previewToken.js";
 
 // ── GET /restaurants — liste publique ─────────────────────────────────────────
 export const list = asyncHandler(async (req, res) => {
@@ -502,8 +489,9 @@ export const getAvailability = asyncHandler(async (req, res) => {
   // Aperçu privé du propriétaire : lève le filtre de publication si le jeton est valide
   const previewOk = req.query.preview ? verifyPreviewToken(String(req.query.preview), req.params.slug) : false;
   const { rows: [resto] } = await query(
-    `SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif'
-       ${previewOk ? "" : "AND COALESCE(is_published, TRUE) = TRUE"}`,
+    `SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND ${previewOk
+      ? "status IN ('actif','en_attente')"
+      : "status = 'actif' AND COALESCE(is_published, TRUE) = TRUE"}`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

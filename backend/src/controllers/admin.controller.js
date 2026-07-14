@@ -1273,8 +1273,12 @@ export const seedRun = asyncHandler(async (req, res) => {
 });
 
 export const seedClean = asyncHandler(async (_req, res) => {
-  const summary = await cleanSeed({ onProgress: (m) => logger.info(`[Seed] ${m}`) });
-  return ok(res, summary, "Données de seed supprimées");
+  // Nettoyage en arrière-plan (peut durer selon le volume) — suivi via /admin/seed/stats.
+  // Évite tout timeout HTTP ; la suppression par lots est idempotente/relançable.
+  cleanSeed({ onProgress: (m) => logger.info(`[Seed] ${m}`) })
+    .then(s => logger.info("[Seed] Nettoyage terminé", s))
+    .catch(e => logger.error("[Seed] Nettoyage échoué", { error: e.message }));
+  return ok(res, { started: true }, "Nettoyage démarré en arrière-plan — suivez /admin/seed/stats");
 });
 
 export const seedStatus = asyncHandler(async (_req, res) => {

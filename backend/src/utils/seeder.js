@@ -132,22 +132,59 @@ export async function seedLoad({ restaurants = 1000, clients = 10000, reservatio
   return summary;
 }
 
-/** Supprime TOUTES les données de seed (ordre FK : réservations → restaurants → users). */
+/**
+ * Supprime TOUTES les données de seed (ordre FK : réservations → restaurants → users).
+ * Suppression PAR LOTS : chaque requête reste sous le statement_timeout PostgreSQL
+ * (15 s), sinon un gros DELETE (dizaines de milliers de lignes) est avorté.
+ * Idempotent → relançable sans risque.
+ */
+const CLEAN_BATCH = 2000;
 export async function cleanSeed({ onProgress = () => {} } = {}) {
   const t0 = Date.now();
-  const r1 = await query(
-    `DELETE FROM reservations WHERE restaurant_id IN (SELECT id FROM restaurants WHERE slug LIKE $1)`,
-    [`${MARK_SLUG}%`]
+
+  // Exécute `sql` en boucle tant qu'un lot plein est traité (rowCount === batch).
+  const runBatched = async (sql, params, label) => {
+    let total = 0, n;
+    do {
+      const r = await query(sql, params);
+      n = r.rowCount || 0; total += n;
+      if (n) onProgress(`${label} : ${total}`);
+    } while (n >= CLEAN_BATCH);
+    return total;
+  };
+
+  // 1) Réservations des restos seed
+  const reservations = await runBatched(
+    `DELETE FROM reservations WHERE id IN (
+       SELECT id FROM reservations
+       WHERE restaurant_id IN (SELECT id FROM restaurants WHERE slug LIKE $1)
+       LIMIT ${CLEAN_BATCH})`,
+    [`${MARK_SLUG}%`], "Réservations supprimées"
   );
-  onProgress(`Réservations supprimées : ${r1.rowCount}`);
-  // Détacher restaurant_id des gérants (FK users.restaurant_id) avant de supprimer les restos
-  await query(`UPDATE users SET restaurant_id = NULL WHERE email LIKE $1`, [`%${MARK_EMAIL}`]);
-  const r2 = await query(`DELETE FROM restaurants WHERE slug LIKE $1`, [`${MARK_SLUG}%`]); // tables en CASCADE
-  onProgress(`Restaurants supprimés : ${r2.rowCount}`);
-  const r3 = await query(`DELETE FROM users WHERE email LIKE $1`, [`%${MARK_EMAIL}`]);
-  onProgress(`Utilisateurs supprimés : ${r3.rowCount}`);
+
+  // 2) Détacher restaurant_id des gérants (FK users.restaurant_id) avant suppression des restos
+  await runBatched(
+    `UPDATE users SET restaurant_id = NULL WHERE id IN (
+       SELECT id FROM users WHERE email LIKE $1 AND restaurant_id IS NOT NULL LIMIT ${CLEAN_BATCH})`,
+    [`%${MARK_EMAIL}`], "Gérants détachés"
+  );
+
+  // 3) Restaurants seed (tables en CASCADE)
+  const restaurants = await runBatched(
+    `DELETE FROM restaurants WHERE id IN (
+       SELECT id FROM restaurants WHERE slug LIKE $1 LIMIT ${CLEAN_BATCH})`,
+    [`${MARK_SLUG}%`], "Restaurants supprimés"
+  );
+
+  // 4) Comptes seed
+  const users = await runBatched(
+    `DELETE FROM users WHERE id IN (
+       SELECT id FROM users WHERE email LIKE $1 LIMIT ${CLEAN_BATCH})`,
+    [`%${MARK_EMAIL}`], "Utilisateurs supprimés"
+  );
+
   const secs = Math.round((Date.now() - t0) / 1000);
-  const summary = { reservations: r1.rowCount, restaurants: r2.rowCount, users: r3.rowCount, seconds: secs };
+  const summary = { reservations, restaurants, users, seconds: secs };
   logger.info("[Seed] Nettoyage terminé", summary);
   return summary;
 }

@@ -6,14 +6,14 @@ export const restaurantsService = {
     return res.data;
   },
 
-  async getBySlug(slug) {
-    const res = await api.get(`/restaurants/${slug}`);
+  async getBySlug(slug, preview) {
+    const res = await api.get(`/restaurants/${slug}`, { params: preview ? { preview } : {} });
     return res.data.data;
   },
 
-  async getAvailability(slug, date, partySize, at) {
+  async getAvailability(slug, date, partySize, at, preview) {
     const res = await api.get(`/restaurants/${slug}/availability`, {
-      params: { date, party_size: partySize, ...(at ? { at } : {}) },
+      params: { date, party_size: partySize, ...(at ? { at } : {}), ...(preview ? { preview } : {}) },
     });
     return res.data.data;
   },

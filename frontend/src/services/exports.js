@@ -93,3 +93,27 @@ export async function exportXLSX({ sheetName = "Données", title, subtitle, colu
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
 }
+
+/**
+ * Génère un fichier CSV (compatible Excel / import CRM) et le télécharge.
+ * BOM UTF-8 en tête → les accents s'affichent correctement dans Excel.
+ * @param {{columns:string[], rows:(string|number)[][], filename:string, delimiter?:string}} o
+ */
+export function exportCSV({ columns, rows, filename, delimiter = "," }) {
+  const esc = (v) => {
+    const s = v == null ? "" : String(v);
+    // Échappe si le champ contient le séparateur, un guillemet ou un saut de ligne
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [columns, ...rows].map(r => r.map(esc).join(delimiter));
+  const csv = "﻿" + lines.join("\r\n"); // BOM + CRLF (Excel)
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

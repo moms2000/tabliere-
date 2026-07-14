@@ -82,6 +82,17 @@ export default function RestClients() {
     } catch (e) { alert("Export Excel impossible"); console.error(e); }
     finally { setBusy(null); }
   };
+  const exportCsv = async () => {
+    setBusy("csv");
+    try {
+      const { exportCSV } = await import("../../services/exports.js");
+      exportCSV({
+        columns: COLS, rows: toRows(filtered),
+        filename: `clients-${(user?.resto_slug || "resto")}`,
+      });
+    } catch (e) { alert("Export CSV impossible"); console.error(e); }
+    finally { setBusy(null); }
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
@@ -90,6 +101,7 @@ export default function RestClients() {
         <div style={{ display: "flex", gap: 8 }}>
           <Btn icon={FileText} onClick={exportPdf} disabled={busy || !clients.length}>{busy === "pdf" ? "…" : "PDF"}</Btn>
           <Btn icon={Sheet} onClick={exportXls} disabled={busy || !clients.length}>{busy === "xls" ? "…" : "Excel"}</Btn>
+          <Btn icon={Download} onClick={exportCsv} disabled={busy || !clients.length}>{busy === "csv" ? "…" : "CSV"}</Btn>
         </div>
       </motion.div>
 

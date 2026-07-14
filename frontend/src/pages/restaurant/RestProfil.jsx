@@ -34,6 +34,7 @@ export default function RestProfil() {
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState("");
   const [pubBusy, setPubBusy] = useState(false);
+  const [previewToken, setPreviewToken] = useState("");
 
   // Publication immédiate : bascule visible / en préparation et enregistre aussitôt
   const togglePublish = async () => {
@@ -53,6 +54,7 @@ export default function RestProfil() {
       .then(d => {
         const r = d.restaurant || {};
         setResto(r);
+        setPreviewToken(d.preview_token || "");
         setForm({
           name:          r.name          || "",
           description:   r.description   || "",
@@ -200,6 +202,14 @@ export default function RestProfil() {
                 ? "Votre restaurant apparaît dans la liste publique et est réservable."
                 : "Votre restaurant est masqué de la liste publique. Finissez votre configuration, puis mettez-le en ligne."}
             </div>
+            {resto?.slug && previewToken && (
+              <button type="button"
+                onClick={() => window.open(`https://tabliereci.net/restaurants/${resto.slug}?preview=${encodeURIComponent(previewToken)}`, "_blank")}
+                style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5, border: "none",
+                  background: "transparent", color: P, cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 700, padding: 0 }}>
+                <Link2 size={13} /> Prévisualiser ma page (lien privé)
+              </button>
+            )}
           </div>
           <button type="button" onClick={togglePublish} disabled={pubBusy}
             style={{ position: "relative", width: 46, height: 26, borderRadius: 13, border: "none",

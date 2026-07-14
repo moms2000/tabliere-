@@ -3,12 +3,26 @@
  * CRUD restaurants + tables + QR
  */
 
+import jwt from "jsonwebtoken";
 import { query, withTransaction } from "../config/db.js";
 import { cache }  from "../config/redis.js";
+import { env }    from "../config/env.js";
 import { ok, created, notFound, forbidden, paginated } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { qrService }  from "../services/qr.service.js";
 import { logger }     from "../utils/logger.js";
+
+// Jeton de PRÉVISUALISATION privée : permet au propriétaire de voir sa page
+// exactement comme le public, même « en préparation » (non publiée). Signé,
+// lié au slug, courte durée. Ne donne accès qu'à la page publique (données déjà
+// destinées au public) — aucune donnée interne.
+function signPreviewToken(slug) {
+  return jwt.sign({ typ: "resto_preview", slug }, env.JWT_SECRET, { expiresIn: "24h" });
+}
+function verifyPreviewToken(token, slug) {
+  try { const d = jwt.verify(token, env.JWT_SECRET); return d.typ === "resto_preview" && d.slug === slug; }
+  catch { return false; }
+}
 
 // ── GET /restaurants — liste publique ─────────────────────────────────────────
 export const list = asyncHandler(async (req, res) => {
@@ -89,9 +103,14 @@ export const list = asyncHandler(async (req, res) => {
 
 // ── GET /restaurants/:slug — détail public ───────────────────────────────────
 export const getOne = asyncHandler(async (req, res) => {
+  // Aperçu privé du propriétaire : jeton valide → on lève le filtre de
+  // publication ET on court-circuite le cache (jamais mettre l'aperçu en cache).
+  const previewOk = req.query.preview ? verifyPreviewToken(String(req.query.preview), req.params.slug) : false;
   const cacheKey = `restaurant:${req.params.slug}`;
-  const cached = await cache.get(cacheKey).catch(() => null);
-  if (cached) return ok(res, { restaurant: cached });
+  if (!previewOk) {
+    const cached = await cache.get(cacheKey).catch(() => null);
+    if (cached) return ok(res, { restaurant: cached });
+  }
 
   // Endpoint PUBLIC : liste blanche stricte de colonnes non sensibles.
   // On NE joint PAS l'email du propriétaire (u.email) — le laisser fuiter ici
@@ -113,7 +132,7 @@ export const getOne = asyncHandler(async (req, res) => {
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
      WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')
-       AND COALESCE(r.is_published, TRUE) = TRUE`,
+       ${previewOk ? "" : "AND COALESCE(r.is_published, TRUE) = TRUE"}`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
@@ -125,8 +144,8 @@ export const getOne = asyncHandler(async (req, res) => {
   );
   resto.tables = tables;
 
-  await cache.set(cacheKey, resto, 600).catch(() => {}); // 10 min
-  return ok(res, { restaurant: resto });
+  if (!previewOk) await cache.set(cacheKey, resto, 600).catch(() => {}); // 10 min (jamais l'aperçu)
+  return ok(res, { restaurant: resto, preview: previewOk || undefined });
 });
 
 // ── GET /restaurants/:id/manage — restaurateur ────────────────────────────────
@@ -144,7 +163,9 @@ export const getManage = asyncHandler(async (req, res) => {
     "SELECT * FROM restaurant_tables WHERE restaurant_id = $1 ORDER BY label",
     [resto.id]
   );
-  return ok(res, { restaurant: { ...resto, tables } });
+  // Jeton d'aperçu privé pour prévisualiser la page même « en préparation »
+  const preview_token = signPreviewToken(resto.slug);
+  return ok(res, { restaurant: { ...resto, tables }, preview_token });
 });
 
 // ── PATCH /restaurants/:id ─────────────────────────────────────────────────────
@@ -478,8 +499,11 @@ export const getAvailability = asyncHandler(async (req, res) => {
   // Parse robuste : un party_size non numérique casserait la comparaison INTEGER (500)
   const party_size = Math.max(1, parseInt(req.query.party_size, 10) || 2);
 
+  // Aperçu privé du propriétaire : lève le filtre de publication si le jeton est valide
+  const previewOk = req.query.preview ? verifyPreviewToken(String(req.query.preview), req.params.slug) : false;
   const { rows: [resto] } = await query(
-    "SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif' AND COALESCE(is_published, TRUE) = TRUE",
+    `SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif'
+       ${previewOk ? "" : "AND COALESCE(is_published, TRUE) = TRUE"}`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

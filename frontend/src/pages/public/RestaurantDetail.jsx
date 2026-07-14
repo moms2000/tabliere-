@@ -456,6 +456,7 @@ export default function RestaurantDetail() {
   // Contexte de réservation transmis depuis la recherche d'accueil (pré-remplissage)
   const prefillDate   = searchParams.get("date")   || undefined;
   const prefillGuests = searchParams.get("guests") || undefined;
+  const preview       = searchParams.get("preview") || undefined; // aperçu privé propriétaire
 
   const [resto,   setResto]   = useState(null);
   const [menu,    setMenu]    = useState(null); // catégories du menu si menu_public
@@ -522,7 +523,7 @@ export default function RestaurantDetail() {
   }, []);
 
   useEffect(() => {
-    restaurantsService.getBySlug(slug)
+    restaurantsService.getBySlug(slug, preview)
       .then(d => {
         const r = d.restaurant || d;
         setResto(r);
@@ -610,7 +611,7 @@ export default function RestaurantDetail() {
         const dateOnly    = selDate;
         // Récupérer une table libre à CET horaire (tient compte de la durée d'assise :
         // une table occupée se libère après la durée → pas de double réservation).
-        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers, reserved_at).catch(() => null);
+        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers, reserved_at, preview).catch(() => null);
         const table = avail?.available_tables?.[0] || null;
 
         const payload     = {
@@ -665,6 +666,14 @@ export default function RestaurantDetail() {
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: FONT }}>
+
+      {/* Bandeau aperçu privé (propriétaire) */}
+      {preview && (
+        <div style={{ background: "#1E2E28", color: "#FEF6EC", fontSize: 12.5, fontWeight: 600,
+          textAlign: "center", padding: "8px 14px" }}>
+          Aperçu privé — cette page n'est pas encore visible publiquement. Publiez-la depuis votre profil pour la mettre en ligne.
+        </div>
+      )}
 
       {/* Nav */}
       <nav style={{ background: "white", borderBottom: `0.5px solid ${BORDER}`,

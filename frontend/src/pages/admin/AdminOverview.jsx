@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Utensils, Users, CalendarCheck, TrendingUp, Star, Activity } from "lucide-react";
-import { StatCard, Card, SectionHeader, Badge, PageTitle } from "../../components/ui";
+import { StatCard, Card, SectionHeader, Badge, PageTitle, LoadError } from "../../components/ui";
 import { adminService } from "../../services/admin.service.js";
 
 const P      = "#E8A045";
@@ -29,18 +29,22 @@ const PLAN_COLORS = {
 export default function AdminOverview() {
   const [stats,   setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true); setError(false);
     adminService.getStats()
       .then(setStats)
-      .catch(console.error)
+      .catch(e => { console.error(e); setError(true); })
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
 
   if (loading) return (
     <div style={{ textAlign: "center", padding: "60px 0", color: MUTED,
       fontSize: 13, fontFamily: FONT }}>Chargement…</div>
   );
+  if (error) return <LoadError onRetry={load} />;
 
   const g      = stats?.global || {};
   const recent = stats?.recentActivity || [];

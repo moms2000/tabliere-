@@ -18,7 +18,14 @@ const WEBHOOK_SECRETS = {
 };
 function verifyCallback(method, req) {
   const secret = WEBHOOK_SECRETS[method]?.();
-  if (!secret) { logger.warn("[Webhook] Secret non configuré — signature non vérifiée", { method }); return true; }
+  if (!secret) {
+    // Fail-closed en production : sans secret, on ne peut pas prouver que le
+    // webhook vient bien du fournisseur → on refuse (sinon n'importe qui peut
+    // forger un « paiement réussi »). En dev/sandbox on laisse passer.
+    if (env.isProd) { logger.error("[Webhook] Secret manquant en prod — webhook REJETÉ", { method }); return false; }
+    logger.warn("[Webhook] Secret non configuré (dev) — signature non vérifiée", { method });
+    return true;
+  }
   const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}));
   const provided = String(
     req.headers["wave-signature"] || req.headers["x-signature"] || req.headers["x-webhook-signature"] || ""
@@ -61,7 +68,7 @@ async function initiateOrangeMoney({ phone, amount, reference, description }) {
       status:       "pending",
     };
   } catch (err) {
-    logger.error("[Orange Money] Erreur API", { error: err.response?.data || err.message });
+    logger.error("[Orange Money] Erreur API", { error: err.message });
     throw new Error("Orange Money indisponible");
   }
 }
@@ -98,7 +105,7 @@ async function initiateMtnMomo({ phone, amount, reference, description }) {
     );
     return { reference: `MTN-${reference}`, checkout_url: null, status: "pending" };
   } catch (err) {
-    logger.error("[MTN MoMo] Erreur API", { error: err.response?.data || err.message });
+    logger.error("[MTN MoMo] Erreur API", { error: err.message });
     throw new Error("MTN MoMo indisponible");
   }
 }
@@ -129,33 +136,41 @@ async function initiateWave({ phone, amount, reference, description }) {
       status:       "pending",
     };
   } catch (err) {
-    logger.error("[Wave] Erreur API", { error: err.response?.data || err.message });
+    logger.error("[Wave] Erreur API", { error: err.message });
     throw new Error("Wave indisponible");
   }
 }
 
 // ── Parse webhook callback ────────────────────────────────────────────────────
 function parseCallback(method, payload) {
-  let providerRef, success;
+  let providerRef, success, amount, currency;
 
   switch (method) {
     case "orange_money":
       providerRef = payload.pay_token || payload.txnid;
       success     = payload.status === "SUCCESS" || payload.status === "60000";
+      amount      = payload.amount;
+      currency    = payload.currency;
       break;
     case "mtn_momo":
       providerRef = `MTN-${payload.externalId}`;
       success     = payload.status === "SUCCESSFUL";
+      amount      = payload.amount;
+      currency    = payload.currency;
       break;
     case "wave":
       providerRef = payload.id;
       success     = payload.payment_status === "succeeded";
+      amount      = payload.amount;
+      currency    = payload.currency;
       break;
     default:
       throw new Error(`Méthode callback inconnue: ${method}`);
   }
 
-  return { providerRef, success };
+  // Montant fournisseur normalisé (entier XOF) quand présent
+  const amountNum = amount != null && amount !== "" ? Math.round(Number(amount)) : null;
+  return { providerRef, success, amount: Number.isFinite(amountNum) ? amountNum : null, currency: currency || null };
 }
 
 // ── Point d'entrée unifié ─────────────────────────────────────────────────────

@@ -13,7 +13,9 @@ import { env } from "../config/env.js";
 // ── Helper email SendGrid (direct, ne bloque jamais l'inscription) ────────────
 async function sendVerificationEmail(email, fullName, token) {
   if (!env.SENDGRID_API_KEY) {
-    logger.info(`[Email MOCK] Vérification → ${email} | token=${token}`);
+    // Ne jamais journaliser un token en clair en production (fuite de compte).
+    if (!env.isProd) logger.info(`[Email MOCK] Vérification → ${email} | token=${token}`);
+    else logger.error("[Email] SENDGRID_API_KEY manquant en prod — email de vérification NON envoyé", { email });
     return;
   }
   const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
@@ -68,7 +70,8 @@ async function sendVerificationEmail(email, fullName, token) {
 // ── Helper email SendGrid — réinitialisation de mot de passe ──────────────────
 async function sendResetEmail(email, fullName, token) {
   if (!env.SENDGRID_API_KEY) {
-    logger.info(`[Email MOCK] Reset MDP → ${email} | token=${token}`);
+    if (!env.isProd) logger.info(`[Email MOCK] Reset MDP → ${email} | token=${token}`);
+    else logger.error("[Email] SENDGRID_API_KEY manquant en prod — email de reset NON envoyé", { email });
     return;
   }
   const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
@@ -264,10 +267,13 @@ export const login = asyncHandler(async (req, res) => {
   );
   const user = rows[0];
   if (!user) return unauth(res, "Email ou mot de passe incorrect");
-  if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
 
-  const valid = await bcrypt.compare(password, user.password_hash);
+  // On vérifie le mot de passe AVANT de révéler quoi que ce soit sur le compte.
+  // Sinon un message « Compte suspendu » servi avant la vérif du mot de passe
+  // permet d'énumérer les emails existants.
+  const valid = await bcrypt.compare(password, user.password_hash || "");
   if (!valid) return unauth(res, "Email ou mot de passe incorrect");
+  if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
 
   await query("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user.id]).catch(() => {});
   await cache.del(`user:${user.id}`).catch(() => {});
@@ -457,7 +463,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 export const resetPassword = asyncHandler(async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) throw new AppError("Token et nouveau mot de passe requis", 400);
-  if (password.length < 6) throw new AppError("Le mot de passe doit contenir au moins 6 caractères", 400);
+  if (password.length < 8) throw new AppError("Le mot de passe doit contenir au moins 8 caractères", 400);
 
   const { rows: [user] } = await query(
     `SELECT id FROM users
@@ -469,7 +475,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   if (!user) throw new AppError("Lien invalide ou expiré. Veuillez refaire une demande.", 400);
 
-  const password_hash = await bcrypt.hash(password, 10);
+  const password_hash = await bcrypt.hash(password, 12);
   await query(
     `UPDATE users
      SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = NOW()

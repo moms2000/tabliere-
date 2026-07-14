@@ -4,7 +4,7 @@ import {
   CalendarCheck, Users, Star, TrendingUp, QrCode, CheckCircle,
   ExternalLink, Calendar, XCircle, Clock, Percent, ShoppingBag, AlertTriangle,
 } from "lucide-react";
-import { StatCard, Card, SectionHeader, Badge, PageTitle } from "../../components/ui";
+import { StatCard, Card, SectionHeader, Badge, PageTitle, LoadError } from "../../components/ui";
 import { ordersService } from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
@@ -46,13 +46,15 @@ export default function RestDashboard() {
   const [resas,    setResas]    = useState([]);
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(false);
   const [dateMode,      setDateMode]      = useState("Mois");
   const [customDate,    setCustomDate]    = useState("");
   const [showDatePick,  setShowDatePick]  = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     if (!user) return;
     if (!user.resto_id) { setLoading(false); return; }
+    setLoading(true); setError(false);
     Promise.all([
       restaurantsService.getManage(user.resto_id),
       reservationsService.list({ limit: 100 }),
@@ -63,11 +65,14 @@ export default function RestDashboard() {
         setResas(resaData.data || []);
         setOrders(ordersData.data || []);
       })
-      .catch(console.error)
+      .catch(e => { console.error(e); setError(true); })
       .finally(() => setLoading(false));
-  }, [user?.resto_id, user]);
+  };
+  useEffect(() => { load(); }, [user?.resto_id, user]);
 
   if (loading) return <DashboardSkeleton />;
+
+  if (error) return <LoadError onRetry={load} />;
 
   if (!resto) return (
     <div style={{ textAlign: "center", padding: "60px 0", color: MUTED,

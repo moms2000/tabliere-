@@ -14,6 +14,8 @@ export default function StaffConsole() {
   const [tab, setTab] = useState("checkin");
 
   const logout = () => { localStorage.removeItem(KEY); setSession(null); };
+  // Session staff expirée/révoquée (401/403) → on déconnecte et on revient au PIN.
+  const onExpire = (e) => { if ([401, 403].includes(e?.response?.status)) { logout(); return true; } return false; };
   const firstTab = (r) => r === "bar" ? "orders" : r === "serveur" ? "service" : "checkin";
   if (!session) return <Login onOk={(s) => { localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
 
@@ -54,9 +56,9 @@ export default function StaffConsole() {
       )}
 
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "16px 14px 50px" }}>
-        {active === "service" && <ServerBoard eventId={session.event.id} token={session.token} />}
-        {active === "checkin" && <CheckinTab eventId={session.event.id} staffToken={session.token} />}
-        {active === "orders"  && <OrdersBoard eventId={session.event.id} token={session.token} />}
+        {active === "service" && <ServerBoard eventId={session.event.id} token={session.token} onExpire={onExpire} />}
+        {active === "checkin" && <CheckinTab eventId={session.event.id} staffToken={session.token} onAuthError={onExpire} />}
+        {active === "orders"  && <OrdersBoard eventId={session.event.id} token={session.token} onExpire={onExpire} />}
       </div>
     </div>
   );
@@ -102,12 +104,12 @@ function Login({ onOk }) {
   );
 }
 
-function OrdersBoard({ eventId, token }) {
+function OrdersBoard({ eventId, token, onExpire }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const load = () => eventOpsService.listOrders(eventId, token).then(d => setOrders(d?.orders || [])).catch(console.error).finally(() => setLoading(false));
+  const load = () => eventOpsService.listOrders(eventId, token).then(d => setOrders(d?.orders || [])).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
   useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [eventId]);
-  const setStatus = async (o, status) => { try { await eventOpsService.setOrderStatus(o.id, status, token, eventId); load(); } catch { alert("Erreur"); } };
+  const setStatus = async (o, status) => { try { await eventOpsService.setOrderStatus(o.id, status, token, eventId); load(); } catch (e) { if (!onExpire?.(e)) alert(e.response?.data?.message || "Erreur"); } };
 
   const ST = { en_attente: ["En attente", "#C47D1A", "#FEF6EC"], servi: ["Servi", GREEN, "#F0F6F2"], paye: ["Payé", "#2563EB", "#EFF6FF"], annule: ["Annulé", "#DC2626", "#FEF2F2"] };
   if (loading) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
@@ -156,12 +158,12 @@ function OrdersBoard({ eventId, token }) {
 }
 
 // ── Interface serveur : mes tables + commande directe (Phase 3) ───────────────
-function ServerBoard({ eventId, token }) {
+function ServerBoard({ eventId, token, onExpire }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState(null); // table sur laquelle on commande
   const load = () => eventOpsService.listServerTables(eventId, token)
-    .then(setData).catch(console.error).finally(() => setLoading(false));
+    .then(setData).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
   useEffect(() => { load(); const id = setInterval(load, 25000); return () => clearInterval(id); }, [eventId]);
 
   const ST = { en_attente: ["En attente", "#C47D1A", "#FEF6EC"], servi: ["Servi", GREEN, "#F0F6F2"], paye: ["Payé", "#2563EB", "#EFF6FF"], annule: ["Annulé", "#DC2626", "#FEF2F2"] };

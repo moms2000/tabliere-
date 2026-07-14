@@ -52,6 +52,17 @@ function assertStaffRole(req, allowed) {
   throw new AppError("Action non autorisée pour ce rôle staff", 403);
 }
 
+// Certaines opérations (check-in, changement de statut de commande) ne doivent
+// pas être possibles sur un événement annulé ou terminé.
+async function assertEventActive(eventId) {
+  const { rows: [e] } = await query("SELECT status FROM events WHERE id = $1", [eventId]);
+  if (!e) throw new AppError("Événement introuvable", 404);
+  if (e.status !== "publie") throw new AppError("Événement inactif (annulé ou terminé).", 409);
+}
+
+// Garde-fou absolu contre une saisie aberrante d'arrivées (ex. « 500 » par erreur)
+const ABS_MAX_ARRIVED = 500;
+
 // ── POST /event-orders — commande d'un invité (public, scan QR) ────────────────
 export const createOrder = asyncHandler(async (req, res) => {
   const b = req.body || {};
@@ -74,6 +85,17 @@ export const createOrder = asyncHandler(async (req, res) => {
     const d = verifyOrderToken(b.order_token);
     if (!d || d.event_id !== event.id) throw new AppError("Session responsable expirée. Ressaisissez le code.", 401);
     tableId = d.table_id || null; tableLabel = d.table_label || null; guestName = guestName || d.guest_name || null;
+    // Anti-jeton périmé : la table doit TOUJOURS être occupée par une réservation
+    // confirmée et pointée à l'entrée. Sinon (résa annulée, table libérée, table
+    // désactivée), le jeton — valide 10 h — ne doit plus permettre de commander.
+    if (tableId) {
+      const { rows: live } = await query(
+        `SELECT 1 FROM event_reservations
+         WHERE event_id = $1 AND table_id = $2 AND status = 'confirme' AND checked_in_at IS NOT NULL LIMIT 1`,
+        [event.id, tableId]
+      );
+      if (!live.length) throw new AppError("Session responsable expirée (salon parti ou réservation annulée). Ressaisissez le code.", 401);
+    }
   }
 
   const { rows: [order] } = await query(
@@ -204,6 +226,7 @@ export const createServerOrder = asyncHandler(async (req, res) => {
 // ── PATCH /event-orders/:id/status ────────────────────────────────────────────
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["bar"]);
+  await assertEventActive(req.eventScope);
   const status = req.body?.status;
   if (!ORDER_STATUSES.includes(status)) throw new AppError("Statut invalide", 400);
   const { rows: [order] } = await query(
@@ -244,6 +267,9 @@ export const listCheckin = asyncHandler(async (req, res) => {
   const { rows: [ev] } = await query("SELECT capacity FROM events WHERE id = $1", [req.eventScope]);
   const arrivedCovers = arrivedRows.reduce((a, c) => a + arrivedPax(c), 0);
   const capacity = ev?.capacity ?? null;
+  // Anti-fuite PII : le téléphone client n'est exposé qu'à l'organisateur
+  // (req.staff absent), jamais à un staff temporaire connecté par PIN.
+  if (req.staff) rows.forEach(r => { delete r.client_phone; });
   return ok(res, {
     reservations: rows,
     tables,
@@ -266,10 +292,11 @@ async function syncTableStatus(resaId, occupied) {
     [occupied ? "occupe" : "reserve", resaId]
   ).catch(() => {});
 }
-// Nombre de personnes arrivées (saisi au check-in), borné ; défaut = party_size
+// Nombre de personnes arrivées (saisi au check-in). Doit être >= 1 (pointer 0
+// personne n'a pas de sens) et borné par un plafond absolu anti-typo.
 const arrivedFromBody = (body, fallback) => {
   const n = parseInt(body?.arrived_size, 10);
-  return Number.isFinite(n) && n >= 0 ? n : (fallback ?? null);
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, ABS_MAX_ARRIVED) : (fallback ?? null);
 };
 
 // Capacité du salon/table d'une réservation (null = pas de table / pas de limite)
@@ -284,14 +311,20 @@ async function tableCapacityForResa(resaId) {
 async function assertArrivedFits(resaId, arrived) {
   if (arrived == null) return;
   const cap = await tableCapacityForResa(resaId);
-  if (cap && arrived > cap) {
-    throw new AppError(`Ce salon accueille au maximum ${cap} personnes (vous avez saisi ${arrived}).`, 400);
+  const limit = cap || ABS_MAX_ARRIVED; // sans table → plafond absolu
+  if (arrived > limit) {
+    throw new AppError(
+      cap ? `Ce salon accueille au maximum ${cap} personnes (vous avez saisi ${arrived}).`
+          : `Nombre d'arrivées invalide (max ${ABS_MAX_ARRIVED}).`,
+      400
+    );
   }
 }
 
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────
 export const doCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
+  await assertEventActive(req.eventScope);
   const undo = req.body?.undo === true;
   const arrived = undo ? null : arrivedFromBody(req.body);
   if (!undo) await assertArrivedFits(req.params.resaId, arrived);
@@ -314,6 +347,7 @@ export const doCheckin = asyncHandler(async (req, res) => {
 // ── POST /event-checkin/by-ref — pointer via QR (ref scannée) ─────────────────
 export const checkinByRef = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
+  await assertEventActive(req.eventScope);
   const ref = String(req.body?.ref || "").trim().toUpperCase();
   if (!ref) throw new AppError("Référence requise", 400);
   const arrived = arrivedFromBody(req.body);

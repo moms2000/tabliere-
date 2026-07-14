@@ -1,5 +1,6 @@
 import bcrypt              from "bcryptjs";
 import { query, withTransaction } from "../config/db.js";
+import { purgeOwnerRestaurants } from "../utils/purgeOwnerRestaurants.js";
 import { cache }            from "../config/redis.js";
 import { ok, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -117,13 +118,8 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   // code d'accès resterait consommé à vie.
   const uid = req.user.id;
   await withTransaction(async (client) => {
-    await client.query(
-      `UPDATE restaurants SET status = 'suspendu', deleted_at = NOW(), updated_at = NOW() WHERE owner_id = $1`, [uid]
-    );
-    await client.query(
-      `UPDATE reservations SET archived_at = NOW(), updated_at = NOW()
-       WHERE restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = $1)`, [uid]
-    );
+    // Restaurants : suppression définitive si vides, sinon masquage + libération du slug
+    await purgeOwnerRestaurants(client, uid);
     await client.query(`UPDATE events SET status = 'annule', updated_at = NOW() WHERE owner_id = $1`, [uid]);
     await client.query(`UPDATE restaurateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);
     await client.query(`UPDATE organisateur_codes SET is_used = FALSE, used_by = NULL, used_at = NULL WHERE used_by = $1`, [uid]);

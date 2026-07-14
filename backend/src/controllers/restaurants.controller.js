@@ -21,7 +21,9 @@ export const list = asyncHandler(async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
   const offset = (page - 1) * limit;
   const params = ["actif"];
-  const conditions = ["r.status = $1"];
+  // Actif (validé) ET publié par le restaurateur (pas en préparation).
+  // COALESCE → les restos sans la colonne renseignée restent visibles.
+  const conditions = ["r.status = $1", "COALESCE(r.is_published, TRUE) = TRUE"];
 
   // Correspondances partielles (ILIKE %..%) pour tolérer "ivoi" → "Ivoirien", etc.
   if (ville)         { params.push(`%${ville}%`);        conditions.push(`r.ville ILIKE $${params.length}`); }
@@ -171,6 +173,8 @@ export const update = asyncHandler(async (req, res) => {
     "menu_public",
     // Instants (stories éphémères) activés sur la page publique
     "stories_enabled",
+    // Publication de la page (restaurateur) : visible publiquement ou en préparation
+    "is_published",
   ];
   const updates = [];
   const values  = [];
@@ -215,7 +219,7 @@ export const update = asyncHandler(async (req, res) => {
     }
     // Booléens stricts
     if (field === "qr_active" || field === "auto_confirm" || field === "deposit_enabled"
-        || field === "menu_public" || field === "stories_enabled") {
+        || field === "menu_public" || field === "stories_enabled" || field === "is_published") {
       val = (val === true || val === "true" || val === 1);
     }
     // Contrôle plateforme : le menu QR est une fonctionnalité payante.

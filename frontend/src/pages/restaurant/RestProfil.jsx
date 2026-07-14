@@ -33,6 +33,19 @@ export default function RestProfil() {
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState("");
+  const [pubBusy, setPubBusy] = useState(false);
+
+  // Publication immédiate : bascule visible / en préparation et enregistre aussitôt
+  const togglePublish = async () => {
+    const next = !form.is_published;
+    setPubBusy(true); setError("");
+    try {
+      await restaurantsService.update(user.resto_id, { is_published: next });
+      setForm(p => ({ ...p, is_published: next }));
+    } catch (e) {
+      setError("Impossible de changer la visibilité. Réessayez.");
+    } finally { setPubBusy(false); }
+  };
 
   useEffect(() => {
     if (!user?.resto_id) { setLoading(false); return; }
@@ -69,6 +82,7 @@ export default function RestProfil() {
           deposit_message:   r.deposit_message || "",
           latitude:          r.latitude ?? "",
           longitude:         r.longitude ?? "",
+          is_published:      r.is_published !== false, // défaut : en ligne
         });
       })
       .catch(console.error)
@@ -168,6 +182,34 @@ export default function RestProfil() {
           {error}
         </motion.div>
       )}
+
+      {/* Publication de la page — visible publiquement ou en préparation */}
+      <motion.div variants={fadeUp}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          padding: "13px 16px", marginBottom: 14, borderRadius: 12,
+          background: form.is_published ? "#F0FBF6" : "#FFF7ED",
+          border: `0.5px solid ${form.is_published ? "#1D9E7533" : "#F0C98A"}` }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e2e28", display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%",
+                background: form.is_published ? "#1D9E75" : "#E8A045" }} />
+              {form.is_published ? "Page en ligne" : "Page en préparation"}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#888", marginTop: 3, lineHeight: 1.5 }}>
+              {form.is_published
+                ? "Votre restaurant apparaît dans la liste publique et est réservable."
+                : "Votre restaurant est masqué de la liste publique. Finissez votre configuration, puis mettez-le en ligne."}
+            </div>
+          </div>
+          <button type="button" onClick={togglePublish} disabled={pubBusy}
+            style={{ position: "relative", width: 46, height: 26, borderRadius: 13, border: "none",
+              cursor: pubBusy ? "default" : "pointer", flexShrink: 0, opacity: pubBusy ? 0.6 : 1,
+              transition: "background .2s", background: form.is_published ? "#1D9E75" : "#ccc" }}>
+            <span style={{ position: "absolute", top: 3, left: form.is_published ? 23 : 3,
+              width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left .2s" }} />
+          </button>
+        </div>
+      </motion.div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 14, alignItems: "start" }}>
 

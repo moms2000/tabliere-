@@ -65,6 +65,11 @@ async function runBusinessMigrations() {
     // Menu visible sur la page publique du restaurant (opt-in du restaurateur)
     `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS menu_public BOOLEAN DEFAULT FALSE`,
 
+    // Publication contrôlée par le restaurateur : TRUE par défaut (les restos
+    // existants restent visibles). Mis à FALSE = « en préparation », masqué de
+    // la liste publique le temps de finir la configuration.
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE`,
+
     // Email vérification (TRUE par défaut pour les comptes existants)
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified     BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token        VARCHAR(64)`,

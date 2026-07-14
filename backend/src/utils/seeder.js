@@ -162,6 +162,18 @@ export async function cleanSeed({ onProgress = () => {} } = {}) {
     [`${MARK_SLUG}%`], "Réservations supprimées"
   );
 
+  // 1bis) Commandes (table `orders`, FK restaurants ON DELETE RESTRICT) — sinon la
+  // suppression des restaurants échoue. Résilient si la table n'existe pas.
+  try {
+    await runBatched(
+      `DELETE FROM orders WHERE id IN (
+         SELECT id FROM orders
+         WHERE restaurant_id IN (SELECT id FROM restaurants WHERE slug LIKE $1)
+         LIMIT ${CLEAN_BATCH})`,
+      [`${MARK_SLUG}%`], "Commandes supprimées"
+    );
+  } catch (e) { onProgress(`orders ignoré (${e.message})`); }
+
   // 2) Détacher restaurant_id des gérants (FK users.restaurant_id) avant suppression des restos
   await runBatched(
     `UPDATE users SET restaurant_id = NULL WHERE id IN (

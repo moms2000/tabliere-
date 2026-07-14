@@ -172,6 +172,7 @@ export const deleteStory = asyncHandler(async (req, res) => {
 
 // ── POST /stories/:id/react — réagir (upsert) ────────────────────────────────
 export const reactStory = asyncHandler(async (req, res) => {
+  await ensureStoriesSchema();
   const emoji = String(req.body?.emoji || "").slice(0, 8);
   const ALLOWED = ["❤️", "🔥", "😍", "👏", "😮"];
   if (!ALLOWED.includes(emoji)) throw new AppError("Réaction invalide", 400);
@@ -185,6 +186,7 @@ export const reactStory = asyncHandler(async (req, res) => {
 
 // ── DELETE /stories/:id/react — retirer sa réaction ──────────────────────────
 export const unreactStory = asyncHandler(async (req, res) => {
+  await ensureStoriesSchema();
   await query("DELETE FROM story_reactions WHERE story_id = $1 AND user_id = $2", [req.params.id, req.user.id]);
   return ok(res, {}, "Réaction retirée");
 });

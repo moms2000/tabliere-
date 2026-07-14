@@ -215,8 +215,7 @@ export const list = asyncHandler(async (req, res) => {
 // Agrège les réservations en fiches clients : contact + historique de visites.
 export const getClients = asyncHandler(async (req, res) => {
   await ensureResaColumns();
-  const isAdmin = req.user.role === "admin";
-  const restoId = isAdmin ? req.query.restaurant_id : req.user.restaurant_id;
+  const restoId = await resolveRestoId(req); // fiable même si users.restaurant_id est null
   if (!restoId) throw new AppError("Aucun restaurant associé", 400);
 
   const { rows } = await query(
@@ -275,7 +274,7 @@ function normPhone(p) { return p ? String(p).replace(/\D/g, "") : ""; }
 // ── POST /reservations/clients/import — importer une base clients (restaurateur) ─
 export const importClients = asyncHandler(async (req, res) => {
   const isAdmin = req.user.role === "admin";
-  const restoId = isAdmin ? req.body.restaurant_id : req.user.restaurant_id;
+  const restoId = isAdmin ? req.body.restaurant_id : await resolveRestoId(req);
   if (!restoId) throw new AppError("Aucun restaurant associé", 400);
   // Anti-IDOR : un restaurateur ne peut importer que pour SON restaurant
   if (!isAdmin) {
@@ -338,7 +337,11 @@ export const importClients = asyncHandler(async (req, res) => {
   }
   const updated = clean.filter(c => c.pn && existing.has(c.pn)).length;
   const importedN = processed - updated;
-  logger.info("Import clients", { restoId, imported: importedN, updated, skipped });
+  // Trace de consentement RGPD (qui, quand, combien) pour audit
+  logger.info("Import clients (consentement confirmé)", {
+    restoId, userId: req.user.id, consent: true, at: new Date().toISOString(),
+    imported: importedN, updated, skipped,
+  });
   return ok(res, { imported: importedN, updated, skipped }, "Base clients importée");
 });
 

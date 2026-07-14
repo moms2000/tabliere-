@@ -6,6 +6,17 @@
 const AMBER = [232, 160, 69];
 const DARK  = [30, 46, 40];
 
+// Anti-injection de formule (CSV/XLSX) : une cellule texte commençant par
+// = + - @ (ou tab/CR) est interprétée comme une formule par Excel/LibreOffice.
+// On la neutralise avec une apostrophe de tête. Les données importées (noms de
+// clients, notes) pouvant contenir des charges malveillantes, on assainit partout.
+function sanitizeCell(v) {
+  if (v == null) return "";
+  if (typeof v === "number") return v;
+  const s = String(v);
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
 function drawLogo(doc, x, y, s = 26) {
   // Carré arrondi orange + marques blanches (rappel du logo)
   doc.setFillColor(...AMBER);
@@ -85,7 +96,7 @@ export async function exportXLSX({ sheetName = "Données", title, subtitle, colu
     [`Généré le ${todayStr()}`],
     [],
     columns,
-    ...rows.map(r => r.map(c => (c == null ? "" : c))),
+    ...rows.map(r => r.map(sanitizeCell)),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = columns.map((c, i) => ({ wch: Math.max(12, String(c).length + 2, ...rows.map(r => String(r[i] ?? "").length + 2)) }));
@@ -101,8 +112,7 @@ export async function exportXLSX({ sheetName = "Données", title, subtitle, colu
  */
 export function exportCSV({ columns, rows, filename, delimiter = "," }) {
   const esc = (v) => {
-    const s = v == null ? "" : String(v);
-    // Échappe si le champ contient le séparateur, un guillemet ou un saut de ligne
+    const s = String(sanitizeCell(v)); // neutralise les formules (= + - @) puis échappe
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [columns, ...rows].map(r => r.map(esc).join(delimiter));

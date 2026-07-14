@@ -112,7 +112,8 @@ export const getOne = asyncHandler(async (req, res) => {
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
-     WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')`,
+     WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')
+       AND COALESCE(r.is_published, TRUE) = TRUE`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");
@@ -478,7 +479,7 @@ export const getAvailability = asyncHandler(async (req, res) => {
   const party_size = Math.max(1, parseInt(req.query.party_size, 10) || 2);
 
   const { rows: [resto] } = await query(
-    "SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif'",
+    "SELECT id, seating_duration FROM restaurants WHERE slug = $1 AND status = 'actif' AND COALESCE(is_published, TRUE) = TRUE",
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

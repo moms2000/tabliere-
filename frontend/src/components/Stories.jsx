@@ -130,6 +130,7 @@ export default function Stories({ slug }) {
         <StoryViewer
           stories={stories} index={openIdx} onIndex={setOpenIdx}
           onClose={() => setOpenIdx(null)} onChanged={load} userId={user.id}
+          onReactChange={(idx, patch) => setData(d => d ? { ...d, stories: d.stories.map((s, i) => i === idx ? { ...s, ...patch } : s) } : d)}
         />
       )}
     </div>
@@ -137,7 +138,7 @@ export default function Stories({ slug }) {
 }
 
 // ── Visionneuse plein écran ──────────────────────────────────────────────────
-function StoryViewer({ stories, index, onIndex, onClose, onChanged, userId }) {
+function StoryViewer({ stories, index, onIndex, onClose, onChanged, onReactChange, userId }) {
   const s = stories[index];
   const [reaction, setReaction] = useState(s.my_reaction || null);
   const [reactCount, setReactCount] = useState(s.reactions || 0);
@@ -146,9 +147,21 @@ function StoryViewer({ stories, index, onIndex, onClose, onChanged, userId }) {
   useEffect(() => { setReaction(s.my_reaction || null); setReactCount(s.reactions || 0); setReported(false); }, [index]);
 
   const react = async (emoji) => {
-    const was = reaction;
-    if (was === emoji) { setReaction(null); setReactCount(c => Math.max(0, c - 1)); storiesService.unreact(s.id).catch(() => {}); }
-    else { setReaction(emoji); setReactCount(c => was ? c : c + 1); storiesService.react(s.id, emoji).catch(() => {}); }
+    const prevReaction = reaction, prevCount = reactCount;
+    const removing = reaction === emoji;
+    const nextReaction = removing ? null : emoji;
+    const nextCount = removing ? Math.max(0, reactCount - 1) : (prevReaction ? reactCount : reactCount + 1);
+    // Optimiste immédiat
+    setReaction(nextReaction); setReactCount(nextCount);
+    try {
+      if (removing) await storiesService.unreact(s.id);
+      else await storiesService.react(s.id, emoji);
+      // Propager au parent → la réaction persiste en changeant d'Instant / en rouvrant
+      onReactChange?.(index, { my_reaction: nextReaction, reactions: nextCount });
+    } catch {
+      // Échec réel → on revient à l'état vrai (plus de "faux enregistré")
+      setReaction(prevReaction); setReactCount(prevCount);
+    }
   };
   const del = async () => {
     if (!confirm("Supprimer cet Instant ?")) return;

@@ -1273,12 +1273,16 @@ export const seedRun = asyncHandler(async (req, res) => {
 });
 
 export const seedClean = asyncHandler(async (_req, res) => {
-  // Nettoyage en arrière-plan (peut durer selon le volume) — suivi via /admin/seed/stats.
-  // Évite tout timeout HTTP ; la suppression par lots est idempotente/relançable.
-  cleanSeed({ onProgress: (m) => logger.info(`[Seed] ${m}`) })
-    .then(s => logger.info("[Seed] Nettoyage terminé", s))
-    .catch(e => logger.error("[Seed] Nettoyage échoué", { error: e.message }));
-  return ok(res, { started: true }, "Nettoyage démarré en arrière-plan — suivez /admin/seed/stats");
+  // On ATTEND et on renvoie le résultat réel (ou l'erreur exacte). La suppression
+  // par lots reste sous le statement_timeout, et le gros volume (réservations)
+  // étant déjà parti, ça finit vite. Idempotent → relançable.
+  try {
+    const summary = await cleanSeed({ onProgress: (m) => logger.info(`[Seed] ${m}`) });
+    return ok(res, summary, "Données de seed supprimées");
+  } catch (e) {
+    logger.error("[Seed] Nettoyage échoué", { error: e.message });
+    return res.status(500).json({ success: false, message: `Nettoyage échoué : ${e.message}` });
+  }
 });
 
 export const seedStatus = asyncHandler(async (_req, res) => {

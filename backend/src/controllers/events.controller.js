@@ -373,7 +373,7 @@ export const createStaff = asyncHandler(async (req, res) => {
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const b = req.body || {};
   if (!b.name) throw new AppError("Nom requis", 400);
-  const role = ["all", "checkin", "bar", "serveur"].includes(b.role) ? b.role : "all";
+  const role = ["all", "checkin", "bar", "serveur", "caisse"].includes(b.role) ? b.role : "all";
   // PIN aléatoire (crypto), unique dans l'événement
   let pin = b.pin && /^\d{6}$/.test(b.pin) ? b.pin : genPin();
   for (let k = 0; k < 20; k++) {

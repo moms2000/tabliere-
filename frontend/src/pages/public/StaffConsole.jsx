@@ -16,17 +16,17 @@ export default function StaffConsole() {
   const logout = () => { localStorage.removeItem(KEY); setSession(null); };
   // Session staff expirée/révoquée (401/403) → on déconnecte et on revient au PIN.
   const onExpire = (e) => { if ([401, 403].includes(e?.response?.status)) { logout(); return true; } return false; };
-  const firstTab = (r) => r === "bar" ? "orders" : r === "serveur" ? "service" : "checkin";
+  const firstTab = (r) => (r === "bar" || r === "caisse") ? "orders" : r === "serveur" ? "service" : "checkin";
   if (!session) return <Login onOk={(s) => { localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
 
   const role = session.staff?.role || "all";
   const canCheckin = role === "all" || role === "checkin";
-  const canBar = role === "all" || role === "bar";
+  const canOrders = role === "all" || role === "bar" || role === "caisse";
   const canServe = role === "all" || role === "serveur";
   const tabs = [
     canServe && ["service", "Mes tables"],
     canCheckin && ["checkin", "Check-in"],
-    canBar && ["orders", "Commandes"],
+    canOrders && ["orders", "Commandes"],
   ].filter(Boolean);
   const active = tabs.find(t => t[0] === tab) ? tab : tabs[0]?.[0];
 

@@ -137,7 +137,7 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
 
 // ── GET /event-orders?event_id= — tableau des commandes (organisateur/staff) ──
 export const listOrders = asyncHandler(async (req, res) => {
-  assertStaffRole(req, ["bar"]);
+  assertStaffRole(req, ["bar", "caisse"]);
   const { rows } = await query(
     `SELECT o.*, t.kind AS table_kind, srv.name AS server_name FROM event_orders o
      LEFT JOIN event_tables t ON t.id = o.table_id
@@ -146,6 +146,25 @@ export const listOrders = asyncHandler(async (req, res) => {
     [req.eventScope]
   );
   return ok(res, { orders: rows });
+});
+
+// ── GET /event-orders/mine?order_token= — commandes du salon (invité, public) ──
+// Scellé au jeton responsable : ne renvoie QUE les commandes de la table du jeton.
+// Permet à l'invité de suivre le statut de ses commandes et de revoir son historique
+// après un re-scan (tant que le jeton de 10 h est valide).
+export const listMyOrders = asyncHandler(async (req, res) => {
+  const token = req.query?.order_token || req.body?.order_token;
+  const d = token ? verifyOrderToken(token) : null;
+  if (!d) throw new AppError("Session responsable expirée. Ressaisissez le code.", 401);
+  if (!d.table_id) return ok(res, { orders: [], table_label: d.table_label || null });
+  const { rows } = await query(
+    `SELECT id, ref, items, total, status, note, created_at, updated_at
+     FROM event_orders
+     WHERE event_id = $1 AND table_id = $2
+     ORDER BY created_at DESC LIMIT 100`,
+    [d.event_id, d.table_id]
+  );
+  return ok(res, { orders: rows, table_label: d.table_label || null });
 });
 
 // ── GET /event-server/tables — les tables assignées au serveur connecté ───────
@@ -226,7 +245,7 @@ export const createServerOrder = asyncHandler(async (req, res) => {
 
 // ── PATCH /event-orders/:id/status ────────────────────────────────────────────
 export const updateOrderStatus = asyncHandler(async (req, res) => {
-  assertStaffRole(req, ["bar"]);
+  assertStaffRole(req, ["bar", "caisse"]);
   await assertEventActive(req.eventScope);
   const status = req.body?.status;
   if (!ORDER_STATUSES.includes(status)) throw new AppError("Statut invalide", 400);
@@ -242,7 +261,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 export const listCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   const { rows } = await query(
-    `SELECT r.id, r.ref, r.party_size, r.arrived_size, r.status, r.checked_in_at, r.promoter_code,
+    `SELECT r.id, r.ref, r.party_size, r.arrived_size, r.status, r.checked_in_at, r.order_pin, r.promoter_code,
             r.special_request, r.created_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
@@ -265,15 +284,19 @@ export const listCheckin = asyncHandler(async (req, res) => {
   const arrivedRows = rows.filter(r => r.checked_in_at);
   // Personnes réellement arrivées = arrived_size si saisi, sinon party_size
   const arrivedPax = (r) => (r.arrived_size != null ? r.arrived_size : (r.party_size || 0));
-  const { rows: [ev] } = await query("SELECT capacity FROM events WHERE id = $1", [req.eventScope]);
+  const { rows: [ev] } = await query("SELECT capacity, slug, name FROM events WHERE id = $1", [req.eventScope]);
   const arrivedCovers = arrivedRows.reduce((a, c) => a + arrivedPax(c), 0);
   const capacity = ev?.capacity ?? null;
-  // Anti-fuite PII : le téléphone client n'est exposé qu'à l'organisateur
-  // (req.staff absent), jamais à un staff temporaire connecté par PIN.
-  if (req.staff) rows.forEach(r => { delete r.client_phone; });
+  // Anti-fuite PII : le téléphone client et le code de commande ne sont exposés
+  // qu'à l'organisateur (req.staff absent) et au staff d'accueil (rôle checkin/all)
+  // — jamais au bar ni aux serveurs. L'accueil en a besoin pour renvoyer le code
+  // (affichage / WhatsApp) au responsable du salon qui l'aurait perdu.
+  const reception = !req.staff || req.staff.role === "checkin" || req.staff.role === "all";
+  if (!reception) rows.forEach(r => { delete r.client_phone; delete r.order_pin; });
   return ok(res, {
     reservations: rows,
     tables,
+    event: { slug: ev?.slug || null, name: ev?.name || null },
     totals: {
       total: rows.length,
       arrived: arrivedRows.length,
@@ -340,8 +363,8 @@ export const doCheckin = asyncHandler(async (req, res) => {
   const pin = undo ? null : await genUniqueOrderPin(req.eventScope);
   const { rows: [resa] } = await query(
     `UPDATE event_reservations
-       SET checked_in_at = ${undo ? "NULL" : "NOW()"},
-           arrived_size  = ${undo ? "NULL" : "COALESCE($3, party_size)"},
+       SET checked_in_at = ${undo ? "NULL" : "COALESCE(checked_in_at, NOW())"},
+           arrived_size  = ${undo ? "NULL" : "COALESCE($3, arrived_size, party_size)"},
            order_pin     = ${undo ? "NULL" : "COALESCE(order_pin, $4)"},
            updated_at = NOW()
      WHERE id = $1 AND event_id = $2

@@ -227,8 +227,9 @@ export const updateTable = asyncHandler(async (req, res) => {
   if (!event) return notFound(res, "Événement introuvable");
   assertOwner(req, event);
 
-  // Assignation d'un serveur : on vérifie qu'il appartient bien à CET événement
-  if (req.body.server_id) {
+  // Assignation d'un serveur : on vérifie qu'il appartient bien à CET événement.
+  // "none"/"" = désassignation (retirer le serveur) → pas de vérification UUID.
+  if (req.body.server_id && req.body.server_id !== "none" && req.body.server_id !== "") {
     const { rows } = await query(
       "SELECT 1 FROM event_staff WHERE id = $1 AND event_id = $2 AND is_active = TRUE", [req.body.server_id, event.id]
     );

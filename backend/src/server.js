@@ -424,6 +424,23 @@ async function runEventsPhase2Migration() {
     // Phase 3 : rôle serveur + assignation serveur ↔ table (après création de event_staff)
     `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS server_id UUID REFERENCES event_staff(id) ON DELETE SET NULL`,
     `CREATE INDEX IF NOT EXISTS idx_evt_tables_server ON event_tables(server_id)`,
+
+    // ── Phase 5 : confirmation par acompte mobile money (pas de blocage de stock) ──
+    // Config paiement de l'organisateur
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS payment_methods JSONB DEFAULT '[]'`,   // [{operator, number, holder}]
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS deposit_percent INTEGER DEFAULT 0`,    // % du prix de table exigé en acompte
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS deposit_message TEXT`,                 // consigne personnalisée
+    // Acompte fixe optionnel par table (prioritaire sur le %)
+    `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS deposit_amount INTEGER DEFAULT 0`,
+    // Suivi d'acompte + réservations invité (sans compte, créées manuellement)
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS guest_email   VARCHAR(255)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_amount INTEGER`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_method VARCHAR(30)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_ref    VARCHAR(80)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_confirmed_at TIMESTAMPTZ`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT FALSE`, // créée par l'organisateur
+    // Réservations invité : client_id devient optionnel
+    `ALTER TABLE event_reservations ALTER COLUMN client_id DROP NOT NULL`,
   ];
   let okc = 0, failc = 0;
   for (const sql of stmts) {

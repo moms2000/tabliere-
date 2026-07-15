@@ -614,7 +614,8 @@ export default function Profil() {
                           <span style={{ display: "inline-block", marginTop: 7, fontSize: 10.5, fontWeight: 700, color: stColor,
                             background: stColor + "18", borderRadius: 6, padding: "2px 8px" }}>{stLabel}</span>
                         </div>
-                        {r.status !== "annule" && (
+                        {/* Le QR n'existe QUE pour une réservation confirmée (acompte reçu) */}
+                        {r.status === "confirme" && (
                           <button onClick={() => setQrResa(r)}
                             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, border: "0.5px solid #eee",
                               borderRadius: 10, padding: "8px 12px", background: "#FEF6EC", color: "#C47D1A", cursor: "pointer",

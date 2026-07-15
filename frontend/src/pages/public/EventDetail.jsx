@@ -95,16 +95,14 @@ export default function EventDetail() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, color: GREEN, fontWeight: 700, fontSize: 14 }}>
               <Check size={18} /> Demande envoyée !
             </div>
-            <div style={{ fontSize: 13, color: "#3a5a4a", marginTop: 6 }}>
-              Votre réservation <strong>{done}</strong> est en attente de confirmation de l'organisateur. Paiement en cash sur place.
+            <div style={{ fontSize: 13, color: "#3a5a4a", marginTop: 6, lineHeight: 1.55 }}>
+              Votre réservation <strong>{done}</strong> est <strong>en attente de votre acompte</strong>. Vous allez recevoir par
+              e-mail et WhatsApp les instructions de paiement (numéro mobile money + montant).
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, background: "white", borderRadius: 10, padding: 12 }}>
-              <div style={{ background: "white", padding: 6, borderRadius: 8, border: `0.5px solid ${BORDER}` }}>
-                <QRCode value={done} size={72} fgColor={DARK} />
-              </div>
-              <div style={{ fontSize: 12.5, color: MUTED }}>
-                Présentez ce QR à l'entrée pour votre <strong style={{ color: DARK }}>check-in</strong>.
-              </div>
+            <div style={{ fontSize: 12.5, color: "#7a5a1a", marginTop: 10, background: "#FEF6EC", border: "0.5px solid #F0C98A",
+              borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>
+              ⚠️ Votre table n'est <strong>confirmée qu'après réception de l'acompte</strong> par l'organisateur.
+              Premier acompte reçu, premier servi. Le <strong>QR code</strong> vous sera envoyé une fois l'acompte confirmé.
             </div>
           </motion.div>
         )}

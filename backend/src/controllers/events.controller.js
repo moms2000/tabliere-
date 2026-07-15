@@ -102,8 +102,11 @@ export const getBySlug = asyncHandler(async (req, res) => {
      WHERE event_id = $1 AND is_active = TRUE
      ORDER BY kind DESC, label ASC`, [event.id]
   );
-  // Endpoint public : ne pas exposer l'UUID interne du propriétaire
-  const { owner_id, ...publicEvent } = event;
+  // Endpoint PUBLIC : on retire l'UUID interne du propriétaire ET la config de
+  // paiement (numéros mobile money, titulaires, message d'acompte) — ces données
+  // sont transmises en privé au client par email/WhatsApp APRÈS réservation,
+  // jamais exposées à un visiteur anonyme (anti-scraping / arnaque au numéro).
+  const { owner_id, payment_methods, deposit_message, deposit_percent, ...publicEvent } = event;
   return ok(res, { event: publicEvent, tables });
 });
 

@@ -8,6 +8,8 @@ import QRCode              from "qrcode";
 
 const FRONT = (env.FRONTEND_URL || "https://tabliereci.net").replace(/\/$/, "");
 const fmtF = (n) => (Number(n) || 0).toLocaleString("fr-FR") + " FCFA";
+// Échappe toute valeur utilisateur avant insertion dans du HTML d'email (anti-XSS/injection)
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------------------------------------------------------------------------
 // Mode d'envoi des notifications
@@ -235,7 +237,7 @@ async function processNotification(name, data) {
         ? methods.map(m => `${m.operator} : ${m.number}${m.holder ? ` (${m.holder})` : ""}`).join(" | ")
         : "à demander à l'organisateur";
       const mHtml = methods.length
-        ? methods.map(m => `<li style="margin:3px 0"><strong>${m.operator}</strong> : ${m.number}${m.holder ? ` <span style="color:#888">(${m.holder})</span>` : ""}</li>`).join("")
+        ? methods.map(m => `<li style="margin:3px 0"><strong>${esc(m.operator)}</strong> : ${esc(m.number)}${m.holder ? ` <span style="color:#888">(${esc(m.holder)})</span>` : ""}</li>`).join("")
         : "<li>À demander à l'organisateur.</li>";
       const subject = `Réservation ${r.ref} — acompte requis pour confirmer`;
       if (r.email) await sendEmail({ to: r.email, subject,
@@ -245,17 +247,17 @@ async function processNotification(name, data) {
             <div style="background:#e8a045;padding:12px 20px;border-radius:8px 8px 0 0"><span style="color:#1a1000;font-size:16px;font-weight:bold">TablièreCI</span></div>
             <div style="background:#fff;padding:24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px">
               <h2 style="color:#1e2e28;margin:0 0 8px">Réservation en attente d'acompte</h2>
-              <p style="color:#666">Bonjour <strong>${r.name}</strong>, votre demande est bien enregistrée.</p>
+              <p style="color:#666">Bonjour <strong>${esc(r.name)}</strong>, votre demande est bien enregistrée.</p>
               <div style="background:#fef6ec;border-radius:8px;padding:16px;margin:14px 0">
-                <p style="margin:4px 0"><strong>Événement :</strong> ${r.event_name}</p>
+                <p style="margin:4px 0"><strong>Événement :</strong> ${esc(r.event_name)}</p>
                 <p style="margin:4px 0"><strong>Date :</strong> ${fmtDate(r.starts_at)}</p>
-                <p style="margin:4px 0"><strong>Table :</strong> ${table} · ${r.party_size} pers.</p>
+                <p style="margin:4px 0"><strong>Table :</strong> ${esc(table)} · ${r.party_size} pers.</p>
                 <p style="margin:4px 0"><strong>Référence :</strong> <span style="color:#e8a045;font-weight:bold">${r.ref}</span></p>
                 ${dep ? `<p style="margin:8px 0 0"><strong>Acompte à envoyer :</strong> <span style="color:#1e2e28;font-weight:bold;font-size:17px">${fmtF(dep)}</span></p>` : ""}
               </div>
               <p style="margin:0 0 6px;color:#1e2e28;font-weight:600">Payez l'acompte via mobile money :</p>
               <ul style="color:#444;font-size:14px;padding-left:18px;margin:0 0 14px">${mHtml}</ul>
-              ${r.deposit_message ? `<p style="color:#666;font-size:13px">${r.deposit_message}</p>` : ""}
+              ${r.deposit_message ? `<p style="color:#666;font-size:13px">${esc(r.deposit_message)}</p>` : ""}
               <div style="background:#FFF7ED;border:1px solid #F0C98A;border-radius:8px;padding:12px;color:#7a5a1a;font-size:13px">
                 ⚠️ Votre table n'est <strong>confirmée qu'après réception de l'acompte</strong> par l'organisateur.
                 <strong>Premier acompte reçu, premier servi.</strong> Le <strong>QR code</strong> vous sera envoyé dès la confirmation.
@@ -288,11 +290,11 @@ async function processNotification(name, data) {
             <div style="background:#e8a045;padding:12px 20px;border-radius:8px 8px 0 0"><span style="color:#1a1000;font-size:16px;font-weight:bold">TablièreCI</span></div>
             <div style="background:#fff;padding:24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px;text-align:center">
               <div style="display:inline-block;background:#f0f6f2;border-radius:20px;padding:5px 13px;margin-bottom:14px"><span style="color:#3d6b55;font-size:12px;font-weight:600">✓ Acompte reçu · Table confirmée</span></div>
-              <h2 style="color:#1e2e28;margin:0 0 8px">Votre réservation est confirmée, ${r.name} !</h2>
+              <h2 style="color:#1e2e28;margin:0 0 8px">Votre réservation est confirmée, ${esc(r.name)} !</h2>
               <div style="background:#fef6ec;border-radius:8px;padding:16px;margin:14px 0;text-align:left">
-                <p style="margin:4px 0"><strong>Événement :</strong> ${r.event_name}</p>
+                <p style="margin:4px 0"><strong>Événement :</strong> ${esc(r.event_name)}</p>
                 <p style="margin:4px 0"><strong>Date :</strong> ${fmtDate(r.starts_at)}</p>
-                <p style="margin:4px 0"><strong>Table :</strong> ${table} · ${r.party_size} pers.</p>
+                <p style="margin:4px 0"><strong>Table :</strong> ${esc(table)} · ${r.party_size} pers.</p>
                 <p style="margin:4px 0"><strong>Référence :</strong> <span style="color:#e8a045;font-weight:bold">${r.ref}</span></p>
               </div>
               ${attachments ? `<img src="cid:qrcode" alt="QR ${r.ref}" style="width:200px;height:200px;border:1px solid #e4dfd8;border-radius:10px;padding:8px;background:#fff" />` : ""}
@@ -319,9 +321,9 @@ async function processNotification(name, data) {
             <div style="background:#e8a045;padding:12px 20px;border-radius:8px 8px 0 0"><span style="color:#1a1000;font-size:16px;font-weight:bold">TablièreCI</span></div>
             <div style="background:#fff;padding:24px;border:1px solid #e4dfd8;border-top:none;border-radius:0 0 8px 8px">
               <h2 style="color:#1e2e28;margin:0 0 8px">Table indisponible</h2>
-              <p style="color:#666">Bonjour <strong>${r.name}</strong>,</p>
-              <p style="color:#444">${reason}</p>
-              <p style="color:#666;font-size:13px">Votre réservation <strong>${r.ref}</strong> (${r.event_name}). Contactez l'organisateur pour choisir une autre table encore libre.</p>
+              <p style="color:#666">Bonjour <strong>${esc(r.name)}</strong>,</p>
+              <p style="color:#444">${esc(reason)}</p>
+              <p style="color:#666;font-size:13px">Votre réservation <strong>${r.ref}</strong> (${esc(r.event_name)}). Contactez l'organisateur pour choisir une autre table encore libre.</p>
             </div>
             <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
           </div>`,

@@ -99,7 +99,7 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(false);
   const [editTable, setEditTable] = useState(null);
-  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0 });
+  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0 });
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef(null);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -127,13 +127,13 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
     try { await eventsService.updateTable(event.id, id, { status }); setSelected(p => p ? { ...p, status } : p); await onChanged(); }
     catch (e) { console.error(e); }
   };
-  const openNew = () => { setEditTable(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0 }); setModal(true); };
-  const openEdit = (t) => { setEditTable(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", min_order: t.min_order || 0 }); setModal(true); setSelected(null); };
+  const openNew = () => { setEditTable(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0 }); setModal(true); };
+  const openEdit = (t) => { setEditTable(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", min_order: t.min_order || 0, deposit_amount: t.deposit_amount || 0 }); setModal(true); setSelected(null); };
   const save = async () => {
     if (!f.label) return;
     setSaving(true);
     try {
-      const payload = { ...f, zone: "general", capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0 };
+      const payload = { ...f, zone: "general", capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0, deposit_amount: Number(f.deposit_amount) || 0 };
       if (editTable) await eventsService.updateTable(event.id, editTable.id, payload);
       else {
         const n = tables.length;
@@ -294,6 +294,9 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
             </FormField>
             <FormField label="Minimum de commande (FCFA, 0 = aucun)">
               <Input type="number" value={f.min_order} onChange={e => set("min_order", e.target.value)} placeholder="Ex : 300000" />
+            </FormField>
+            <FormField label="Acompte fixe pour cette table (FCFA, 0 = utiliser le %)">
+              <Input type="number" value={f.deposit_amount} onChange={e => set("deposit_amount", e.target.value)} placeholder="Ex : 1000000" />
             </FormField>
           </>
         )}

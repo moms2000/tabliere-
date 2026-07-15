@@ -374,9 +374,15 @@ function ResaTab({ event, tables = [] }) {
     finally { setBusy(null); }
   };
 
+  // Normalise un numéro CI au format international sans + (wa.me) : 225 + numéro
+  const waPhone = (p) => {
+    const d = String(p || "").replace(/\D/g, "");
+    if (!d) return "";
+    return d.startsWith("225") ? d : "225" + d; // CI conserve le 0 après l'indicatif
+  };
   // Lien WhatsApp pré-rempli (fallback immédiat, sans API)
   const waLink = (r) => {
-    const phone = String(r.client_phone || r.guest_phone || "").replace(/\D/g, "");
+    const phone = waPhone(r.client_phone || r.guest_phone);
     const table = r.table_label ? `${r.table_kind === "vip" ? "VIP " : ""}${r.table_label}` : "Entrée";
     let msg;
     if (r.status === "confirme") {

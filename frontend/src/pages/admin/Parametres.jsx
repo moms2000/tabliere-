@@ -151,10 +151,13 @@ export default function Parametres() {
         <motion.div variants={fadeUp}>
           <Card>
             <SectionHeader title="Notifications" icon={Bell} />
-            <Row label="Alertes réservations" desc="Notification à chaque nouvelle réservation">
+            <Row label="Alertes réservations" desc="E-mails/WhatsApp aux clients à chaque réservation, confirmation ou annulation">
               <Toggle value={notifRes} onChange={toggleAndSave(setNotifRes, "notif_reservations")} />
             </Row>
-            <Row label="WhatsApp Business" desc="Canal principal de communication clients">
+            <Row label="Alertes paiements" desc="Notifie le client à la réception d'un paiement">
+              <Toggle value={notifPay} onChange={toggleAndSave(setNotifPay, "notif_paiements")} />
+            </Row>
+            <Row label="WhatsApp Business" desc="Interrupteur maître du canal WhatsApp (coupe tous les envois WhatsApp)">
               <Toggle value={whatsapp} onChange={toggleAndSave(setWhatsapp, "notif_whatsapp")} />
             </Row>
           </Card>

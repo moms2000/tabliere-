@@ -571,6 +571,19 @@ async function runPerfIndexes() {
 let server;
 
 async function start() {
+  // ── Écouter IMMÉDIATEMENT ────────────────────────────────────────────────
+  // Le health check de Render doit obtenir une réponse sans attendre la fin des
+  // migrations (sinon « timed out waiting for internal health check » → deploy
+  // marqué en échec). On ouvre le port d'abord, on migre ensuite en arrière-plan.
+  server = app.listen(env.PORT, () => {
+    logger.info("TablièreCI API démarrée", { port: env.PORT, env: env.NODE_ENV, url: `http://localhost:${env.PORT}` });
+  });
+  server.requestTimeout   = 30_000;
+  server.headersTimeout   = 35_000;
+  server.keepAliveTimeout = 65_000;
+  server.on("error", (err) => { logger.error("Erreur serveur HTTP", { error: err?.message }); process.exit(1); });
+
+  // ── Connexion DB + Redis + migrations EN ARRIÈRE-PLAN (le serveur écoute déjà) ──
   try {
     // Connexion PostgreSQL
     try {
@@ -581,7 +594,6 @@ async function start() {
         code:  err?.code,
         hint:  "Vérifier DATABASE_URL dans les variables d'environnement Render",
       });
-      // On ne quitte pas — le serveur démarre quand même pour exposer /health
     }
 
     // Connexion Redis (optionnelle)
@@ -612,25 +624,12 @@ async function start() {
       purgeExpiredStories().then(n => { if (n) logger.info(`[Instants] ${n} instant(s) expiré(s) purgé(s)`); });
     }, 30 * 60 * 1000);
 
-    server = app.listen(env.PORT, () => {
-      logger.info("TablièreCI API démarrée", {
-        port: env.PORT,
-        env:  env.NODE_ENV,
-        url:  `http://localhost:${env.PORT}`,
-      });
-    });
-    // Timeouts HTTP : coupe les connexions lentes/hung (anti slow-loris). keepAlive
-    // > timeout du load-balancer Render pour éviter les 502 sur connexions ré-utilisées.
-    server.requestTimeout  = 30_000;
-    server.headersTimeout  = 35_000;
-    server.keepAliveTimeout = 65_000;
+    logger.info("Initialisation terminée (migrations, files, purge)");
   } catch (err) {
-    logger.error("Erreur fatale au démarrage", {
-      error:   err?.message || String(err),
-      code:    err?.code,
-      stack:   err?.stack,
+    // Le serveur écoute déjà → /health répond. On journalise sans quitter le process.
+    logger.error("Erreur pendant l'initialisation post-écoute", {
+      error: err?.message || String(err), code: err?.code, stack: err?.stack,
     });
-    process.exit(1);
   }
 }
 

@@ -44,6 +44,7 @@ const AdminAnalytics    = lazy(() => import("./pages/admin/Analytics"));
 const Evenements        = lazy(() => import("./pages/public/Evenements"));
 const EventDetail       = lazy(() => import("./pages/public/EventDetail"));
 const EventOrder        = lazy(() => import("./pages/public/EventOrder"));
+const EventTicket       = lazy(() => import("./pages/public/EventTicket"));
 const StaffConsole      = lazy(() => import("./pages/public/StaffConsole"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
@@ -231,6 +232,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/evenements"          element={<Evenements />} />
                   <Route path="/evenement/:slug"     element={<EventDetail />} />
                   <Route path="/evenement/:slug/carte" element={<EventOrder />} />
+                  <Route path="/billet/:ref"         element={<EventTicket />} />
                   <Route path="/staff"               element={<StaffConsole />} />
                   <Route path="/verify-email"         element={<VerifyEmail />} />
                   <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />

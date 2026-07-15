@@ -89,6 +89,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (!restaurant_id) throw new AppError("restaurant_id requis", 400);
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
+  if (items.length > 100) throw new AppError("Trop d'articles dans la commande", 400);
 
   // Vérifier que le restaurant existe et a qr_active = true
   const { rows: [resto] } = await query(
@@ -129,7 +130,9 @@ export const createOrder = asyncHandler(async (req, res) => {
 // ── GET /orders — liste des commandes du restaurant ────────────────────────
 export const listOrders = asyncHandler(async (req, res) => {
   await ensureTable();
-  const { page = 1, limit = 50, status, date_from, date_to } = req.query;
+  const { status, date_from, date_to } = req.query;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
   const offset = (page - 1) * limit;
 
   // Récupérer le restaurant du restaurateur connecté (anti-IDOR)
@@ -228,6 +231,7 @@ export const createManualOrder = asyncHandler(async (req, res) => {
   const restoId = await resolveRestoId(req);
   if (!items || !Array.isArray(items) || items.length === 0)
     throw new AppError("La commande doit contenir au moins un article", 400);
+  if (items.length > 100) throw new AppError("Trop d'articles dans la commande", 400);
 
   // Prix recalculés côté serveur depuis la carte (jamais le prix envoyé par le client)
   const { safeItems, total } = await repriceItems(restoId, items);

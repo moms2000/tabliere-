@@ -30,7 +30,9 @@ export const testPush = asyncHandler(async (req, res) => {
 // GET /users/me/reservations
 // ---------------------------------------------------------------------------
 export const myReservations = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 100, status } = req.query;
+  const { status } = req.query;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 100));
   const offset = (page - 1) * limit;
   const params = [req.user.id];
   let where = "WHERE r.client_id = $1";

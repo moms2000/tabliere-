@@ -44,6 +44,16 @@ function assertOwner(req, event) {
 export const createEvent = asyncHandler(async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.starts_at) throw new AppError("Nom et date de début requis", 400);
+  // Validation des dates : début valide, fin après le début
+  const starts = new Date(b.starts_at);
+  if (isNaN(starts.getTime())) throw new AppError("Date de début invalide", 400);
+  let ends = null;
+  if (b.ends_at) {
+    ends = new Date(b.ends_at);
+    if (isNaN(ends.getTime())) throw new AppError("Date de fin invalide", 400);
+    if (ends <= starts) throw new AppError("La date de fin doit être après le début", 400);
+  }
+  const cap = (v, n) => v ? String(v).slice(0, n) : null;
   const slug = await uniqueSlug(b.name);
   const { rows: [event] } = await query(
     `INSERT INTO events
@@ -52,10 +62,10 @@ export const createEvent = asyncHandler(async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'brouillon')
      RETURNING *`,
     [
-      req.user.id, b.name, slug, b.description || null, b.venue_name || null,
-      b.address || null, b.ville || null, b.quartier || null,
-      b.starts_at, b.ends_at || null, b.cover_url || null,
-      b.theme_color || "#E8A045", b.is_public !== false,
+      req.user.id, cap(b.name, 160), slug, cap(b.description, 4000), cap(b.venue_name, 160),
+      cap(b.address, 240), cap(b.ville, 80), cap(b.quartier, 80),
+      starts.toISOString(), ends ? ends.toISOString() : null, b.cover_url || null,
+      cap(b.theme_color, 20) || "#E8A045", b.is_public !== false,
     ]
   );
   return created(res, { event }, "Événement créé");
@@ -63,7 +73,9 @@ export const createEvent = asyncHandler(async (req, res) => {
 
 // ── GET /events — liste publique des événements publiés ──────────────────────
 export const listPublic = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, ville } = req.query;
+  const { ville } = req.query;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
   const params = [];
   const conds = ["e.status = 'publie'", "e.is_public = TRUE"];
@@ -252,6 +264,12 @@ export const deleteTable = asyncHandler(async (req, res) => {
   const event = await eventById(req.params.id);
   if (!event) return notFound(res, "Événement introuvable");
   assertOwner(req, event);
+  // Refuser si la table est référencée par une réservation active (en attente / confirmée)
+  const { rows: [busy] } = await query(
+    "SELECT 1 FROM event_reservations WHERE table_id = $1 AND status IN ('en_attente','confirme') LIMIT 1",
+    [req.params.tableId]
+  );
+  if (busy) throw new AppError("Table réservée : annulez d'abord les réservations liées.", 409);
   await query(
     "UPDATE event_tables SET is_active = FALSE, updated_at = NOW() WHERE id = $1 AND event_id = $2",
     [req.params.tableId, event.id]

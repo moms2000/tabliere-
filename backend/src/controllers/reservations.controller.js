@@ -56,10 +56,12 @@ export const create = asyncHandler(async (req, res) => {
     [effectiveRestoId]
   );
   if (!resto) throw new AppError("Restaurant introuvable", 404);
+  // Un resto suspendu par la plateforme ne peut recevoir AUCUNE réservation (même du restaurateur).
+  if (resto.status === "suspendu") throw new AppError("Restaurant suspendu", 403);
   // Un client ne peut réserver que dans un resto actif ET publié (pas « en préparation »).
   if (req.user.role === "client" && (resto.status !== "actif" || resto.is_published === false))
     throw new AppError("Restaurant indisponible", 404);
-  if (party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
+  if (resto.capacity && party_size > resto.capacity) throw new AppError(`Ce restaurant accepte au maximum ${resto.capacity} couverts`, 400);
 
   // Anti-double-booking : la table est libre après la durée d'assise du restaurant.
   // La vérification de conflit + l'insert se font DANS la transaction avec un
@@ -167,7 +169,9 @@ export const create = asyncHandler(async (req, res) => {
 
 // ── GET /reservations ─────────────────────────────────────────────────────────
 export const list = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status, date } = req.query;
+  const { status, date } = req.query;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
   const isAdmin = req.user.role === "admin";
   const isResto = req.user.role === "restaurateur";
@@ -292,12 +296,12 @@ export const importClients = asyncHandler(async (req, res) => {
   const seen = new Set();
   const clean = [];
   let skipped = 0;
+  // Nettoyage : les exports externes mettent souvent "null"/"undefined"/"N/A" en texte
+  const norm = (v) => { const s = String(v ?? "").trim(); return (!s || /^(null|undefined|n\/?a|-)$/i.test(s)) ? "" : s; };
   for (const c of list) {
-    // Nettoyage : les exports externes mettent souvent "null"/"undefined"/"N/A" en texte
-    const clean = (v) => { const s = String(v ?? "").trim(); return (!s || /^(null|undefined|n\/?a|-)$/i.test(s)) ? "" : s; };
-    const name = clean(c.name).slice(0, 160) || null;
-    const phone = clean(c.phone).slice(0, 40) || null;
-    const email = clean(c.email).toLowerCase().slice(0, 200) || null;
+    const name = norm(c.name).slice(0, 160) || null;
+    const phone = norm(c.phone).slice(0, 40) || null;
+    const email = norm(c.email).toLowerCase().slice(0, 200) || null;
     const note = (c.note ? String(c.note).trim() : "").slice(0, 500) || null;
     const pn = normPhone(phone);
     if (!pn && !email) { skipped++; continue; }          // fiche inexploitable
@@ -449,6 +453,10 @@ export const assignTable = asyncHandler(async (req, res) => {
   if (!resa) return notFound(res, "Réservation introuvable");
 
   await assertOwnsReservation(req, resa);
+  // On n'assigne une table qu'à une réservation active (pas annulée/no-show/terminée).
+  if (!["en_attente", "confirme"].includes(resa.status)) {
+    throw new AppError("Réservation inactive — table non assignable.", 400);
+  }
 
   // Vérifier la table
   const { rows: [tbl] } = await query(
@@ -539,6 +547,11 @@ export const noShow = asyncHandler(async (req, res) => {
   if (req.user.role === "restaurateur" && req.user.restaurant_id !== resa.restaurant_id) {
     throw new AppError("Accès refusé", 403);
   }
+  // Seules les réservations en attente ou confirmées peuvent devenir no-show
+  // (pas une annulée / terminée / déjà no-show).
+  if (!["en_attente", "confirme"].includes(resa.status)) {
+    throw new AppError("Cette réservation ne peut pas être marquée no-show.", 400);
+  }
 
   await ensureResaColumns();
   const { rows: [updated] } = await query(
@@ -570,16 +583,23 @@ export const update = asyncHandler(async (req, res) => {
     throw new AppError("Accès refusé", 403);
   }
 
-  // Validation des valeurs sensibles avant écriture (évite les 500 ENUM/CHECK)
-  if (req.body.status !== undefined && !RESA_STATUSES.includes(req.body.status)) {
-    throw new AppError("Statut de réservation invalide", 400);
-  }
+  // Le changement de STATUT passe par les endpoints dédiés (confirm/cancel/no-show)
+  // qui gèrent les transitions + effets de bord (table, notifications). On l'exclut
+  // ici pour éviter les sauts d'état arbitraires (ex. annule → confirme).
   if (req.body.party_size !== undefined) {
     const n = parseInt(req.body.party_size, 10);
     if (!Number.isFinite(n) || n <= 0) throw new AppError("Nombre de couverts invalide", 400);
+    req.body.party_size = Math.min(50, n);
+  }
+  // Si une table est fournie, elle doit appartenir à CE restaurant
+  if (req.body.table_id) {
+    const { rows: [t] } = await query(
+      "SELECT 1 FROM restaurant_tables WHERE id = $1 AND restaurant_id = $2", [req.body.table_id, resa.restaurant_id]
+    );
+    if (!t) throw new AppError("Table introuvable dans ce restaurant", 400);
   }
 
-  const ALLOWED = ["reserved_at","party_size","status","notes","special_request","table_id"];
+  const ALLOWED = ["reserved_at","party_size","notes","special_request","table_id"];
   const updates = [];
   const values  = [];
   for (const field of ALLOWED) {

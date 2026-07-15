@@ -35,7 +35,12 @@ export const initiate = asyncHandler(async (req, res) => {
     [reservation_id, req.user.id]
   );
   if (!resa) return notFound(res, "Réservation introuvable");
-  if (resa.status === "annule") throw new AppError("Impossible de payer une réservation annulée", 400);
+  if (["annule", "no_show", "termine"].includes(resa.status)) throw new AppError("Cette réservation ne peut plus être payée.", 400);
+  // Anti double-paiement : refuser si un paiement a déjà réussi pour cette réservation.
+  const { rows: [paid] } = await query(
+    "SELECT 1 FROM payments WHERE reservation_id = $1 AND status = 'succes' LIMIT 1", [reservation_id]
+  );
+  if (paid) throw new AppError("Un paiement a déjà été effectué pour cette réservation.", 409);
 
   // Montant de l'arrhes : par couvert, configuré par le restaurant (deposit_amount),
   // avec repli à 2 000 F/couvert si non défini.
@@ -208,8 +213,11 @@ export const refund = asyncHandler(async (req, res) => {
       [reason || null, payment.id]
     );
     if (payment.reservation_id) {
+      // N'annuler que si la réservation est encore active (ne pas réécrire un
+      // historique 'termine'/'no_show'/'annule').
       await client.query(
-        "UPDATE reservations SET status = 'annule', cancel_reason = $1, cancelled_at = NOW() WHERE id = $2",
+        `UPDATE reservations SET status = 'annule', cancel_reason = $1, cancelled_at = NOW()
+         WHERE id = $2 AND status IN ('en_attente','confirme')`,
         [`Remboursement: ${reason || "demande client"}`, payment.reservation_id]
       );
     }

@@ -18,6 +18,7 @@ router.get   ("/export",                   ctrl.exportCSV);
 router.get   ("/settings",                 ctrl.getSettings);
 router.patch ("/settings",                 ctrl.updateSettings);
 router.post  ("/change-password",          ctrl.changeAdminPassword);
+router.get   ("/system",                   ctrl.getSystemStatus);
 
 // Restaurants
 router.get   ("/restaurants",              ctrl.listRestaurants);

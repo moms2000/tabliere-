@@ -1,4 +1,5 @@
-import { query, withTransaction }  from "../config/db.js";
+import { query, withTransaction, poolStats }  from "../config/db.js";
+import { env } from "../config/env.js";
 import { seedLoad, cleanSeed, seedStats } from "../utils/seeder.js";
 import { purgeOwnerRestaurants } from "../utils/purgeOwnerRestaurants.js";
 import { bustSettingsCache } from "../utils/platformSettings.js";
@@ -1228,6 +1229,59 @@ export const updateSettings = asyncHandler(async (req, res) => {
   }
 
   return ok(res, null, "Paramètres enregistrés");
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/system — état réel des services (mémoire, pool DB, config services)
+// ---------------------------------------------------------------------------
+export const getSystemStatus = asyncHandler(async (_req, res) => {
+  // Santé base de données : vraie requête avec garde de 2s
+  let dbOk = false, dbLatencyMs = null;
+  const t0 = Date.now();
+  try {
+    await Promise.race([
+      query("SELECT 1"),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2000)),
+    ]);
+    dbOk = true;
+    dbLatencyMs = Date.now() - t0;
+  } catch { dbOk = false; }
+
+  const pool = poolStats();
+  const mem  = process.memoryUsage();
+
+  // Détection RÉELLE de la configuration de chaque service (via variables d'env)
+  const paymentProviders = [
+    env.ORANGE_MONEY_API_KEY && "Orange Money",
+    env.MTN_MOMO_API_KEY     && "MTN MoMo",
+    env.WAVE_API_KEY         && "Wave",
+    env.STRIPE_SECRET_KEY    && "Stripe",
+  ].filter(Boolean);
+
+  return ok(res, {
+    status:      "ok",
+    uptime_s:    Math.floor(process.uptime()),
+    memory_mb:   Math.round(mem.heapUsed / 1_048_576),
+    memory_rss_mb: Math.round(mem.rss / 1_048_576),
+    db: {
+      ok:           dbOk,
+      latency_ms:   dbLatencyMs,
+      pool_total:   pool.total,
+      pool_idle:    pool.idle,
+      pool_waiting: pool.waiting,
+      pool_max:     pool.max,
+    },
+    redis: {
+      configured: !!process.env.REDIS_URL,
+      connected:  false, // Redis retiré — cache mémoire en fallback
+    },
+    services: {
+      email:    { configured: !!env.SENDGRID_API_KEY, detail: env.SENDGRID_API_KEY ? "SendGrid" : "non configuré" },
+      whatsapp: { configured: !!env.WHATSAPP_TOKEN,   detail: env.WHATSAPP_TOKEN ? "API Cloud" : "manuel (wa.me)" },
+      payments: { configured: paymentProviders.length > 0, detail: paymentProviders.length ? paymentProviders.join(", ") : "non configuré" },
+      qr:       { configured: true, detail: "local" },
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------

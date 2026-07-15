@@ -133,6 +133,11 @@ export const adminService = {
     return res.data;
   },
 
+  async getSystem() {
+    const res = await api.get("/admin/system");
+    return res.data.data;
+  },
+
   async exportCSV(type) {
     const res = await api.get("/admin/export", { params: { type }, responseType: "blob" });
     const url  = URL.createObjectURL(res.data);

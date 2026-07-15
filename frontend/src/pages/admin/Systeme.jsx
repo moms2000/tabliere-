@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Activity, Server, Cpu, HardDrive, Wifi, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge } from "../../components/ui";
-import axios from "axios";
+import { adminService } from "../../services/admin.service";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
@@ -26,16 +26,14 @@ export default function Systeme() {
 
   const fetchHealth = async () => {
     setRefreshing(true);
-    const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1")
-      .replace("/api/v1", "");
     try {
       const start = Date.now();
-      const { data } = await axios.get(`${baseUrl}/health`);
+      const data = await adminService.getSystem();
       const latency = Date.now() - start;
       setHealth({ ...data, latency });
       setLastRefresh(new Date());
     } catch (e) {
-      setHealth({ status: "error", latency: 9999, error: e.message });
+      setHealth({ status: "error", latency: 9999, error: e.response?.data?.message || e.message });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,9 +49,9 @@ export default function Systeme() {
   }, []);
 
   const apiStatus = health?.status === "ok" ? "opérationnel" : health ? "dégradé" : "hors-service";
-  const dbStatus  = health?.db?.pool_total > 0 && health?.db?.pool_waiting === 0 ? "opérationnel" : health ? "dégradé" : "hors-service";
+  const dbStatus  = health?.db?.ok ? "opérationnel" : health ? "dégradé" : "hors-service";
   const apiLatency = health?.latency ? `${health.latency}ms` : "—";
-  const dbLatency  = health?.db?.pool_waiting === 0 ? "≤10ms" : "dégradé";
+  const dbLatency  = health?.db?.latency_ms != null ? `${health.db.latency_ms}ms` : "—";
 
   const memMb    = health?.memory_mb || 0;
   const memPct   = Math.min(Math.round((memMb / 512) * 100), 100); // 512 MB baseline
@@ -61,23 +59,28 @@ export default function Systeme() {
     ? `${Math.floor(health.uptime_s / 3600)}h ${Math.floor((health.uptime_s % 3600) / 60)}m`
     : "—";
 
-  const redisStatus   = health?.redis?.connected ? "opérationnel" : health ? "non configuré" : "—";
-  const redisLatency  = health?.redis?.latency_ms != null ? `${health.redis.latency_ms}ms` : "—";
+  const svc = health?.services || {};
+  // Statut RÉEL de chaque service selon sa configuration (variables d'environnement)
+  const cfgStatus = (c) => (c?.configured ? "opérationnel" : "non configuré");
+  const redisStatus = health?.redis?.configured
+    ? (health.redis.connected ? "opérationnel" : "dégradé")
+    : (health ? "non configuré" : "—");
 
   const SERVICES = [
-    { name: "API principale",      status: apiStatus,   latency: apiLatency,  uptime: health ? "99.9%"  : "—", icon: Server },
-    { name: "Base de données",     status: dbStatus,    latency: dbLatency,   uptime: health ? "99.99%" : "—", icon: HardDrive },
-    { name: "Cache Redis",         status: redisStatus, latency: redisLatency,uptime: health?.redis?.connected ? "99.9%" : "—", icon: Cpu },
-    { name: "Service WhatsApp",    status: "opérationnel", latency: "—", uptime: "99.8%",  icon: Wifi },
-    { name: "Passerelle paiement", status: "opérationnel", latency: "—", uptime: "98.5%",  icon: Activity },
-    { name: "Génération QR Code",  status: "opérationnel", latency: "—", uptime: "99.95%", icon: CheckCircle },
+    { name: "API principale",      status: apiStatus, latency: apiLatency, note: "Express",    icon: Server },
+    { name: "Base de données",     status: dbStatus,  latency: dbLatency,  note: "PostgreSQL", icon: HardDrive },
+    { name: "Cache Redis",         status: redisStatus, latency: "—", note: health?.redis?.configured ? "" : "cache mémoire", icon: Cpu },
+    { name: "E-mails (SendGrid)",  status: cfgStatus(svc.email),    latency: "—", note: svc.email?.detail    || "", icon: Wifi },
+    { name: "Service WhatsApp",    status: cfgStatus(svc.whatsapp), latency: "—", note: svc.whatsapp?.detail || "", icon: Wifi },
+    { name: "Passerelle paiement", status: cfgStatus(svc.payments), latency: "—", note: svc.payments?.detail || "", icon: Activity },
+    { name: "Génération QR Code",  status: "opérationnel", latency: "—", note: "local", icon: CheckCircle },
   ];
 
   const METRICS = [
     { label: "Mémoire serveur",   val: health ? `${memMb} MB` : "—",      bar: memPct,  color: "#185FA5", icon: Server },
-    { label: "Connexions DB",     val: health ? `${health.db?.pool_total || 0}/${health.db?.pool_max || 10}` : "—", bar: health ? Math.round((health.db?.pool_total || 0) / (health.db?.pool_max || 10) * 100) : 0, color: "#1D9E75", icon: HardDrive },
+    { label: "Connexions DB",     val: health ? `${health.db?.pool_total || 0}/${health.db?.pool_max || 20}` : "—", bar: health ? Math.round((health.db?.pool_total || 0) / (health.db?.pool_max || 20) * 100) : 0, color: "#1D9E75", icon: HardDrive },
     { label: "File d'attente DB", val: health ? `${health.db?.pool_waiting || 0}` : "—", bar: Math.min((health?.db?.pool_waiting || 0) * 10, 100), color: "#854F0B", icon: Cpu },
-    { label: "Latence Redis",     val: redisLatency, bar: health?.redis?.connected ? Math.max(0, 100 - (health.redis.latency_ms || 0)) : 0, color: health?.redis?.connected ? "#1D9E75" : "#aaa", icon: Wifi },
+    { label: "Latence DB",        val: health ? dbLatency : "—", bar: health?.db?.ok ? Math.max(10, 100 - (health.db.latency_ms || 0) * 4) : 0, color: health?.db?.ok ? "#1D9E75" : "#993C1D", icon: Wifi },
     { label: "Uptime serveur",    val: uptime, bar: 100, color: "#1D9E75", icon: Activity },
   ];
 
@@ -143,8 +146,8 @@ export default function Systeme() {
                   <span style={{ fontSize: 13 }}>{s.name}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 11, color: "#aaa" }}>{s.latency}</span>
-                  <span style={{ fontSize: 11, color: "#bbb" }}>{s.uptime}</span>
+                  {s.latency !== "—" && <span style={{ fontSize: 11, color: "#aaa" }}>{s.latency}</span>}
+                  {s.note && <span style={{ fontSize: 11, color: "#bbb" }}>{s.note}</span>}
                   <Badge label={s.status} variant={STATUS_BADGE[s.status] || "gray"} />
                 </div>
               </div>
@@ -255,7 +258,7 @@ export default function Systeme() {
             { ok: (health?.db?.pool_waiting || 0) === 0, msg: "Pool DB : 0 connexion en attente",                          tip: "Augmenter DB_POOL_MAX dans Render env vars si > 0 régulièrement" },
             { ok: (health?.memory_mb || 0) < 400,         msg: `Mémoire < 400 MB (actuel : ${health?.memory_mb || 0} MB)`, tip: "Redémarrer le service si > 450 MB en continu" },
             { ok: (health?.latency || 0) < 800,           msg: `Latence API < 800ms (actuel : ${health?.latency || 0}ms)`,  tip: "Passer au plan Render Starter ($7/mois) pour éliminer les cold starts" },
-            { ok: !!health?.redis?.connected,               msg: `Cache Redis ${health?.redis?.connected ? `actif — latence ${health?.redis?.latency_ms ?? "?"}ms` : "non connecté"}`,  tip: "Ajouter REDIS_URL (Upstash) dans Render → x5 plus rapide" },
+            { ok: true,                                    msg: "Cache mémoire actif (Redis optionnel, non requis)",         tip: "" },
             { ok: true,                                    msg: "Indexes DB critiques créés (17 indexes)",                  tip: "" },
             { ok: true,                                    msg: "CORS configuré (domaines Vercel autorisés)",               tip: "" },
             { ok: true,                                    msg: "Rate limiting activé (/api/*)",                            tip: "" },

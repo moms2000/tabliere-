@@ -142,6 +142,8 @@ export const updateEvent = asyncHandler(async (req, res) => {
     "name", "description", "venue_name", "address", "ville", "quartier",
     "starts_at", "ends_at", "cover_url", "theme_color", "is_public", "status",
     "bottles_enabled", "ordering_mode", "capacity", "entry_price", "photos",
+    // Phase 5 : config paiement / acomptes
+    "payment_methods", "deposit_percent", "deposit_message",
   ];
   const updates = [], values = [];
   for (const f of ALLOWED) {
@@ -152,6 +154,16 @@ export const updateEvent = asyncHandler(async (req, res) => {
     if (f === "status" && !EVENT_STATUSES.includes(val)) throw new AppError("Statut invalide", 400);
     if (f === "capacity") val = (val === null || val === "" ) ? null : (parseInt(val, 10) || null);
     if (f === "entry_price") val = Math.max(0, parseInt(val, 10) || 0);
+    if (f === "deposit_percent") val = Math.min(100, Math.max(0, parseInt(val, 10) || 0));
+    if (f === "payment_methods") {
+      // Liste [{operator, number, holder}] — nettoyée et bornée
+      const arr = Array.isArray(val) ? val : [];
+      val = JSON.stringify(arr.slice(0, 6).map(m => ({
+        operator: String(m.operator || "").slice(0, 20),
+        number: String(m.number || "").slice(0, 30),
+        holder: String(m.holder || "").slice(0, 60),
+      })).filter(m => m.operator && m.number));
+    }
     if (f === "photos") val = JSON.stringify(Array.isArray(val) ? val.slice(0, 5) : []);
     // Dates : une chaîne vide n'est pas un TIMESTAMPTZ valide → NULL (ou on ignore
     // starts_at qui est obligatoire, pour ne pas le vider par erreur).
@@ -184,11 +196,11 @@ export const createTable = asyncHandler(async (req, res) => {
   const kind = TABLE_KINDS.includes(b.kind) ? b.kind : "simple";
   const nn = (v, d = 0) => Math.max(0, parseInt(v, 10) || d); // entier >= 0
   const { rows: [table] } = await query(
-    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order, deposit_amount)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [
       event.id, String(b.label).slice(0, 40), kind, Math.max(1, nn(b.capacity, 2)), nn(b.price),
-      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, nn(b.min_order),
+      b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, nn(b.min_order), nn(b.deposit_amount),
     ]
   );
   return created(res, { table }, "Table ajoutée");
@@ -208,14 +220,14 @@ export const updateTable = asyncHandler(async (req, res) => {
     if (!rows.length) throw new AppError("Serveur introuvable pour cet événement", 400);
   }
 
-  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order", "server_id"];
+  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order", "server_id", "deposit_amount"];
   const updates = [], values = [];
   for (const f of ALLOWED) {
     if (req.body[f] === undefined) continue;
     let val = req.body[f];
     if (f === "kind" && !TABLE_KINDS.includes(val)) throw new AppError("Type de table invalide", 400);
     if (f === "is_active") val = (val === true || val === "true" || val === 1);
-    if (f === "price" || f === "min_order") val = Math.max(0, parseInt(val, 10) || 0);
+    if (f === "price" || f === "min_order" || f === "deposit_amount") val = Math.max(0, parseInt(val, 10) || 0);
     if (f === "capacity") val = Math.max(1, parseInt(val, 10) || 1);
     if (f === "server_id" && (val === "" || val === "none")) val = null;
     values.push(val);

@@ -152,9 +152,34 @@ async function sendPaymentSuccess({ phone, name, amount, method }) {
   ]);
 }
 
+// ── Message texte libre (hors template) ─────────────────────────────────────
+// Fonctionne dans la fenêtre de session 24h (message client-initié) OU en mock.
+// Pour un envoi business-initié fiable, un template approuvé reste requis — d'où
+// le fallback lien wa.me côté organisateur. Échoue silencieusement sinon.
+async function sendText(to, body) {
+  const phone = String(to || "").replace(/[^\d]/g, "");
+  if (!phone) return { skipped: true };
+  if (!env.WHATSAPP_TOKEN) {
+    logger.info(`[WhatsApp MOCK] → ${phone} | texte`, { body: String(body).slice(0, 120) });
+    return { messageId: `mock-${Date.now()}` };
+  }
+  try {
+    const { data } = await axios.post(
+      BASE_URL,
+      { messaging_product: "whatsapp", to: phone, type: "text", text: { body: String(body).slice(0, 4096) } },
+      { headers: { Authorization: `Bearer ${env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
+    );
+    return { messageId: data.messages?.[0]?.id };
+  } catch (err) {
+    logger.warn("[WhatsApp] Échec texte libre (template requis hors session 24h ?)", { phone, error: err.response?.data?.error?.message || err.message });
+    return { failed: true };
+  }
+}
+
 export const whatsappService = {
   sendReservationConfirmation,
   sendConfirmedByResto,
   sendReminder,
   sendPaymentSuccess,
+  sendText,
 };

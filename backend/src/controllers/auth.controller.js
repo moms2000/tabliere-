@@ -8,6 +8,7 @@ import { generateTokens, revokeToken } from "../middleware/auth.js";
 import { ok, created, unauth } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
+import { getSetting } from "../utils/platformSettings.js";
 import { env } from "../config/env.js";
 
 // ── Helper email SendGrid (direct, ne bloque jamais l'inscription) ────────────
@@ -125,6 +126,12 @@ async function sendResetEmail(email, fullName, token) {
 
 export const register = asyncHandler(async (req, res) => {
   const { full_name, email, phone, password, role, restaurant_name, code_restaurateur, code_organisateur } = req.body;
+
+  // Réglage plateforme : inscriptions ouvertes ? (les restaurateurs/organisateurs
+  // avec code restent autorisés — inscription contrôlée par code de toute façon.)
+  if ((await getSetting("inscriptions_open", "true")) === "false" && (role || "client") === "client") {
+    throw new AppError("Les inscriptions sont temporairement fermées. Réessayez plus tard.", 403);
+  }
 
   // ── Validation code restaurateur ──────────────────────────────────────────
   if (role === "restaurateur") {

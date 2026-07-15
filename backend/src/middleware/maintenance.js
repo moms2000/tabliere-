@@ -12,8 +12,9 @@ export async function isMaintenanceOn() {
   return (await getSetting("maintenance_mode", "false")) === "true";
 }
 
-// Toujours autorisé même en maintenance (connexion admin + statut + santé)
+// Toujours autorisé même en maintenance (santé Render + connexion admin + statut)
 const ALLOW = new Set([
+  "/health", "/ping",
   "/api/v1/status",
   "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/auth/me",
 ]);

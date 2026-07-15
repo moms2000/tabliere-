@@ -127,26 +127,23 @@ app.use(v1, eventOpsRoutes); // /event-orders, /event-checkin, /event-staff/logi
 app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check ────────────────────────────────────────────────────────────
-// LIVENESS : renvoie 200 dès que le process répond (c'est ce que Render vérifie
-// au déploiement). L'état de la base est un DÉTAIL informatif — on ne renvoie
-// jamais 503 sur un pool momentanément vide/idle, ce qui provoquait des échecs
-// de déploiement à tort.
-app.get("/health", async (_req, res) => {
+// LIVENESS PUR : réponse INSTANTANÉE (aucune I/O, aucune requête DB) → Render
+// obtient toujours un 200 rapide au déploiement, quel que soit l'état de la base
+// ou des migrations en cours. Diagnostics DB détaillés → /health/db.
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok", uptime_s: Math.floor(process.uptime()) });
+});
+
+// Diagnostic détaillé (non utilisé par le health check Render)
+app.get("/health/db", async (_req, res) => {
   const db = poolStats();
   let dbOk = false;
   try {
-    await Promise.race([
-      query("SELECT 1"),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2000)),
-    ]);
+    await Promise.race([query("SELECT 1"), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2000))]);
     dbOk = true;
   } catch { dbOk = false; }
-
   res.status(200).json({
-    status:    "ok",
-    ts:        new Date().toISOString(),
-    uptime_s:  Math.floor(process.uptime()),
-    memory_mb: Math.round(process.memoryUsage().heapUsed / 1_048_576),
+    status: "ok", uptime_s: Math.floor(process.uptime()), memory_mb: Math.round(process.memoryUsage().heapUsed / 1_048_576),
     db: { ok: dbOk, pool_total: db.total, pool_idle: db.idle, pool_waiting: db.waiting },
   });
 });

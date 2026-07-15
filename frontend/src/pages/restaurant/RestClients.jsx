@@ -58,7 +58,7 @@ export default function RestClients() {
     setBusy("pdf");
     try {
       const { exportPDF } = await import("../../services/exports.js");
-      await exportPDF({
+      const r = await exportPDF({
         title: "Base clients", subtitle: restoName,
         columns: COLS, rows: toRows(filtered),
         filename: `clients-${(user?.resto_slug || "resto")}`,
@@ -68,7 +68,8 @@ export default function RestClients() {
           { label: "Couverts", value: totals.covers },
         ],
       });
-    } catch (e) { alert("Export PDF impossible"); console.error(e); }
+      if (r?.truncated) alert(`PDF limité aux ${r.exported} premiers clients (sur ${r.total}). Utilisez Excel ou CSV pour la base complète.`);
+    } catch (e) { console.error(e); alert("Export PDF impossible : " + (e?.message || "erreur inconnue")); }
     finally { setBusy(null); }
   };
   const exportXls = async () => {
@@ -80,7 +81,7 @@ export default function RestClients() {
         columns: COLS, rows: toRows(filtered),
         filename: `clients-${(user?.resto_slug || "resto")}`,
       });
-    } catch (e) { alert("Export Excel impossible"); console.error(e); }
+    } catch (e) { console.error(e); alert("Export Excel impossible : " + (e?.message || "erreur inconnue")); }
     finally { setBusy(null); }
   };
   const exportCsv = async () => {
@@ -91,7 +92,7 @@ export default function RestClients() {
         columns: COLS, rows: toRows(filtered),
         filename: `clients-${(user?.resto_slug || "resto")}`,
       });
-    } catch (e) { alert("Export CSV impossible"); console.error(e); }
+    } catch (e) { console.error(e); alert("Export CSV impossible : " + (e?.message || "erreur inconnue")); }
     finally { setBusy(null); }
   };
 

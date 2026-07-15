@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import QRCode from "react-qr-code";
 import { Calendar, MapPin, Clock, Download, Ticket } from "lucide-react";
 import { eventReservationsService } from "../../services/events.service.js";
@@ -10,15 +10,17 @@ const fmtDate = (d) => d ? new Date(d).toLocaleString("fr-FR", { weekday: "long"
 
 export default function EventTicket() {
   const { ref } = useParams();
+  const [sp] = useSearchParams();
+  const t = sp.get("t") || undefined;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(false);
   const qrRef = useRef(null);
 
   useEffect(() => {
-    eventReservationsService.getTicket(ref)
+    eventReservationsService.getTicket(ref, t)
       .then(setData).catch(() => setErr(true)).finally(() => setLoading(false));
-  }, [ref]);
+  }, [ref, t]);
 
   // Télécharge le QR en PNG (rasterise le SVG)
   const download = () => {

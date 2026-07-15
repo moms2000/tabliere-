@@ -33,11 +33,19 @@ const todayStr = () =>
  * Génère un PDF brandé avec un tableau.
  * @param {{title:string, subtitle?:string, columns:string[], rows:(string|number)[][], filename:string, summary?:{label:string,value:string|number}[]}} o
  */
+// Le PDF n'est pas fait pour des milliers de lignes (jspdf sature la mémoire du
+// navigateur). On plafonne ; au-delà, Excel/CSV prennent le relais.
+const MAX_PDF_ROWS = 1500;
+
 export async function exportPDF({ title, subtitle, columns, rows, filename, summary = [] }) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
+
+  const totalRows = rows.length;
+  const truncated = totalRows > MAX_PDF_ROWS;
+  if (truncated) rows = rows.slice(0, MAX_PDF_ROWS);
 
   // En-tête brandé
   drawLogo(doc, 40, 34, 28);
@@ -82,6 +90,7 @@ export async function exportPDF({ title, subtitle, columns, rows, filename, summ
   }
 
   doc.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+  return { exported: rows.length, total: totalRows, truncated };
 }
 
 /**
@@ -99,7 +108,12 @@ export async function exportXLSX({ sheetName = "Données", title, subtitle, colu
     ...rows.map(r => r.map(sanitizeCell)),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = columns.map((c, i) => ({ wch: Math.max(12, String(c).length + 2, ...rows.map(r => String(r[i] ?? "").length + 2)) }));
+  // Largeur de colonne sans spread (robuste pour des milliers de lignes)
+  ws["!cols"] = columns.map((c, i) => {
+    let w = Math.max(12, String(c).length + 2);
+    for (const r of rows) { const l = String(r[i] ?? "").length + 2; if (l > w) w = l; }
+    return { wch: Math.min(60, w) };
+  });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);

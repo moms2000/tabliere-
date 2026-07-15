@@ -69,7 +69,7 @@ export const eventReservationsService = {
   async confirm(id, data = {})  { return (await api.patch(`/event-reservations/${id}/confirm`, data)).data; },
   async resendQr(id)            { return (await api.post(`/event-reservations/${id}/resend-qr`)).data; },
   async cancel(id, reason)      { return (await api.patch(`/event-reservations/${id}/cancel`, reason ? { reason } : {})).data; },
-  async getTicket(ref)          { return (await api.get(`/event-reservations/ticket/${encodeURIComponent(ref)}`)).data.data; },
+  async getTicket(ref, t)       { return (await api.get(`/event-reservations/ticket/${encodeURIComponent(ref)}`, { params: t ? { t } : {} })).data.data; },
 };
 
 export default eventsService;

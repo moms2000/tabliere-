@@ -5,6 +5,7 @@ import { query }           from "../config/db.js";
 import { env }             from "../config/env.js";
 import axios               from "axios";
 import QRCode              from "qrcode";
+import { ticketToken }     from "../utils/ticketToken.js";
 
 const FRONT = (env.FRONTEND_URL || "https://tabliereci.net").replace(/\/$/, "");
 const fmtF = (n) => (Number(n) || 0).toLocaleString("fr-FR") + " FCFA";
@@ -275,7 +276,7 @@ async function processNotification(name, data) {
     case "event_resa_confirmed": {
       const r = await getEventResa(data.reservationId);
       if (!r) break;
-      const ticketUrl = `${FRONT}/billet/${encodeURIComponent(r.ref)}`;
+      const ticketUrl = `${FRONT}/billet/${encodeURIComponent(r.ref)}?t=${ticketToken(r.ref)}`;
       const table = r.table_label ? `${r.table_kind === "vip" ? "VIP · " : ""}${r.table_label}` : "Entrée";
       let attachments;
       try {
@@ -411,10 +412,22 @@ if (USE_REDIS_QUEUE) {
 } else {
   // --- Mode inline (défaut, sans Redis) -----------------------------------
   // Traitement direct, fire-and-forget : ne bloque pas la réponse HTTP.
+  // Retry léger (sans Redis) : jusqu'à 3 tentatives espacées, pour absorber une
+  // panne transitoire de SendGrid/WhatsApp sans perdre la notification.
+  const runWithRetry = async (name, data, attempt = 1) => {
+    try { await processNotification(name, data); }
+    catch (err) {
+      if (attempt < 3) {
+        logger.warn(`[Notif] Échec ${name} (tentative ${attempt}/3), nouvel essai`, { error: err?.message });
+        setTimeout(() => runWithRetry(name, data, attempt + 1), attempt * 8000);
+      } else {
+        logger.error(`[Notif] Abandon après 3 tentatives: ${name}`, { error: err?.message, data });
+      }
+    }
+  };
   const inlineQueue = {
     async add(name, data) {
-      processNotification(name, data).catch((err) =>
-        logger.warn(`[Notif] Échec traitement inline: ${name}`, { error: err?.message }));
+      runWithRetry(name, data);
       return { id: "inline" };
     },
   };

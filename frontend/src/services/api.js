@@ -101,6 +101,12 @@ api.interceptors.response.use(
     const original = err.config;
     const status   = err.response?.status;
 
+    // Mode maintenance : le backend renvoie 503 + code MAINTENANCE → on prévient
+    // l'app (MaintenanceGate affiche la page d'interruption).
+    if (status === 503 && err.response?.data?.code === "MAINTENANCE") {
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("tci:maintenance"));
+    }
+
     // Ne PAS tenter de refresh sur login/register/refresh (sinon boucle ou
     // mauvais message d'erreur). MAIS inclure /auth/me pour rester connecté.
     const noRefresh = ["/auth/login", "/auth/register", "/auth/refresh"]

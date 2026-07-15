@@ -28,6 +28,7 @@ import storiesRoutes       from "./routes/stories.routes.js";
 import eventsRoutes        from "./routes/events.routes.js";
 import eventReservationsRoutes from "./routes/eventReservations.routes.js";
 import eventOpsRoutes       from "./routes/eventOps.routes.js";
+import { maintenanceGuard, isMaintenanceOn } from "./middleware/maintenance.js";
 
 const app = express();
 
@@ -93,6 +94,14 @@ app.use(morgan(env.isProd ? "combined" : "dev", {
 
 // ── Rate limit global ───────────────────────────────────────────────────────
 app.use("/api", apiLimiter);
+
+// ── Statut public (avant le mode maintenance) ───────────────────────────────
+app.get("/api/v1/status", async (_req, res) => {
+  res.json({ maintenance: await isMaintenanceOn() });
+});
+
+// ── Mode maintenance : ferme le site public (sauf admin) si activé ──────────
+app.use(maintenanceGuard);
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 const v1 = "/api/v1";

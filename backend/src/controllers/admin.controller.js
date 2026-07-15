@@ -1,6 +1,7 @@
 import { query, withTransaction }  from "../config/db.js";
 import { seedLoad, cleanSeed, seedStats } from "../utils/seeder.js";
 import { purgeOwnerRestaurants } from "../utils/purgeOwnerRestaurants.js";
+import { bustSettingsCache } from "../utils/platformSettings.js";
 import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -1220,7 +1221,8 @@ export const updateSettings = asyncHandler(async (req, res) => {
     );
   }
 
-  // Si maintenance_mode change, loguer
+  // Effet immédiat des réglages (maintenance, inscriptions…) : on vide le cache
+  bustSettingsCache();
   if ("maintenance_mode" in updates) {
     logger.info("Mode maintenance mis à jour", { active: updates.maintenance_mode });
   }

@@ -8,6 +8,7 @@ import MobileBottomNav     from "./components/mobile/MobileBottomNav.jsx";
 import NotificationPrompt  from "./components/NotificationPrompt.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ToastProvider }    from "./components/ui/Toast.jsx";
+import MaintenanceGate      from "./components/MaintenanceGate.jsx";
 import ProtectedRoute       from "./components/auth/ProtectedRoute.jsx";
 import LogoSplash           from "./components/LogoSplash.jsx";
 
@@ -220,6 +221,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <LanguageProvider>
           <ToastProvider>
             <AuthProvider>
+              <MaintenanceGate>
               <Suspense fallback={<PageLoader />}>
               <AppWithNav>
                 <Routes>
@@ -298,6 +300,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                 </Routes>
               </AppWithNav>
               </Suspense>
+              </MaintenanceGate>
             </AuthProvider>
           </ToastProvider>
         </LanguageProvider>

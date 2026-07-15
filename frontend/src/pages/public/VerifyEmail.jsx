@@ -3,6 +3,9 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react";
 import api from "../../services/api.js";
+import { authService } from "../../services/auth.service.js";
+
+const roleHome = (role) => role === "admin" ? "/admin" : role === "restaurateur" ? "/restaurant" : role === "organisateur" ? "/event" : "/";
 
 const P = "#E8A045"; const S = "#3D6B55"; const DARK = "#1E2E28"; const MUTED = "#9BA89F";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -20,11 +23,12 @@ export default function VerifyEmail() {
 
   useEffect(() => {
     if (!token) { setStatus("error"); setMessage("Lien invalide ou manquant."); return; }
-    api.get(`/auth/verify-email?token=${encodeURIComponent(token)}`)
-      .then(res => {
-        if (res.data.data?.already_verified) setStatus("already");
-        else setStatus("success");
-        setMessage(res.data.message || "");
+    authService.verifyEmail(token)
+      .then(data => {
+        if (data?.already_verified) { setStatus("already"); return; }
+        setStatus("success");
+        // Auto-connexion : le backend a renvoyé des tokens (déjà stockés par le service).
+        if (data?.user) setTimeout(() => window.location.replace(roleHome(data.user.role)), 1400);
       })
       .catch(e => {
         setStatus("error");
@@ -84,7 +88,7 @@ export default function VerifyEmail() {
               {status === "already" ? "E-mail déjà vérifié !" : "E-mail vérifié ! ✓"}
             </h2>
             <p style={{ color: MUTED, fontSize: 14, margin: "0 0 28px" }}>
-              Votre compte TablièreCI est activé. Vous pouvez maintenant réserver des tables.
+              {status === "success" ? "Votre compte est activé — connexion en cours…" : "Votre compte TablièreCI est activé."}
             </p>
             <button onClick={() => navigate("/connexion")}
               style={{ background: P, color: "#1A1000", border: "none", borderRadius: 10,

@@ -256,22 +256,22 @@ export const register = asyncHandler(async (req, res) => {
   // Envoi email (asynchrone, ne bloque pas la réponse)
   sendVerificationEmail(email, full_name, emailToken).catch(() => {});
 
-  const { access, refresh } = generateTokens(result.id, result.role);
-  logger.info("Nouvel utilisateur inscrit", { userId: result.id, role });
+  // PAS d'auto-connexion : aucun token tant que l'e-mail n'est pas vérifié.
+  // L'utilisateur doit cliquer le lien reçu par e-mail puis se connecter.
+  logger.info("Nouvel utilisateur inscrit (en attente de vérification e-mail)", { userId: result.id, role });
 
   return created(res, {
-    user: result,
-    access_token:  access,
-    refresh_token: refresh,
-    email_sent:    true,
-  }, "Compte créé — vérifiez votre e-mail");
+    user:               { id: result.id, email: result.email, full_name: result.full_name, role: result.role },
+    email_sent:         true,
+    needs_verification: true,
+  }, "Compte créé — vérifiez votre e-mail pour vous connecter.");
 });
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const { rows } = await query(
-    `SELECT id, email, full_name, role, status, password_hash, restaurant_id, avatar_url
+    `SELECT id, email, full_name, role, status, password_hash, restaurant_id, avatar_url, email_verified
      FROM users WHERE email = $1`, [email]
   );
   const user = rows[0];
@@ -283,6 +283,13 @@ export const login = asyncHandler(async (req, res) => {
   const valid = await bcrypt.compare(password, user.password_hash || "");
   if (!valid) return unauth(res, "Email ou mot de passe incorrect");
   if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
+  // Vérification d'e-mail OBLIGATOIRE avant toute connexion.
+  if (user.email_verified === false) {
+    return res.status(403).json({
+      success: false, code: "EMAIL_NOT_VERIFIED", email: user.email,
+      message: "Vérifiez votre adresse e-mail avant de vous connecter. Consultez votre boîte mail (et les spams).",
+    });
+  }
 
   await query("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user.id]).catch(() => {});
   await cache.del(`user:${user.id}`).catch(() => {});
@@ -392,7 +399,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
 
   // Chercher un compte avec ce token non expiré
   const { rows: [user] } = await query(
-    `SELECT id, email_verified FROM users
+    `SELECT id, email, full_name, role, status, restaurant_id, avatar_url, email_verified FROM users
      WHERE email_token = $1 AND email_token_expires > NOW()`,
     [token]
   ).catch(() => ({ rows: [] }));
@@ -417,7 +424,14 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   );
   await cache.del(`user:${user.id}`).catch(() => {});
 
-  return ok(res, { verified: true }, "E-mail vérifié avec succès");
+  // Auto-connexion après vérification (sauf compte suspendu) : clic sur le lien →
+  // vérifié → connecté, sans re-saisir ses identifiants.
+  if (["suspendu", "bloque"].includes(user.status)) {
+    return ok(res, { verified: true }, "E-mail vérifié avec succès");
+  }
+  const { access, refresh } = generateTokens(user.id, user.role);
+  const { email_verified: _ev, status: _st, ...safeUser } = user;
+  return ok(res, { verified: true, user: safeUser, access_token: access, refresh_token: refresh }, "E-mail vérifié avec succès");
 });
 
 // ── POST /auth/resend-verification ───────────────────────────────────────────

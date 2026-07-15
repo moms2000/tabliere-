@@ -76,6 +76,12 @@ async function runBusinessMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token_expires TIMESTAMPTZ`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token   VARCHAR(64)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ`,
+    // RATTRAPAGE une-fois : au déploiement de la vérification e-mail obligatoire au
+    // login, on considère TOUS les comptes déjà créés comme vérifiés (sinon ils
+    // seraient bloqués rétroactivement). Cutoff figé = instant du déploiement → les
+    // NOUVELLES inscriptions (après) devront vérifier. Idempotent (cutoff fixe).
+    `UPDATE users SET email_verified = TRUE
+       WHERE email_verified = FALSE AND created_at < TIMESTAMPTZ '2026-07-15 17:56:55+00'`,
 
     // Table avis clients
     `CREATE TABLE IF NOT EXISTS reviews (

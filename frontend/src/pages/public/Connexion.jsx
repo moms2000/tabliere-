@@ -3,6 +3,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { authService } from "../../services/auth.service.js";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -162,6 +163,12 @@ function StepForm({ type, onBack }) {
   const [remember, setRemember] = useState(true);
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [needsVerif, setNeedsVerif] = useState(""); // email à re-vérifier
+  const [resent,   setResent]   = useState(false);
+
+  const doResend = async () => {
+    try { await authService.resendVerification(needsVerif); setResent(true); } catch { setResent(true); }
+  };
 
   const from = location.state?.from?.pathname || null;
 
@@ -224,6 +231,8 @@ function StepForm({ type, onBack }) {
       const status = err.response?.status;
       if (status === 401 || status === 400) {
         setError("Email ou mot de passe incorrect.");
+      } else if (status === 403 && err.response?.data?.code === "EMAIL_NOT_VERIFIED") {
+        setNeedsVerif(err.response?.data?.email || email); setResent(false); setError("");
       } else if (status === 403) {
         setError("Votre compte a été suspendu. Contactez le support.");
       } else {
@@ -315,6 +324,27 @@ function StepForm({ type, onBack }) {
                 borderRadius: 8, padding: "10px 13px" }}>
                 <AlertCircle size={14} color="#DC2626" />
                 <span style={{ fontSize: 13, color: "#DC2626" }}>{error}</span>
+              </div>
+            )}
+
+            {needsVerif && (
+              <div style={{ background: "#FEF6EC", border: "0.5px solid #F0C98A", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <Mail size={15} color="#C47D1A" />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#7a5a1a" }}>E-mail non vérifié</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: "#7a5a1a", lineHeight: 1.5 }}>
+                  Vous devez confirmer votre adresse <strong>{needsVerif}</strong> avant de vous connecter. Vérifiez votre boîte mail (et les spams).
+                </div>
+                {resent ? (
+                  <div style={{ fontSize: 12.5, color: "#1D9E75", fontWeight: 600, marginTop: 8 }}>✓ Nouvel e-mail de vérification envoyé.</div>
+                ) : (
+                  <button type="button" onClick={doResend}
+                    style={{ marginTop: 8, border: "none", background: "#E8A045", color: "#1A1000", borderRadius: 8,
+                      padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                    Renvoyer l'e-mail de vérification
+                  </button>
+                )}
               </div>
             )}
 

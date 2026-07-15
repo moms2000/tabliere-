@@ -335,6 +335,9 @@ function ResaTab({ event, tables = [] }) {
   const [depForm, setDepForm] = useState({ method: "", ref: "" });
   const [qr, setQr] = useState(null);             // résa dont on affiche le QR
   const [filter, setFilter] = useState("attente"); // attente | confirme | all
+  const [refuseT, setRefuseT] = useState(null);    // résa à refuser (modale)
+  const [refuseReason, setRefuseReason] = useState("");
+  const toast = useToast();
 
   const load = () => eventReservationsService.listForEvent(eventId).then(d => setResas(d?.reservations || [])).catch(console.error).finally(() => setLoading(false));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [eventId]);
@@ -352,25 +355,30 @@ function ResaTab({ event, tables = [] }) {
     try {
       await eventReservationsService.confirm(deposit.id, { deposit_method: depForm.method || undefined, deposit_ref: depForm.ref || undefined });
       setDeposit(null); setDepForm({ method: "", ref: "" }); load();
-    } catch (e) { alert(e.response?.data?.message || "Erreur lors de la confirmation"); }
+      toast("Acompte confirmé — QR envoyé au client.", "success");
+    } catch (e) { toast(e.response?.data?.message || "Erreur lors de la confirmation.", "error"); }
     finally { setBusy(null); }
   };
-  const refuse = async (r) => {
-    const reason = window.prompt("Motif du refus (envoyé au client, facultatif) :", "");
-    if (reason === null) return;
-    try { await eventReservationsService.cancel(r.id, reason || undefined); load(); } catch { alert("Erreur"); }
+  const doRefuse = async () => {
+    try {
+      await eventReservationsService.cancel(refuseT.id, refuseReason || undefined);
+      setRefuseT(null); setRefuseReason(""); load();
+      toast("Réservation refusée — le client a été notifié.", "success");
+    } catch { toast("Erreur lors du refus.", "error"); }
   };
   const resend = async (r) => {
-    try { await eventReservationsService.resendQr(r.id); alert("QR code renvoyé au client (e-mail + WhatsApp)."); } catch { alert("Erreur"); }
+    try { await eventReservationsService.resendQr(r.id); toast("QR code renvoyé au client (e-mail + WhatsApp).", "success"); }
+    catch { toast("Erreur lors du renvoi.", "error"); }
   };
   const createManual = async () => {
-    if (!mf.guest_name.trim()) { alert("Nom du client requis."); return; }
-    if (!mf.guest_phone.trim() && !mf.guest_email.trim()) { alert("Téléphone ou e-mail requis."); return; }
+    if (!mf.guest_name.trim()) { toast("Nom du client requis.", "error"); return; }
+    if (!mf.guest_phone.trim() && !mf.guest_email.trim()) { toast("Téléphone ou e-mail requis.", "error"); return; }
     setBusy("manual");
     try {
       await eventReservationsService.createManual({ event_id: eventId, ...mf, party_size: Number(mf.party_size) || 1, table_id: mf.table_id || undefined });
       setManual(false); setMf({ guest_name: "", guest_phone: "", guest_email: "", table_id: "", party_size: 1, special_request: "" }); load();
-    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
+      toast("Réservation manuelle créée — client notifié pour l'acompte.", "success");
+    } catch (e) { toast(e.response?.data?.message || "Erreur.", "error"); }
     finally { setBusy(null); }
   };
 
@@ -386,7 +394,8 @@ function ResaTab({ event, tables = [] }) {
     const table = r.table_label ? `${r.table_kind === "vip" ? "VIP " : ""}${r.table_label}` : "Entrée";
     let msg;
     if (r.status === "confirme") {
-      msg = `Bonjour ${r.client_name || "cher client"}, votre réservation ${r.ref} pour « ${eventName} » est CONFIRMÉE ✅. Votre billet + QR code : ${window.location.origin}/billet/${r.ref}`;
+      const tk = r.ticket_token ? `?t=${r.ticket_token}` : "";
+      msg = `Bonjour ${r.client_name || "cher client"}, votre réservation ${r.ref} pour « ${eventName} » est CONFIRMÉE ✅. Votre billet + QR code : ${window.location.origin}/billet/${r.ref}${tk}`;
     } else {
       const methods = (event.payment_methods || []).map(m => `${m.operator} : ${m.number}${m.holder ? ` (${m.holder})` : ""}`).join(" | ") || "à communiquer";
       const dep = r.deposit_amount ? `\nAcompte : ${fmt(r.deposit_amount)}` : "";
@@ -409,7 +418,7 @@ function ResaTab({ event, tables = [] }) {
         columns: COLS, rows, filename: `clients-evenement`,
         summary: [{ label: "Réservations", value: resas.length }, { label: "Confirmées", value: resas.filter(r => r.status === "confirme").length }] };
       if (kind === "pdf") await mod.exportPDF(common); else await mod.exportXLSX({ sheetName: "Clients", ...common });
-    } catch (e) { alert("Export impossible"); console.error(e); }
+    } catch (e) { toast("Export impossible : " + (e?.message || ""), "error"); console.error(e); }
     finally { setBusy(null); }
   };
 
@@ -484,7 +493,7 @@ function ResaTab({ event, tables = [] }) {
                     <button onClick={() => { setDeposit(r); setDepForm({ method: "", ref: "" }); }}
                       style={btnSt(GREEN, "white")}><Check size={14} /> Acompte reçu</button>
                     {phone && <a href={waLink(r)} target="_blank" rel="noreferrer" style={{ ...btnSt("#25D366", "white"), textDecoration: "none" }}><MessageCircle size={14} /> WhatsApp</a>}
-                    <button onClick={() => refuse(r)} style={btnSt("white", "#DC2626", true)}><X size={14} /> Refuser</button>
+                    <button onClick={() => { setRefuseT(r); setRefuseReason(""); }} style={btnSt("white", "#DC2626", true)}><X size={14} /> Refuser</button>
                   </>
                 )}
                 {r.status === "confirme" && (
@@ -571,8 +580,29 @@ function ResaTab({ event, tables = [] }) {
               <QRCode value={qr.ref} size={190} fgColor={DARK} />
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
-              <Btn icon={ExternalLink} onClick={() => window.open(`${window.location.origin}/billet/${qr.ref}`, "_blank")}>Page billet</Btn>
+              <Btn icon={ExternalLink} onClick={() => window.open(`${window.location.origin}/billet/${qr.ref}${qr.ticket_token ? `?t=${qr.ticket_token}` : ""}`, "_blank")}>Page billet</Btn>
               <Btn variant="primary" icon={RefreshCw} onClick={() => { resend(qr); setQr(null); }}>Renvoyer au client</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modale : refuser une réservation */}
+      <Modal open={!!refuseT} title="Refuser la réservation" width={380} onClose={() => setRefuseT(null)}>
+        {refuseT && (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 13, color: DARK }}>
+              Refuser la réservation de <strong>{refuseT.client_name || refuseT.guest_name}</strong> ({refuseT.ref}) ?
+              Le client sera notifié (e-mail{(refuseT.client_phone || refuseT.guest_phone) ? " + WhatsApp" : ""}).
+            </div>
+            <FormField label="Motif (envoyé au client, facultatif)">
+              <textarea value={refuseReason} onChange={e => setRefuseReason(e.target.value)} rows={2}
+                placeholder="Ex : Table déjà attribuée, choisissez-en une autre."
+                style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: 13, background: BG, outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box", color: DARK }} />
+            </FormField>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setRefuseT(null)}>Annuler</Btn>
+              <Btn variant="danger" icon={X} onClick={doRefuse}>Refuser & notifier</Btn>
             </div>
           </div>
         )}

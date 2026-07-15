@@ -253,8 +253,9 @@ export const getClients = asyncHandler(async (req, res) => {
     const pn = c.phone_norm || normPhone(c.phone);
     if (pn && seenPhones.has(pn)) continue; // déjà présent via une réservation
     if (pn) seenPhones.add(pn);
+    const noNull = (v) => { const s = String(v ?? "").trim(); return (!s || /^(null|undefined|n\/?a)$/i.test(s)) ? null : v; };
     imported.push({
-      name: c.name || "Client", phone: c.phone || null, email: c.email || null,
+      name: c.name || "Client", phone: noNull(c.phone), email: noNull(c.email),
       visits: 0, total_covers: 0, confirmed: 0, no_shows: 0,
       first_visit: null, last_visit: null, imported: true, note: c.note || null,
     });
@@ -292,9 +293,11 @@ export const importClients = asyncHandler(async (req, res) => {
   const clean = [];
   let skipped = 0;
   for (const c of list) {
-    const name = (c.name ? String(c.name).trim() : "").slice(0, 160) || null;
-    const phone = (c.phone ? String(c.phone).trim() : "").slice(0, 40) || null;
-    const email = (c.email ? String(c.email).trim().toLowerCase() : "").slice(0, 200) || null;
+    // Nettoyage : les exports externes mettent souvent "null"/"undefined"/"N/A" en texte
+    const clean = (v) => { const s = String(v ?? "").trim(); return (!s || /^(null|undefined|n\/?a|-)$/i.test(s)) ? "" : s; };
+    const name = clean(c.name).slice(0, 160) || null;
+    const phone = clean(c.phone).slice(0, 40) || null;
+    const email = clean(c.email).toLowerCase().slice(0, 200) || null;
     const note = (c.note ? String(c.note).trim() : "").slice(0, 500) || null;
     const pn = normPhone(phone);
     if (!pn && !email) { skipped++; continue; }          // fiche inexploitable

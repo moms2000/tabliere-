@@ -14,6 +14,7 @@ import { query, withTransaction } from "../config/db.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { notificationQueue } from "../queues/index.js";
+import { ticketToken, verifyTicketToken } from "../utils/ticketToken.js";
 
 async function resaById(id) {
   const { rows } = await query(
@@ -153,7 +154,9 @@ export const listForEvent = asyncHandler(async (req, res) => {
      WHERE r.event_id = $1
      ORDER BY r.created_at DESC`, [eventId]
   );
-  return ok(res, { reservations: rows });
+  // Jeton d'e-billet (pour construire les liens organisateur/WhatsApp) — confirmées uniquement
+  const withTokens = rows.map(r => r.status === "confirme" ? { ...r, ticket_token: ticketToken(r.ref) } : r);
+  return ok(res, { reservations: withTokens });
 });
 
 // ── GET /event-reservations/mine — réservations du client connecté ───────────
@@ -245,9 +248,12 @@ export const getTicket = asyncHandler(async (req, res) => {
      WHERE r.ref = $1`, [ref]
   );
   if (!r) return notFound(res, "Billet introuvable");
-  // Le QR n'est révélé QUE si la réservation est confirmée (acompte reçu).
-  if (r.status !== "confirme") {
-    return ok(res, { confirmed: false, status: r.status, event_name: r.event_name, ref: r.ref }, "Réservation pas encore confirmée");
+  // Anti-énumération : on ne dévoile le billet qu'avec un jeton valide (fourni dans
+  // les liens email/WhatsApp). Sans jeton valide → réponse minimale, indistinguable
+  // d'une réservation non confirmée.
+  const tokenOk = verifyTicketToken(ref, req.query.t);
+  if (r.status !== "confirme" || !tokenOk) {
+    return ok(res, { confirmed: false, ref: r.ref, event_name: tokenOk ? r.event_name : null }, "Billet non disponible");
   }
   return ok(res, {
     confirmed: true, qr: r.ref, ref: r.ref, name: r.name, party_size: r.party_size,

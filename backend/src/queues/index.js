@@ -3,9 +3,13 @@ import { sendPushToUser }  from "../services/push.service.js";
 import { logger }          from "../utils/logger.js";
 import { query }           from "../config/db.js";
 import { env }             from "../config/env.js";
+import { getSetting }      from "../utils/platformSettings.js";
 import axios               from "axios";
 import QRCode              from "qrcode";
 import { ticketToken }     from "../utils/ticketToken.js";
+
+// Lit un toggle admin (platform_settings) — renvoie true/false
+const isOn = async (key, def = "true") => (await getSetting(key, def)) === "true";
 
 const FRONT = (env.FRONTEND_URL || "https://tabliereci.net").replace(/\/$/, "");
 const fmtF = (n) => (Number(n) || 0).toLocaleString("fr-FR") + " FCFA";
@@ -73,6 +77,27 @@ function fmtDate(dt) {
 async function processNotification(name, data) {
   logger.info(`[Notif] Traitement: ${name}`);
 
+  // ── Respect des réglages admin (section « Notifications » des paramètres) ──
+  // Chaque catégorie de notif peut être coupée globalement par l'administrateur.
+  // notif_paiements est OFF par défaut (comme dans SETTINGS_DEFAULTS).
+  const CATEGORY = {
+    confirmation:        { key: "notif_reservations", def: "true"  },
+    confirmation_client: { key: "notif_reservations", def: "true"  },
+    cancellation:        { key: "notif_reservations", def: "true"  },
+    payment_success:     { key: "notif_paiements",    def: "false" },
+    event_resa_pending:  { key: "notif_reservations", def: "true"  },
+    event_resa_confirmed:{ key: "notif_reservations", def: "true"  },
+    event_resa_declined: { key: "notif_reservations", def: "true"  },
+  };
+  const cat = CATEGORY[name];
+  if (cat && !(await isOn(cat.key, cat.def))) {
+    logger.info(`[Notif] ${name} ignorée — réglage « ${cat.key} » désactivé par l'admin`);
+    return;
+  }
+  // Canal WhatsApp : interrupteur maître. Si OFF → aucun message WhatsApp envoyé
+  // (les e-mails, eux, restent régis par leur catégorie ci-dessus).
+  const waOn = await isOn("notif_whatsapp", "true");
+
   switch (name) {
     case "confirmation": {
       // Email + WhatsApp au client après réservation
@@ -117,7 +142,7 @@ async function processNotification(name, data) {
       }
 
       // WhatsApp seulement si confirmée (pas pour une simple demande en attente)
-      if (user?.phone && !isPending) {
+      if (waOn && user?.phone && !isPending) {
         await whatsappService.sendReservationConfirmation({
           phone:      user.phone,
           name:       user.full_name,
@@ -177,7 +202,7 @@ async function processNotification(name, data) {
         });
       }
 
-      if (resa?.phone) {
+      if (waOn && resa?.phone) {
         await whatsappService.sendConfirmedByResto({
           phone:      resa.phone,
           name:       resa.full_name,
@@ -216,7 +241,7 @@ async function processNotification(name, data) {
       const { rows: [user] } = await query(
         "SELECT full_name, phone FROM users WHERE id = $1", [data.userId]
       );
-      if (user?.phone) {
+      if (waOn && user?.phone) {
         await whatsappService.sendPaymentSuccess({
           phone:  user.phone,
           name:   user.full_name,
@@ -267,7 +292,7 @@ async function processNotification(name, data) {
             <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
           </div>`,
       });
-      if (r.phone) await whatsappService.sendText(r.phone,
+      if (waOn && r.phone) await whatsappService.sendText(r.phone,
         `Bonjour ${r.name}, votre réservation ${r.ref} pour *${r.event_name}* (${fmtDate(r.starts_at)}, ${table}) est enregistrée mais *en attente d'acompte*${dep ? ` de ${fmtF(dep)}` : ""}.\n\nPayez via : ${mText}\n\n⚠️ Table confirmée seulement après réception de l'acompte (1er payé, 1er servi). Le QR code vous sera envoyé après confirmation.`
       ).catch(() => {});
       break;
@@ -305,7 +330,7 @@ async function processNotification(name, data) {
             <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
           </div>`,
       });
-      if (r.phone) await whatsappService.sendText(r.phone,
+      if (waOn && r.phone) await whatsappService.sendText(r.phone,
         `✅ ${r.name}, votre acompte est reçu ! Votre réservation ${r.ref} pour *${r.event_name}* (${fmtDate(r.starts_at)}, ${table}) est *confirmée*.\n\nVotre billet + QR code : ${ticketUrl}\nPrésentez-le à l'entrée. 🎉`
       ).catch(() => {});
       break;
@@ -329,7 +354,7 @@ async function processNotification(name, data) {
             <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">TablièreCI — <a href="https://tabliereci.net" style="color:#e8a045">tabliereci.net</a></p>
           </div>`,
       });
-      if (r.phone) await whatsappService.sendText(r.phone,
+      if (waOn && r.phone) await whatsappService.sendText(r.phone,
         `Bonjour ${r.name}, concernant votre réservation ${r.ref} (*${r.event_name}*) : ${reason}\nContactez l'organisateur pour une autre table.`
       ).catch(() => {});
       break;

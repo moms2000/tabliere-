@@ -28,6 +28,7 @@ const ORDER_STATUSES = ["en_attente", "servi", "paye", "annule"];
 // Retourne { items, total }. Lève si panier vide.
 async function priceItems(eventId, rawItems) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) throw new AppError("Panier vide", 400);
+  if (rawItems.length > 100) throw new AppError("Trop d'articles", 400);
   const ids = [...new Set(rawItems.map(it => it.id).filter(Boolean))];
   const { rows: bRows } = ids.length
     ? await query("SELECT id, name, price FROM event_bottles WHERE event_id = $1 AND id = ANY($2) AND is_active = TRUE", [eventId, ids])
@@ -326,6 +327,14 @@ export const doCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   await assertEventActive(req.eventScope);
   const undo = req.body?.undo === true;
+  // On ne pointe à l'entrée qu'une réservation CONFIRMÉE (acompte reçu).
+  if (!undo) {
+    const { rows: [chk] } = await query(
+      "SELECT status FROM event_reservations WHERE id = $1 AND event_id = $2", [req.params.resaId, req.eventScope]
+    );
+    if (!chk) return notFound(res, "Réservation introuvable");
+    if (chk.status !== "confirme") throw new AppError("Réservation non confirmée — l'organisateur doit valider l'acompte avant le check-in.", 400);
+  }
   const arrived = undo ? null : arrivedFromBody(req.body);
   if (!undo) await assertArrivedFits(req.params.resaId, arrived);
   const pin = undo ? null : await genUniqueOrderPin(req.eventScope);

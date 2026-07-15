@@ -218,6 +218,14 @@ export const updateItem = asyncHandler(async (req, res) => {
   if (!item) return notFound(res, "Plat introuvable");
   _assertOwnerOrAdmin(req, { id: item.restaurant_id });
 
+  // Si on déplace le plat vers une catégorie, elle DOIT appartenir au même restaurant
+  if (req.body.category_id) {
+    const { rows: [cat] } = await query(
+      "SELECT 1 FROM menu_categories WHERE id = $1 AND restaurant_id = $2", [req.body.category_id, item.restaurant_id]
+    );
+    if (!cat) throw new AppError("Catégorie introuvable dans ce restaurant", 400);
+  }
+
   const ALLOWED = ["name","description","price","image_url","is_active","is_available","position","category_id","options"];
   const updates = [];
   const values  = [];

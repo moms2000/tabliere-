@@ -24,7 +24,8 @@ async function hasEligibleVisit(restaurantId, clientId) {
 
 // ── GET /restaurants/:slug/reviews ───────────────────────────────────────────
 export const listReviews = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
 
   const { rows: [resto] } = await query(

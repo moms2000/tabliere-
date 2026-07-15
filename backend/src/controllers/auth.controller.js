@@ -174,15 +174,39 @@ export const register = asyncHandler(async (req, res) => {
   if (existing.length > 0) throw new AppError("Email déjà utilisé", 409);
 
   const password_hash = await bcrypt.hash(password, 12);
+  // Token de vérification généré AVANT l'insert → email_verified=FALSE posé
+  // atomiquement (fail-closed : jamais de compte « vérifié » par défaut si un
+  // UPDATE échoue).
+  const emailToken   = crypto.randomBytes(32).toString("hex");
+  const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
 
   const result = await withTransaction(async (client) => {
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (full_name, email, phone, password_hash, role, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (full_name, email, phone, password_hash, role, status, email_verified, email_token, email_token_expires)
+       VALUES ($1, $2, $3, $4, $5, 'actif', FALSE, $6, $7)
        RETURNING id, email, full_name, role, status`,
-      [full_name, email, phone || null, password_hash, role || "client",
-       "actif"]  // compte actif immédiatement (restaurateur opérationnel dès l'inscription)
+      [full_name, email, phone || null, password_hash, role || "client", emailToken, tokenExpires]
     );
+
+    // Consommation ATOMIQUE du code d'accès (single-use, anti-course) DANS la
+    // transaction : si le code a été pris entre-temps (rowCount 0), on annule
+    // toute l'inscription. Fail-closed.
+    if (role === "restaurateur" && code_restaurateur) {
+      const { rowCount } = await client.query(
+        `UPDATE restaurateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
+         WHERE code = $2 AND is_used = FALSE`,
+        [user.id, code_restaurateur.trim().toUpperCase()]
+      );
+      if (rowCount === 0) throw new AppError("Ce code a déjà été utilisé.", 400);
+    }
+    if (role === "organisateur" && code_organisateur) {
+      const { rowCount } = await client.query(
+        `UPDATE organisateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
+         WHERE code = $2 AND is_used = FALSE`,
+        [user.id, code_organisateur.trim().toUpperCase()]
+      );
+      if (rowCount === 0) throw new AppError("Ce code a déjà été utilisé.", 400);
+    }
 
     if (role === "restaurateur" && restaurant_name) {
       let slug = restaurant_name.toLowerCase()
@@ -228,32 +252,9 @@ export const register = asyncHandler(async (req, res) => {
     ).catch((e) => logger.warn("Rattachement réservations invité échoué", { error: e?.message }));
   }
 
-  // Marquer le code comme utilisé
-  if (role === "restaurateur" && code_restaurateur) {
-    await query(
-      `UPDATE restaurateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
-       WHERE code = $2`,
-      [result.id, code_restaurateur.trim().toUpperCase()]
-    ).catch(e => logger.warn("Marquage code échoué", { error: e.message }));
-  }
-  if (role === "organisateur" && code_organisateur) {
-    await query(
-      `UPDATE organisateur_codes SET is_used = TRUE, used_by = $1, used_at = NOW()
-       WHERE code = $2`,
-      [result.id, code_organisateur.trim().toUpperCase()]
-    ).catch(e => logger.warn("Marquage code organisateur échoué", { error: e.message }));
-  }
+  // (Le code d'accès a été consommé atomiquement dans la transaction ci-dessus.)
 
-  // ── Générer token de vérification + envoyer l'email ─────────────────────────
-  const emailToken   = crypto.randomBytes(32).toString("hex");
-  const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-  await query(
-    `UPDATE users SET email_verified = FALSE, email_token = $1, email_token_expires = $2
-     WHERE id = $3`,
-    [emailToken, tokenExpires.toISOString(), result.id]
-  ).catch(e => logger.warn("[Register] Set email_token échoué", { error: e.message }));
-
-  // Envoi email (asynchrone, ne bloque pas la réponse)
+  // Envoi email de vérification (le token a été posé dans l'INSERT, fail-closed)
   sendVerificationEmail(email, full_name, emailToken).catch(() => {});
 
   // PAS d'auto-connexion : aucun token tant que l'e-mail n'est pas vérifié.
@@ -340,12 +341,14 @@ export const refresh = asyncHandler(async (req, res) => {
   // suspendu conserverait ses anciens droits tant qu'il détient un refresh token
   // (valable 30 jours). On régénère avec le rôle DB actuel.
   const { rows: [user] } = await query(
-    "SELECT id, role, status FROM users WHERE id = $1", [decoded.id]
+    "SELECT id, role, status, email_verified FROM users WHERE id = $1", [decoded.id]
   );
   if (!user) return unauth(res, "Compte introuvable");
   if (["suspendu", "bloque"].includes(user.status)) {
     return unauth(res, "Compte suspendu");
   }
+  // Même règle qu'au login : pas de rafraîchissement tant que l'e-mail n'est pas vérifié.
+  if (user.email_verified === false) return unauth(res, "E-mail non vérifié");
 
   const { access, refresh: newRefresh } = generateTokens(user.id, user.role);
   return ok(res, { access_token: access, refresh_token: newRefresh });

@@ -66,8 +66,13 @@ export const createEventReservation = asyncHandler(async (req, res) => {
   if (!event) return notFound(res, "Événement introuvable");
   if (event.status !== "publie") throw new AppError("Cet événement n'accepte pas encore de réservations", 400);
 
-  const partySize = Math.max(1, parseInt(b.party_size, 10) || 1);
+  const partySize = Math.min(100, Math.max(1, parseInt(b.party_size, 10) || 1));
   const promoter = b.promoter_code ? String(b.promoter_code).trim().toUpperCase().slice(0, 30) : null;
+  // Bornage des champs invité (mêmes limites que la réservation manuelle)
+  const gName  = b.guest_name  ? String(b.guest_name).trim().slice(0, 120) : null;
+  const gPhone = b.guest_phone ? String(b.guest_phone).trim().slice(0, 30) : null;
+  const gEmail = (b.guest_email && String(b.guest_email).trim().toLowerCase().slice(0, 200)) || null;
+  const sReq   = b.special_request ? String(b.special_request).slice(0, 500) : null;
 
   const resa = await withTransaction(async (client) => {
     let tableId = null, deposit = 0;
@@ -84,9 +89,7 @@ export const createEventReservation = asyncHandler(async (req, res) => {
        VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'en_attente', FALSE)
        RETURNING *`,
-      [event.id, req.user.id, tableId, partySize,
-       b.guest_name || null, b.guest_phone || null, (b.guest_email && String(b.guest_email).trim().toLowerCase()) || null,
-       b.special_request || null, promoter, deposit]
+      [event.id, req.user.id, tableId, partySize, gName, gPhone, gEmail, sReq, promoter, deposit]
     );
     return r;
   });
@@ -109,7 +112,7 @@ export const createManualReservation = asyncHandler(async (req, res) => {
   const phone = b.guest_phone ? String(b.guest_phone).trim().slice(0, 30) : null;
   const email = (b.guest_email && String(b.guest_email).trim().toLowerCase()) || null;
   if (!phone && !email) throw new AppError("Téléphone ou e-mail requis pour joindre le client", 400);
-  const partySize = Math.max(1, parseInt(b.party_size, 10) || 1);
+  const partySize = Math.min(100, Math.max(1, parseInt(b.party_size, 10) || 1));
 
   const resa = await withTransaction(async (client) => {
     let tableId = null, deposit = 0;
@@ -267,6 +270,7 @@ export const cancelEventReservation = asyncHandler(async (req, res) => {
   const resa = await resaById(req.params.id);
   if (!resa) return notFound(res, "Réservation introuvable");
   assertOwnerOrClient(req, resa);
+  if (resa.status === "annule") return ok(res, { reservation: resa }, "Déjà annulée"); // pas de re-notification
   const byOwner = req.user.role === "admin" || resa.owner_id === req.user.id;
   const reason = byOwner && req.body?.reason ? String(req.body.reason).slice(0, 200) : null;
 

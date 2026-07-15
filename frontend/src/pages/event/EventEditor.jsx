@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import QRCode from "react-qr-code";
 import {
   ArrowLeft, ExternalLink, Save, Plus, Pencil, Trash2, Check, X,
   Crown, Armchair, Calendar, Users, Phone, Copy, CheckCheck, FileText, Sheet, Mail,
+  QrCode, MessageCircle, RefreshCw, Download, Wallet, Trash,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { useToast } from "../../components/ui/Toast.jsx";
@@ -92,7 +94,7 @@ export default function EventEditor() {
       {tab === "details"   && <DetailsTab event={event} onSaved={load} publicUrl={publicUrl} />}
       {tab === "plan"      && <PlanTab event={event} tables={tables} onChanged={load} />}
       {tab === "bottles"   && <BottlesTab event={event} tables={tables} onChanged={load} />}
-      {tab === "resa"      && <ResaTab eventId={event.id} eventName={event.name} />}
+      {tab === "resa"      && <ResaTab event={event} tables={tables} />}
       {tab === "checkin"   && <CheckinTab eventId={event.id} />}
       {tab === "promoters" && <PromotersTab event={event} />}
       {tab === "staff"     && <StaffTab event={event} tables={tables} onChanged={load} />}
@@ -110,12 +112,19 @@ function DetailsTab({ event, onSaved, publicUrl }) {
     starts_at: toLocalInput(event.starts_at), ends_at: toLocalInput(event.ends_at),
     cover_url: event.cover_url || "", is_public: event.is_public !== false,
     capacity: event.capacity ?? "", entry_price: event.entry_price ?? "",
+    payment_methods: Array.isArray(event.payment_methods) ? event.payment_methods : [],
+    deposit_percent: event.deposit_percent ?? "", deposit_message: event.deposit_message || "",
   });
   const [photos, setPhotos] = useState(Array.isArray(event.photos) ? event.photos : (event.cover_url ? [event.cover_url] : []));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const setPhotoAt = (i, url) => setPhotos(p => { const n = [...p]; if (url) n[i] = url; else n.splice(i, 1); return n.filter(Boolean); });
+  // Numéros mobile money de l'organisateur
+  const methods = f.payment_methods || [];
+  const addMethod = () => set("payment_methods", [...methods, { operator: "Orange Money", number: "", holder: "" }]);
+  const setMethod = (i, k, v) => set("payment_methods", methods.map((m, j) => j === i ? { ...m, [k]: v } : m));
+  const delMethod = (i) => set("payment_methods", methods.filter((_, j) => j !== i));
 
   const save = async () => {
     setSaving(true);
@@ -227,6 +236,56 @@ function DetailsTab({ event, onSaved, publicUrl }) {
           <Btn variant="primary" icon={Save} onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Btn>
         </div>
       </Card>
+
+      {/* Paiement & Acomptes — numéros mobile money de l'organisateur */}
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+          <Wallet size={16} color={P} /> Paiement & Acomptes
+        </div>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+          Vos numéros mobile money pour recevoir les acomptes. Ils sont envoyés au client à chaque réservation (en ligne ou manuelle).
+          La table n'est confirmée qu'après réception de l'acompte.
+        </div>
+
+        <div style={{ display: "grid", gap: 8 }}>
+          {methods.map((m, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <select value={m.operator} onChange={e => setMethod(i, "operator", e.target.value)}
+                style={{ border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 10px", fontSize: 12.5, background: BG, fontFamily: FONT, color: DARK, width: 140 }}>
+                {["Orange Money", "MTN MoMo", "Wave", "Moov Money"].map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <input value={m.number} onChange={e => setMethod(i, "number", e.target.value)} placeholder="Numéro (07…)"
+                style={{ flex: 1, minWidth: 120, border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: 13, background: BG, outline: "none", fontFamily: FONT, color: DARK }} />
+              <input value={m.holder} onChange={e => setMethod(i, "holder", e.target.value)} placeholder="Titulaire"
+                style={{ flex: 1, minWidth: 100, border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: 13, background: BG, outline: "none", fontFamily: FONT, color: DARK }} />
+              <button onClick={() => delMethod(i)} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 6, display: "flex" }}><Trash size={15} color="#DC2626" /></button>
+            </div>
+          ))}
+          <button onClick={addMethod} style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start",
+            border: `1px dashed ${BORDER}`, background: "white", borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, color: P, cursor: "pointer", fontFamily: FONT }}>
+            <Plus size={14} /> Ajouter un numéro mobile money
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
+          <div style={{ width: 220 }}>
+            <FormField label="Acompte exigé (% du prix de table)">
+              <Input type="number" value={f.deposit_percent} onChange={e => set("deposit_percent", e.target.value)} placeholder="Ex : 50" />
+            </FormField>
+          </div>
+        </div>
+        <div style={{ fontSize: 11.5, color: MUTED, marginTop: -4 }}>
+          Appliqué au prix de chaque table (ex. 50 % d'une table à 2 000 000 F = 1 000 000 F). Un montant fixe peut être défini par table dans « Plan & Tables ».
+        </div>
+        <FormField label="Message / consignes de paiement (facultatif)">
+          <textarea value={f.deposit_message} onChange={e => set("deposit_message", e.target.value)} rows={2}
+            placeholder="Ex : Envoyez l'acompte puis la capture d'écran au 07…"
+            style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: 13, background: BG, outline: "none", fontFamily: FONT, resize: "vertical", boxSizing: "border-box", color: DARK }} />
+        </FormField>
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+          <Btn variant="primary" icon={Save} onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Btn>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -264,20 +323,72 @@ function TableGroup({ title, icon: Icon, items, onEdit, onDel }) {
   );
 }
 
-// ── Réservations ─────────────────────────────────────────────────────────────
-function ResaTab({ eventId, eventName }) {
+// ── Réservations + acomptes ──────────────────────────────────────────────────
+function ResaTab({ event, tables = [] }) {
+  const eventId = event.id, eventName = event.name;
   const [resas, setResas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
+  const [manual, setManual] = useState(false);
+  const [mf, setMf] = useState({ guest_name: "", guest_phone: "", guest_email: "", table_id: "", party_size: 1, special_request: "" });
+  const [deposit, setDeposit] = useState(null);   // résa à confirmer (modale acompte)
+  const [depForm, setDepForm] = useState({ method: "", ref: "" });
+  const [qr, setQr] = useState(null);             // résa dont on affiche le QR
+  const [filter, setFilter] = useState("attente"); // attente | confirme | all
+
   const load = () => eventReservationsService.listForEvent(eventId).then(d => setResas(d?.reservations || [])).catch(console.error).finally(() => setLoading(false));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [eventId]);
 
-  const act = async (id, kind) => {
-    try { kind === "confirm" ? await eventReservationsService.confirm(id) : await eventReservationsService.cancel(id); load(); }
-    catch (e) { alert("Erreur"); }
+  const activeTables = (tables || []).filter(t => t.is_active !== false);
+  const depositFor = (tableId) => {
+    const t = activeTables.find(x => String(x.id) === String(tableId));
+    if (!t) return 0;
+    if (t.deposit_amount > 0) return t.deposit_amount;
+    return event.deposit_percent > 0 ? Math.round((t.price || 0) * event.deposit_percent / 100) : 0;
   };
 
-  // Export de la base clients de CET événement (PDF / Excel)
+  const confirmDeposit = async () => {
+    setBusy("confirm");
+    try {
+      await eventReservationsService.confirm(deposit.id, { deposit_method: depForm.method || undefined, deposit_ref: depForm.ref || undefined });
+      setDeposit(null); setDepForm({ method: "", ref: "" }); load();
+    } catch (e) { alert(e.response?.data?.message || "Erreur lors de la confirmation"); }
+    finally { setBusy(null); }
+  };
+  const refuse = async (r) => {
+    const reason = window.prompt("Motif du refus (envoyé au client, facultatif) :", "");
+    if (reason === null) return;
+    try { await eventReservationsService.cancel(r.id, reason || undefined); load(); } catch { alert("Erreur"); }
+  };
+  const resend = async (r) => {
+    try { await eventReservationsService.resendQr(r.id); alert("QR code renvoyé au client (e-mail + WhatsApp)."); } catch { alert("Erreur"); }
+  };
+  const createManual = async () => {
+    if (!mf.guest_name.trim()) { alert("Nom du client requis."); return; }
+    if (!mf.guest_phone.trim() && !mf.guest_email.trim()) { alert("Téléphone ou e-mail requis."); return; }
+    setBusy("manual");
+    try {
+      await eventReservationsService.createManual({ event_id: eventId, ...mf, party_size: Number(mf.party_size) || 1, table_id: mf.table_id || undefined });
+      setManual(false); setMf({ guest_name: "", guest_phone: "", guest_email: "", table_id: "", party_size: 1, special_request: "" }); load();
+    } catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    finally { setBusy(null); }
+  };
+
+  // Lien WhatsApp pré-rempli (fallback immédiat, sans API)
+  const waLink = (r) => {
+    const phone = String(r.client_phone || r.guest_phone || "").replace(/\D/g, "");
+    const table = r.table_label ? `${r.table_kind === "vip" ? "VIP " : ""}${r.table_label}` : "Entrée";
+    let msg;
+    if (r.status === "confirme") {
+      msg = `Bonjour ${r.client_name || "cher client"}, votre réservation ${r.ref} pour « ${eventName} » est CONFIRMÉE ✅. Votre billet + QR code : ${window.location.origin}/billet/${r.ref}`;
+    } else {
+      const methods = (event.payment_methods || []).map(m => `${m.operator} : ${m.number}${m.holder ? ` (${m.holder})` : ""}`).join(" | ") || "à communiquer";
+      const dep = r.deposit_amount ? `\nAcompte : ${fmt(r.deposit_amount)}` : "";
+      msg = `Bonjour ${r.client_name || "cher client"}, votre réservation ${r.ref} pour « ${eventName} » (${table}, ${r.party_size} pers.) est en attente d'acompte.${dep}\nPayez via mobile money : ${methods}\n⚠️ Table confirmée seulement après réception de l'acompte (1er payé, 1er servi).`;
+    }
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  };
+
   const doExport = async (kind) => {
     setBusy(kind);
     try {
@@ -290,77 +401,186 @@ function ResaTab({ eventId, eventName }) {
       ]);
       const common = { title: `Base clients — ${eventName || "événement"}`, subtitle: "TablièreCI — Événements",
         columns: COLS, rows, filename: `clients-evenement`,
-        summary: [{ label: "Réservations", value: resas.length },
-          { label: "Confirmées", value: resas.filter(r => r.status === "confirme").length }] };
-      if (kind === "pdf") await mod.exportPDF(common);
-      else await mod.exportXLSX({ sheetName: "Clients", ...common });
+        summary: [{ label: "Réservations", value: resas.length }, { label: "Confirmées", value: resas.filter(r => r.status === "confirme").length }] };
+      if (kind === "pdf") await mod.exportPDF(common); else await mod.exportXLSX({ sheetName: "Clients", ...common });
     } catch (e) { alert("Export impossible"); console.error(e); }
     finally { setBusy(null); }
   };
 
   if (loading) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
 
+  const pending = resas.filter(r => r.status === "en_attente");
+  const confirmed = resas.filter(r => r.status === "confirme");
+  const shown = filter === "attente" ? pending : filter === "confirme" ? confirmed : resas;
+  const hasPay = (event.payment_methods || []).length > 0;
+
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Base clients de l'événement</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: DARK }}>Réservations & acomptes</div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
-              {resas.length} réservation{resas.length > 1 ? "s" : ""} · {resas.filter(r => r.status === "confirme").length} confirmée{resas.filter(r => r.status === "confirme").length > 1 ? "s" : ""}
+              {pending.length} en attente d'acompte · {confirmed.length} confirmée{confirmed.length > 1 ? "s" : ""}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={!!busy || !resas.length}>{busy === "pdf" ? "…" : "PDF"}</Btn>
-            <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={!!busy || !resas.length}>{busy === "xls" ? "…" : "Excel"}</Btn>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn variant="primary" icon={Plus} onClick={() => setManual(true)}>Réservation manuelle</Btn>
+            <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={!!busy || !resas.length}>PDF</Btn>
+            <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={!!busy || !resas.length}>Excel</Btn>
           </div>
         </div>
+        {!hasPay && (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#7a5a1a", background: "#FEF6EC", border: "0.5px solid #F0C98A", borderRadius: 8, padding: "8px 12px" }}>
+            ⚠️ Aucun numéro mobile money configuré. Renseignez-le dans l'onglet « Détails » → « Paiement & Acomptes » pour que les clients reçoivent les instructions d'acompte.
+          </div>
+        )}
+        {/* Filtres */}
+        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+          {[["attente", `En attente (${pending.length})`], ["confirme", `Confirmées (${confirmed.length})`], ["all", "Toutes"]].map(([k, l]) => (
+            <button key={k} onClick={() => setFilter(k)}
+              style={{ border: `1px solid ${filter === k ? P : BORDER}`, background: filter === k ? "#FEF6EC" : "white",
+                color: filter === k ? "#C47D1A" : MUTED, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{l}</button>
+          ))}
+        </div>
       </Card>
-      {!resas.length && <Card><div style={{ textAlign: "center", padding: "38px 0", color: MUTED, fontSize: 13 }}>Aucune réservation pour le moment.</div></Card>}
-      {resas.map(r => {
+
+      {!shown.length && <Card><div style={{ textAlign: "center", padding: "38px 0", color: MUTED, fontSize: 13 }}>Aucune réservation ici.</div></Card>}
+
+      {shown.map(r => {
         const st = RESA_STATUS[r.status] || RESA_STATUS.en_attente;
+        const phone = r.client_phone || r.guest_phone;
         return (
           <Card key={r.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{r.client_name || r.guest_name || "Client"}</span>
-                  <Badge label={st.label} variant={st.variant} />
+                  <Badge label={r.status === "en_attente" ? "En attente d'acompte" : r.status === "confirme" ? "Confirmée" : "Refusée"} variant={st.variant} />
+                  {r.is_manual && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#2563EB", background: "#EFF6FF", borderRadius: 5, padding: "1px 5px" }}>MANUELLE</span>}
                   <span style={{ fontSize: 11, color: MUTED, fontFamily: "monospace" }}>{r.ref}</span>
                 </div>
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 3, display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Users size={12} /> {r.party_size} pers.</span>
                   {r.table_label && <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    {r.table_kind === "vip" ? <Crown size={12} color={P} /> : <Armchair size={12} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}
-                  </span>}
-                  {(r.client_phone || r.guest_phone) && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={12} /> {r.client_phone || r.guest_phone}</span>}
+                    {r.table_kind === "vip" ? <Crown size={12} color={P} /> : <Armchair size={12} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}</span>}
+                  {phone && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={12} /> {phone}</span>}
                   {r.client_email && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Mail size={12} /> {r.client_email}</span>}
+                  {r.deposit_amount > 0 && <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#C47D1A", fontWeight: 600 }}><Wallet size={12} /> Acompte {fmt(r.deposit_amount)}</span>}
                 </div>
+                {r.deposit_ref && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>Réf transaction : {r.deposit_ref}</div>}
                 {r.special_request && <div style={{ fontSize: 12, color: MUTED, marginTop: 4, fontStyle: "italic" }}>« {r.special_request} »</div>}
               </div>
-              {r.status !== "annule" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  {r.status !== "confirme" && (
-                    <button onClick={() => act(r.id, "confirm")}
-                      style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8,
-                        padding: "7px 12px", background: GREEN, color: "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                      <Check size={14} /> Confirmer
-                    </button>
-                  )}
-                  <button onClick={() => act(r.id, "cancel")}
-                    style={{ display: "flex", alignItems: "center", gap: 5, border: `0.5px solid ${BORDER}`, borderRadius: 8,
-                      padding: "7px 12px", background: "white", color: "#DC2626", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                    <X size={14} /> Annuler
-                  </button>
-                </div>
-              )}
+
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {r.status === "en_attente" && (
+                  <>
+                    <button onClick={() => { setDeposit(r); setDepForm({ method: "", ref: "" }); }}
+                      style={btnSt(GREEN, "white")}><Check size={14} /> Acompte reçu</button>
+                    {phone && <a href={waLink(r)} target="_blank" rel="noreferrer" style={{ ...btnSt("#25D366", "white"), textDecoration: "none" }}><MessageCircle size={14} /> WhatsApp</a>}
+                    <button onClick={() => refuse(r)} style={btnSt("white", "#DC2626", true)}><X size={14} /> Refuser</button>
+                  </>
+                )}
+                {r.status === "confirme" && (
+                  <>
+                    <button onClick={() => setQr(r)} style={btnSt("#FEF6EC", "#C47D1A", true)}><QrCode size={14} /> QR</button>
+                    <button onClick={() => resend(r)} style={btnSt("white", DARK, true)}><RefreshCw size={13} /> Renvoyer</button>
+                    {phone && <a href={waLink(r)} target="_blank" rel="noreferrer" style={{ ...btnSt("#25D366", "white"), textDecoration: "none" }}><MessageCircle size={14} /> WhatsApp</a>}
+                  </>
+                )}
+              </div>
             </div>
           </Card>
         );
       })}
+
+      {/* Modale : réservation manuelle */}
+      <Modal open={manual} title="Nouvelle réservation manuelle" width={440} onClose={() => setManual(false)}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <FormField label="Nom du client *"><Input value={mf.guest_name} onChange={e => setMf(p => ({ ...p, guest_name: e.target.value }))} placeholder="Awa Koné" /></FormField>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 150 }}><FormField label="Téléphone / WhatsApp"><Input value={mf.guest_phone} onChange={e => setMf(p => ({ ...p, guest_phone: e.target.value }))} placeholder="+225 07…" type="tel" /></FormField></div>
+            <div style={{ flex: 1, minWidth: 150 }}><FormField label="E-mail"><Input value={mf.guest_email} onChange={e => setMf(p => ({ ...p, guest_email: e.target.value }))} placeholder="client@mail.ci" type="email" /></FormField></div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <FormField label="Table / salon">
+                <select value={mf.table_id} onChange={e => setMf(p => ({ ...p, table_id: e.target.value }))}
+                  style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, background: BG, fontFamily: FONT, color: DARK }}>
+                  <option value="">— Entrée (sans table) —</option>
+                  {activeTables.map(t => <option key={t.id} value={t.id}>{t.kind === "vip" ? "VIP · " : ""}{t.label}{t.price ? ` (${fmt(t.price)})` : ""}</option>)}
+                </select>
+              </FormField>
+            </div>
+            <div style={{ width: 100 }}><FormField label="Places"><Input type="number" value={mf.party_size} onChange={e => setMf(p => ({ ...p, party_size: e.target.value }))} /></FormField></div>
+          </div>
+          {mf.table_id && depositFor(mf.table_id) > 0 && (
+            <div style={{ fontSize: 12, color: "#7a5a1a", background: "#FEF6EC", borderRadius: 8, padding: "8px 12px" }}>
+              Acompte attendu : <strong>{fmt(depositFor(mf.table_id))}</strong> — le client recevra les instructions de paiement.
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: MUTED }}>Le client sera notifié (e-mail{mf.guest_phone ? " + WhatsApp" : ""}) pour envoyer l'acompte. Aucun QR n'est émis avant confirmation.</div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <Btn onClick={() => setManual(false)}>Annuler</Btn>
+            <Btn variant="primary" onClick={createManual} disabled={busy === "manual"}>{busy === "manual" ? "…" : "Créer la réservation"}</Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modale : confirmer l'acompte reçu */}
+      <Modal open={!!deposit} title="Confirmer l'acompte reçu" width={400} onClose={() => setDeposit(null)}>
+        {deposit && (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 13.5, color: DARK }}>
+              <strong>{deposit.client_name || deposit.guest_name}</strong> · {deposit.ref}
+              {deposit.table_label ? ` · ${deposit.table_label}` : ""}
+              {deposit.deposit_amount > 0 && <div style={{ fontSize: 12.5, color: "#C47D1A", marginTop: 3 }}>Acompte attendu : <strong>{fmt(deposit.deposit_amount)}</strong></div>}
+            </div>
+            <FormField label="Opérateur (facultatif)">
+              <select value={depForm.method} onChange={e => setDepForm(p => ({ ...p, method: e.target.value }))}
+                style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, background: BG, fontFamily: FONT, color: DARK }}>
+                <option value="">—</option>
+                {["Orange Money", "MTN MoMo", "Wave", "Moov Money", "Espèces"].map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Référence transaction (facultatif)"><Input value={depForm.ref} onChange={e => setDepForm(p => ({ ...p, ref: e.target.value }))} placeholder="ex : OM-123456789" /></FormField>
+            <div style={{ fontSize: 12, color: "#7a5a1a", background: "#FEF6EC", borderRadius: 8, padding: "9px 12px" }}>
+              ✅ La table sera <strong>définitivement attribuée</strong> à ce client et son <strong>QR code envoyé</strong> (e-mail + WhatsApp). Les autres en attente sur cette table seront notifiés.
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setDeposit(null)}>Annuler</Btn>
+              <Btn variant="primary" icon={Check} onClick={confirmDeposit} disabled={busy === "confirm"}>{busy === "confirm" ? "…" : "Confirmer & envoyer le QR"}</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modale : QR code d'une réservation confirmée */}
+      <Modal open={!!qr} title="QR code du billet" width={340} onClose={() => setQr(null)}>
+        {qr && (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK, marginBottom: 4 }}>{qr.client_name || qr.guest_name} · {qr.ref}</div>
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>{qr.table_label || "Entrée"} · {qr.party_size} pers.</div>
+            <div style={{ display: "inline-block", padding: 12, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12 }}>
+              <QRCode value={qr.ref} size={190} fgColor={DARK} />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+              <Btn icon={ExternalLink} onClick={() => window.open(`${window.location.origin}/billet/${qr.ref}`, "_blank")}>Page billet</Btn>
+              <Btn variant="primary" icon={RefreshCw} onClick={() => { resend(qr); setQr(null); }}>Renvoyer au client</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
+
+// Petit bouton d'action réutilisable
+const btnSt = (bg, color, outline) => ({
+  display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 8, padding: "7px 11px",
+  border: outline ? `0.5px solid ${BORDER}` : "none", background: bg, color, fontSize: 12.5, fontWeight: 600,
+  cursor: "pointer", fontFamily: FONT,
+});
 
 const dateInp = { width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, background: BG, outline: "none", fontFamily: FONT, boxSizing: "border-box", color: DARK };
 const iconBtn = { border: "none", background: "transparent", cursor: "pointer", padding: 4, display: "flex" };

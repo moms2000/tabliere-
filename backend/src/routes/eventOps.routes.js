@@ -11,6 +11,7 @@ router.post("/event-staff/login", pinLimiter, staffLogin);
 
 // Commandes de bouteilles
 router.post ("/event-orders/verify-pin",  pinLimiter,   ops.verifyOrderPin); // responsable : PIN → jeton (strict anti-brute-force)
+router.get  ("/event-orders/mine",                      ops.listMyOrders);  // invité : suivi/historique via ?order_token= (public, scellé)
 router.post ("/event-orders",             orderLimiter, ops.createOrder);   // invité (public, scan QR)
 router.get  ("/event-orders",             ownerOrStaff, ops.listOrders);    // ?event_id= (organisateur/staff)
 router.patch("/event-orders/:id/status",  ownerOrStaff, ops.updateOrderStatus);

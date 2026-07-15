@@ -41,6 +41,7 @@ export const eventsService = {
 export const eventOpsService = {
   async createOrder(data)                        { return (await api.post("/event-orders", data)).data.data; },
   async verifyOrderPin(payload)                  { return (await api.post("/event-orders/verify-pin", payload)).data.data; },
+  async listMyOrders(orderToken)                 { return (await api.get("/event-orders/mine", { params: { order_token: orderToken } })).data.data; },
   async listOrders(eventId, auth)                { return (await api.get("/event-orders", { params: { event_id: eventId }, ...authCfg(auth) })).data.data; },
   async setOrderStatus(id, status, auth, eventId){ return (await api.patch(`/event-orders/${id}/status`, { status, event_id: eventId }, authCfg(auth))).data.data; },
   async listCheckin(eventId, auth)               { return (await api.get("/event-checkin", { params: { event_id: eventId }, ...authCfg(auth) })).data.data; },

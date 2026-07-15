@@ -4,6 +4,7 @@ import {
   Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
   QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
   Phone, ChevronDown, ChevronUp, AlertTriangle, MapPin, Wallet, TrendingUp, RefreshCw, DoorOpen,
+  KeyRound, MessageCircle, UserPlus,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
@@ -369,7 +370,7 @@ export function StaffTab({ event, tables = [], onChanged }) {
   const create = async () => { if (!f.name) return; try { await eventsService.createStaff(event.id, f); setModal(false); setF({ name: "", role: "all" }); load(); } catch { alert("Erreur"); } };
   const del = async (s) => { if (!window.confirm(`Retirer ${s.name} ?`)) return; try { await eventsService.deleteStaff(event.id, s.id); load(); } catch { alert("Erreur"); } };
   const staffUrl = `${window.location.origin}/staff`;
-  const roleLabel = { all: "Tout", checkin: "Check-in", bar: "Bar", serveur: "Serveur" };
+  const roleLabel = { all: "Tout", checkin: "Check-in", bar: "Bar", serveur: "Serveur", caisse: "Caisse" };
   const servers = list.filter(s => s.role === "serveur" || s.role === "all");
   const assign = async (tableId, serverId) => {
     setAssignBusy(tableId);
@@ -407,7 +408,7 @@ export function StaffTab({ event, tables = [], onChanged }) {
         <FormField label="Nom"><Input value={f.name} onChange={e => setF(p => ({ ...p, name: e.target.value }))} placeholder="Awa (accueil)" /></FormField>
         <FormField label="Rôle">
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[["all", "Tout"], ["checkin", "Check-in"], ["bar", "Bar"], ["serveur", "Serveur"]].map(([k, label]) => (
+            {[["all", "Tout"], ["checkin", "Check-in"], ["bar", "Bar"], ["serveur", "Serveur"], ["caisse", "Caisse"]].map(([k, label]) => (
               <button key={k} onClick={() => setF(p => ({ ...p, role: k }))}
                 style={{ flex: 1, minWidth: 78, border: `1.5px solid ${f.role === k ? P : BORDER}`, borderRadius: 10, padding: "9px 0",
                   background: f.role === k ? "#FEF6EC" : "white", cursor: "pointer", fontFamily: FONT, color: f.role === k ? "#C47D1A" : DARK, fontSize: 13, fontWeight: 600 }}>{label}</button>
@@ -520,6 +521,98 @@ function TablePlanMini({ tables, highlightId, onClose }) {
   );
 }
 
+// ── Onglet Commandes (organisateur + staff bar/caisse) ───────────────────────
+// Reçoit les commandes des salons en temps réel (polling 20 s) et permet de les
+// faire évoluer : en attente → servi → payé (ou annulé).
+const ORDER_STATUS = {
+  en_attente: { label: "En attente", color: "#854F0B", bg: "#FAEEDA" },
+  servi:      { label: "Servi",      color: GREEN,     bg: "#F0F6F2" },
+  paye:       { label: "Payé",       color: "#185FA5", bg: "#E6F1FB" },
+  annule:     { label: "Annulé",     color: "#993C1D", bg: "#FAECE7" },
+};
+const oBtn = (c) => ({ border: "none", borderRadius: 8, padding: "7px 13px", background: c, color: "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT });
+const oGhost = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 13px", background: "white", color: "#993C1D", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT };
+
+export function OrdersTab({ eventId, staffToken, onAuthError }) {
+  const [orders, setOrders] = useState(null);
+  const [filter, setFilter] = useState("actives"); // actives | toutes
+  const load = () => eventOpsService.listOrders(eventId, staffToken)
+    .then(d => setOrders(d?.orders || [])).catch(e => { if (!onAuthError?.(e)) console.error(e); });
+  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [eventId]);
+  const setStatus = async (o, status) => {
+    try { await eventOpsService.setOrderStatus(o.id, status, staffToken, eventId); load(); }
+    catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
+  };
+  if (!orders) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  const pending = orders.filter(o => o.status === "en_attente");
+  const paid = orders.filter(o => o.status === "paye");
+  const revenue = paid.reduce((s, o) => s + (o.total || 0), 0);
+  const shown = filter === "actives" ? orders.filter(o => o.status === "en_attente" || o.status === "servi") : orders;
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {[
+          ["En attente", pending.length, pending.length ? "#854F0B" : DARK, "à servir"],
+          ["Encaissé", fmt(revenue), GREEN, `${paid.length} payée${paid.length > 1 ? "s" : ""}`],
+          ["Total commandes", orders.length, DARK, ""],
+        ].map(([l, v, c, sub], i) => (
+          <div key={i} style={{ flex: 1, minWidth: 110, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+            <div style={{ fontSize: 11.5, color: MUTED }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: c }}>{v}</div>
+            {sub && <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{sub}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {[["actives", "Actives"], ["toutes", "Toutes"]].map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ border: `1px solid ${filter === k ? P : BORDER}`, background: filter === k ? "#FEF6EC" : "white",
+              color: filter === k ? "#8a5a10" : MUTED, borderRadius: 9, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{l}</button>
+        ))}
+        <button onClick={load} title="Rafraîchir"
+          style={{ marginLeft: "auto", border: `1px solid ${BORDER}`, background: "white", borderRadius: 9, padding: "6px 12px",
+            cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontFamily: FONT }}>
+          <RefreshCw size={13} /> Actualiser
+        </button>
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {shown.map(o => {
+          const st = ORDER_STATUS[o.status] || ORDER_STATUS.en_attente;
+          const items = Array.isArray(o.items) ? o.items : [];
+          return (
+            <div key={o.id} style={{ border: `0.5px solid ${BORDER}`, borderRadius: 11, background: "white", padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: DARK, fontFamily: "monospace" }}>{o.ref}</span>
+                  {o.table_label && <span style={{ fontSize: 12, color: MUTED, display: "inline-flex", alignItems: "center", gap: 3 }}>{o.table_kind === "vip" && <Crown size={12} color={P} />}{o.table_label}</span>}
+                  {o.server_name && <span style={{ fontSize: 11.5, color: MUTED }}>· {o.server_name}</span>}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: "3px 10px", borderRadius: 20 }}>{st.label}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: "#4a5a52", marginBottom: 6 }}>
+                {items.map((it, idx) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between" }}><span>{it.qty}× {it.name}</span><span>{fmt(it.price * it.qty)}</span></div>
+                ))}
+              </div>
+              {o.guest_name && <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 4 }}>{o.guest_name}</div>}
+              {o.note && <div style={{ fontSize: 11.5, color: MUTED, fontStyle: "italic", marginBottom: 4 }}>« {o.note} »</div>}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: P }}>{fmt(o.total)}</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {o.status === "en_attente" && <button onClick={() => setStatus(o, "servi")} style={oBtn(GREEN)}>Servi</button>}
+                  {(o.status === "en_attente" || o.status === "servi") && <button onClick={() => setStatus(o, "paye")} style={oBtn("#185FA5")}>Payé</button>}
+                  {o.status !== "annule" && o.status !== "paye" && <button onClick={() => setStatus(o, "annule")} style={oGhost}>Annuler</button>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {shown.length === 0 && <Empty text="Aucune commande pour le moment. Les commandes des salons apparaîtront ici en temps réel." />}
+      </div>
+    </div>
+  );
+}
+
 export function CheckinTab({ eventId, staffToken, onAuthError }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
@@ -551,13 +644,35 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
         ? await eventOpsService.checkinByRef(confirm.resa.ref, staffToken, eventId, confirm.count)
         : await eventOpsService.checkin(confirm.resa.id, false, staffToken, eventId, confirm.count);
       const pin = r?.reservation?.order_pin;
-      const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label, table_id: confirm.resa.table_id };
+      const info = { pin, name: confirm.resa.client_name, table: confirm.resa.table_label, table_id: confirm.resa.table_id, phone: confirm.resa.client_phone };
+      const wasTopup = confirm.topup;
       setConfirm(null); await load();
-      if (pin) setPinResult(info);
+      // Lors d'un simple complément d'arrivées, on ne ré-affiche pas le code
+      // (déjà remis à la 1re arrivée). Sinon on affiche le code du responsable.
+      if (pin && !wasTopup) setPinResult(info);
     } catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
     finally { setBusy(false); }
   };
   const undo = async (r) => { try { await eventOpsService.checkin(r.id, true, staffToken, eventId); load(); } catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); } };
+
+  // Revoir le code d'une arrivée déjà pointée (si le responsable l'a perdu)
+  const openCode = (r) => setPinResult({ pin: r.order_pin, name: r.client_name, table: r.table_label, table_id: r.table_id, phone: r.client_phone });
+
+  // Lien WhatsApp (wa.me) pré-rempli avec le code + le lien de la carte du salon
+  const waLink = (info) => {
+    const phone = String(info?.phone || "").replace(/\D/g, "");
+    if (!phone || !info?.pin) return null;
+    const slug = data?.event?.slug;
+    const carte = slug ? `${window.location.origin}/evenement/${slug}/carte` : "";
+    const evName = data?.event?.name || "l'événement";
+    const msg =
+      `Bonjour ${info.name || ""}, voici votre code d'accès à la carte des bouteilles pour ${evName}` +
+      (info.table ? ` (salon ${info.table})` : "") + ` :\n\n` +
+      `🔑 Code : ${info.pin}\n` +
+      (carte ? `📲 Commandez ici : ${carte}\n` : "") +
+      `\nEntrez ce code à 4 chiffres pour accéder à la carte et commander.`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  };
 
   if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
   const t = data.totals || {};
@@ -620,16 +735,43 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
                       {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} détail</span>
                   </div>
                 </div>
-                <button onClick={() => arrived ? undo(r) : setConfirm({ resa: r, count: r.party_size || 1, byScan: false })}
-                  style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
-                    background: arrived ? "#e8e8e8" : GREEN, color: arrived ? DARK : "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                  {arrived ? <><X size={14} /> Annuler</> : <><Check size={14} /> Arrivé</>}
-                </button>
+                {arrived ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {r.order_pin && (
+                      <button onClick={() => openCode(r)} title="Revoir le code du responsable"
+                        style={{ display: "flex", alignItems: "center", gap: 4, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px",
+                          background: "white", color: P, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                        <KeyRound size={14} /> Code
+                      </button>
+                    )}
+                    <button onClick={() => undo(r)}
+                      style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
+                        background: "#e8e8e8", color: DARK, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                      <X size={14} /> Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirm({ resa: r, count: r.party_size || 1, byScan: false })}
+                    style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
+                      background: GREEN, color: "white", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                    <Check size={14} /> Arrivé
+                  </button>
+                )}
               </div>
               {isOpen && (
                 <div style={{ padding: "0 13px 12px", fontSize: 12.5, color: "#4a5a52", display: "grid", gap: 5 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Users size={13} color={MUTED} /> Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Users size={13} color={MUTED} /> Réservé <strong>{r.party_size}</strong> · arrivés <strong>{arrived ? pax : "—"}</strong>
+                      {arrived && pax < r.party_size && <span style={{ color: P, fontWeight: 700 }}>· reste {r.party_size - pax}</span>}
+                    </span>
+                    {arrived && pax < r.party_size && (
+                      <button onClick={() => setConfirm({ resa: r, count: pax, byScan: false, topup: true })}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${P}`, borderRadius: 7,
+                          padding: "3px 9px", background: "#FEF6EC", cursor: "pointer", fontFamily: FONT, fontSize: 11.5, color: "#8a5a10", fontWeight: 700 }}>
+                        <UserPlus size={12} /> Compléter les arrivées
+                      </button>
+                    )}</div>
                   {r.table_label && <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {r.table_kind === "vip" ? <Crown size={13} color={P} /> : <Armchair size={13} color={MUTED} />} {r.table_label}{r.table_price ? ` · ${fmt(r.table_price)}` : ""}
                     {r.table_id && <button onClick={() => setPlanTable(r.table_id)}
@@ -658,12 +800,18 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
 
       {/* Confirmation d'arrivée : saisie du nombre réel de personnes */}
       {confirm && (
-        <Modal open title="Confirmer l'arrivée" width={360} onClose={() => setConfirm(null)}>
+        <Modal open title={confirm.topup ? "Compléter les arrivées" : "Confirmer l'arrivée"} width={360} onClose={() => setConfirm(null)}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{confirm.resa.client_name || "Client"}</div>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>
             <span style={{ fontFamily: "monospace" }}>{confirm.resa.ref}</span>
             {confirm.resa.table_label ? ` · ${confirm.resa.table_label}` : ""} · réservé {confirm.resa.party_size} pers.
           </div>
+          {confirm.topup && (
+            <div style={{ fontSize: 12, color: "#8a5a10", background: "#FEF6EC", border: `1px solid ${P}55`, borderRadius: 8,
+              padding: "8px 11px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <UserPlus size={13} /> Saisissez le <strong>total</strong> de personnes maintenant arrivées (le code du salon reste le même).
+            </div>
+          )}
           {confirm.resa.table_id && (
             <button onClick={() => setPlanTable(confirm.resa.table_id)}
               style={{ ...qrChip, display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
@@ -710,7 +858,7 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
           )}
           <Btn variant="primary" icon={Check} onClick={doConfirm} disabled={busy}
             style={{ width: "100%", justifyContent: "center" }}>
-            {busy ? "…" : "Confirmer l'arrivée"}
+            {busy ? "…" : (confirm.topup ? "Mettre à jour" : "Confirmer l'arrivée")}
           </Btn>
         </Modal>
       )}
@@ -734,6 +882,14 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
             <div style={{ fontSize: 12.5, color: "#4a5a52", lineHeight: 1.55, marginBottom: 14 }}>
               Remettez ce code au responsable du salon. Il en aura besoin pour <strong>passer les commandes</strong> via le QR de sa table.
             </div>
+            {waLink(pinResult) && (
+              <a href={waLink(pinResult)} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%",
+                  textDecoration: "none", boxSizing: "border-box", borderRadius: 11, padding: "12px",
+                  background: "#25D366", color: "white", fontSize: 14, fontWeight: 700, fontFamily: FONT, marginBottom: 8 }}>
+                <MessageCircle size={16} /> Envoyer le code par WhatsApp
+              </a>
+            )}
             {pinResult.table_id && (
               <Btn variant="ghost" icon={MapPin} onClick={() => setPlanTable(pinResult.table_id)}
                 style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>

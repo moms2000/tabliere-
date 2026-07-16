@@ -324,24 +324,27 @@ export default function RestPlanSalle() {
   const [modalTable, setModalTable] = useState(false);
   const [editTable,  setEditTable]  = useState(null);
   const [form, setForm] = useState({ label: "", capacity: 2, zone: "interieur", status: "libre" });
+  const [err,  setErr]  = useState("");
 
-  useEffect(() => {
+  // Recharge les tables depuis le SERVEUR (seule source de vérité). Appelé au
+  // montage et après chaque création/suppression → l'écran ne peut jamais afficher
+  // une table « fantôme » non enregistrée.
+  const load = useCallback(async () => {
     if (!user?.resto_id) { setLoading(false); return; }
-    restaurantsService.getManage(user.resto_id)
-      .then(d => {
-        const raw = d.restaurant?.tables || [];
-        // Assign default positions if missing
-        const positioned = raw.map((t, i) => ({
-          ...t,
-          pos_x: t.pos_x ?? (40 + (i % 5) * 145),
-          pos_y: t.pos_y ?? (30 + Math.floor(i / 5) * 145),
-        }));
-        setTables(positioned);
-        setRestoSlug(d.restaurant?.slug || "");
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      const d = await restaurantsService.getManage(user.resto_id);
+      const raw = d.restaurant?.tables || [];
+      const positioned = raw.map((t, i) => ({
+        ...t,
+        pos_x: t.pos_x ?? (40 + (i % 5) * 145),
+        pos_y: t.pos_y ?? (30 + Math.floor(i / 5) * 145),
+      }));
+      setTables(positioned);
+      setRestoSlug(d.restaurant?.slug || "");
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, [user?.resto_id]);
+  useEffect(() => { load(); }, [load]);
 
   // Réservations du resto : pour afficher, dans la sidebar d'une table, tous
   // les créneaux réservés (une table peut être réservée 12h, 15h, 21h…).
@@ -391,30 +394,46 @@ export default function RestPlanSalle() {
     }
   }, [user?.resto_id]);
 
+  const [saving, setSaving] = useState(false);
   const saveTable = async () => {
+    if (saving) return;
+    setSaving(true); setErr("");
     try {
       if (editTable) {
-        await restaurantsService.updateTable(user.resto_id, editTable.id, form);
-        setTables(prev => prev.map(t => t.id === editTable.id ? { ...t, ...form } : t));
+        const res = await restaurantsService.updateTable(user.resto_id, editTable.id, form);
+        const updated = res?.table;
+        // On n'applique le changement en local QUE si le serveur a confirmé
+        setTables(prev => prev.map(t => t.id === editTable.id ? { ...t, ...(updated || form) } : t));
       } else {
         const zoneTablesCount = tables.filter(t => (t.zone || "interieur") === form.zone).length;
         const px = 40 + (zoneTablesCount % 5) * 145;
         const py = 30 + Math.floor(zoneTablesCount / 5) * 145;
-        const res = await restaurantsService.createTable(user.resto_id, { ...form, pos_x: px, pos_y: py }).catch(() => null);
-        const n = res?.table || { id: Date.now(), ...form, pos_x: px, pos_y: py };
+        const res = await restaurantsService.createTable(user.resto_id, { ...form, pos_x: px, pos_y: py });
+        const n = res?.table;
+        // JAMAIS de table fantôme : sans réponse serveur valide, on lève une erreur.
+        if (!n?.id) throw new Error("invalid_response");
         setTables(prev => [...prev, n]);
       }
-    } catch (e) { console.error(e); }
-    setModalTable(false); setEditTable(null);
+      setModalTable(false); setEditTable(null);
+    } catch (e) {
+      console.error("Échec enregistrement table", e);
+      setErr("⚠️ La table n'a PAS été enregistrée (connexion lente ou serveur en veille). Réessayez dans quelques secondes — rien n'a été perdu.");
+      load(); // resynchroniser avec le serveur (aucune table fantôme affichée)
+    } finally { setSaving(false); }
   };
 
   const deleteTable = async (id) => {
     if (!window.confirm("Supprimer cette table ?")) return;
+    setErr("");
     try {
-      await restaurantsService.deleteTable(user.resto_id, id).catch(() => null);
+      await restaurantsService.deleteTable(user.resto_id, id);
       setTables(prev => prev.filter(t => t.id !== id));
       if (selected?.id === id) setSelected(null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Échec suppression table", e);
+      setErr("⚠️ La suppression a échoué — réessayez.");
+      load();
+    }
   };
 
   const openNew  = () => { setEditTable(null); setForm({ label: "", capacity: 2, zone: activeZone, status: "libre" }); setModalTable(true); };
@@ -443,6 +462,14 @@ export default function RestPlanSalle() {
           <Btn variant="primary" icon={Plus} onClick={openNew}>Nouvelle table</Btn>
         </div>
       </div>
+
+      {err && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FEF2F2", border: "1px solid #FECACA",
+          color: "#B91C1C", fontSize: 13, borderRadius: 12, padding: "11px 14px", marginBottom: 14 }}>
+          <span style={{ flex: 1 }}>{err}</span>
+          <button onClick={() => setErr("")} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#B91C1C" }}><X size={16} /></button>
+        </div>
+      )}
 
       {/* ── KPIs ── */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
@@ -819,10 +846,13 @@ export default function RestPlanSalle() {
                 { value: "occupé",  label: "Occupé" },
               ]} />
           </FormField>
+          {err && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", fontSize: 12.5, borderRadius: 8, padding: "9px 12px", marginTop: 10 }}>{err}</div>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn onClick={() => { setModalTable(false); setEditTable(null); }}>Annuler</Btn>
-            <Btn variant="primary" onClick={saveTable} disabled={!form.label || !form.capacity}>
-              {editTable ? "Enregistrer" : "Créer"}
+            <Btn onClick={() => { setModalTable(false); setEditTable(null); setErr(""); }}>Annuler</Btn>
+            <Btn variant="primary" onClick={saveTable} disabled={saving || !form.label || !form.capacity}>
+              {saving ? "Enregistrement…" : editTable ? "Enregistrer" : "Créer"}
             </Btn>
           </div>
         </Modal>

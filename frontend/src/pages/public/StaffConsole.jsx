@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Wine, UserCheck, RefreshCw, Check, X, Clock, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff } from "lucide-react";
+import { LogOut, Wine, RefreshCw, Check, X, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff } from "lucide-react";
 import { eventStaffService, eventOpsService } from "../../services/events.service.js";
 import { CheckinTab } from "../event/EventTabs2.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";

@@ -58,21 +58,6 @@ export const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
-// Génération des tokens
-export const generateTokens = (userId, role) => {
-  const access = jwt.sign(
-    { id: userId, role },
-    env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN }
-  );
-  const refresh = jwt.sign(
-    { id: userId, role, type: "refresh" },
-    env.JWT_SECRET,
-    { expiresIn: env.JWT_REFRESH_IN }
-  );
-  return { access, refresh };
-};
-
 // Révoquer un token (logout)
 export const revokeToken = async (token) => {
   const decoded = jwt.decode(token);

@@ -26,26 +26,42 @@ export function unlockAudio() {
 
 export function audioUnlocked() { return unlocked; }
 
-// Bip d'alerte à deux tons (montant) → attire l'attention sans être agressif
+// Alarme forte à deux tons, RÉPÉTÉE pendant ~10 s → impossible de la manquer même
+// dans un environnement bruyant. Un garde empêche d'empiler deux alarmes.
+const ALARM_MS = 10000;
+let alarmUntil = 0;
+
 export function playOrderAlarm() {
   const c = getCtx();
   if (!c) return;
   if (c.state === "suspended") c.resume().catch(() => {});
+  const now = Date.now();
+  if (now < alarmUntil) return; // déjà en cours → ne pas empiler
+  alarmUntil = now + ALARM_MS;
+
   const t0 = c.currentTime;
-  const beep = (freq, start, dur, vol = 0.35) => {
+  const vol = 0.85; // fort
+  const beep = (freq, start, dur) => {
     const osc = c.createOscillator();
     const gain = c.createGain();
-    osc.type = "sine";
+    osc.type = "triangle"; // plus puissant qu'une sinusoïde, moins agressif qu'un carré
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, t0 + start);
-    gain.gain.exponentialRampToValueAtTime(vol, t0 + start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + start + 0.015);
+    gain.gain.setValueAtTime(vol, t0 + start + dur - 0.03);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
     osc.connect(gain); gain.connect(c.destination);
     osc.start(t0 + start);
     osc.stop(t0 + start + dur + 0.03);
   };
-  beep(880, 0, 0.18);      // La5
-  beep(1174.7, 0.19, 0.26); // Ré6
+  // Motif « bi-bip » répété toutes les 0,9 s pendant 10 s
+  const PERIOD = 0.9;
+  const reps = Math.ceil(ALARM_MS / 1000 / PERIOD);
+  for (let i = 0; i < reps; i++) {
+    const base = i * PERIOD;
+    beep(988, base, 0.22);        // Si5
+    beep(1319, base + 0.26, 0.30); // Mi6
+  }
 }
 
 // Débloque l'audio dès la 1re interaction de la page (filet de sécurité global)

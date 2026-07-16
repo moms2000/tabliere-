@@ -370,12 +370,33 @@ export const createTable = asyncHandler(async (req, res) => {
   if (!resto) return notFound(res, "Restaurant introuvable");
   _assertOwnerOrAdmin(req, resto);
 
-  const { rows: [table] } = await query(
-    `INSERT INTO restaurant_tables (restaurant_id, label, capacity, zone, pos_x, pos_y)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [resto.id, label, capacity || 2, normalizeZone(zone), pos_x ?? 20, pos_y ?? 20]
+  // Contrainte UNIQUE (restaurant_id, label) : une table supprimée (is_active=FALSE)
+  // garde son label. Sans ce garde, recréer un label supprimé échouerait toujours.
+  const { rows: [existing] } = await query(
+    "SELECT id, is_active FROM restaurant_tables WHERE restaurant_id = $1 AND label = $2",
+    [resto.id, label]
   );
+  if (existing?.is_active) {
+    throw new AppError(`Le numéro « ${label} » est déjà utilisé par une autre table.`, 409);
+  }
+
+  let table;
+  if (existing) {
+    // Table précédemment supprimée → on la RÉACTIVE avec les nouvelles valeurs.
+    ({ rows: [table] } = await query(
+      `UPDATE restaurant_tables
+         SET is_active = TRUE, capacity = $2, zone = $3, pos_x = $4, pos_y = $5,
+             status = 'libre', updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [existing.id, capacity || 2, normalizeZone(zone), pos_x ?? 20, pos_y ?? 20]
+    ));
+  } else {
+    ({ rows: [table] } = await query(
+      `INSERT INTO restaurant_tables (restaurant_id, label, capacity, zone, pos_x, pos_y)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [resto.id, label, capacity || 2, normalizeZone(zone), pos_x ?? 20, pos_y ?? 20]
+    ));
+  }
 
   await cache.delPattern(`restaurant:*`).catch(() => {});
   return created(res, { table }, "Table créée");

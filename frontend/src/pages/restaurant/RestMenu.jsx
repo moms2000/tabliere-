@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "react-qr-code";
 import { Notebook, Plus, Pencil, Trash2, QrCode, ExternalLink, Copy, Check, Share2 } from "lucide-react";
@@ -95,8 +95,22 @@ export default function RestMenu() {
   const [editCat,    setEditCat]    = useState(null);
   const [formCat,    setFormCat]    = useState({ name: "" });
   const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
+  const [err,        setErr]        = useState("");
+  const [saving,     setSaving]     = useState(false);
 
   const menuUrl = `${window.location.origin}/menu/${user?.resto_slug || ""}`;
+
+  // Recharge le menu depuis le SERVEUR (source de vérité). Réutilisé après un échec
+  // d'enregistrement pour ne jamais laisser une catégorie/plat « fantôme » à l'écran.
+  const reloadMenu = useCallback(async () => {
+    if (!user?.resto_slug) return;
+    try {
+      const menuData = await menuService.getFullMenu(user.resto_slug);
+      const cats = menuData.categories || [];
+      setCategories(cats);
+      setActiveTab(prev => (cats.some(c => c.id === prev) ? prev : (cats[0]?.id || null)));
+    } catch (e) { console.error(e); }
+  }, [user?.resto_slug]);
 
   useEffect(() => {
     if (!user?.resto_slug) { setLoading(false); return; }
@@ -162,28 +176,41 @@ export default function RestMenu() {
   };
 
   const saveCat = async () => {
+    if (saving) return;
+    setSaving(true); setErr("");
     try {
       if (editCat) {
-        await menuService.updateCategory(editCat.id, formCat);
-        setCategories(prev => prev.map(c => c.id === editCat.id ? { ...c, ...formCat } : c));
+        const res = await menuService.updateCategory(editCat.id, formCat);
+        const upd = res?.category;
+        setCategories(prev => prev.map(c => c.id === editCat.id ? { ...c, ...(upd || formCat) } : c));
       } else {
         const res = await menuService.createCategory(user.resto_id, formCat);
-        const n = res.category || { id: Date.now(), ...formCat, items: [] };
+        const n = res?.category;
+        if (!n?.id) throw new Error("invalid_response"); // jamais de catégorie fantôme
         setCategories(prev => [...prev, n]);
         if (!activeTab) setActiveTab(n.id);
       }
-    } catch (e) { console.error(e); }
-    setModalCat(false); setEditCat(null); setFormCat({ name: "" });
+      setModalCat(false); setEditCat(null); setFormCat({ name: "" });
+    } catch (e) {
+      console.error("Échec enregistrement catégorie", e);
+      setErr("⚠️ La catégorie n'a PAS été enregistrée (connexion lente ?). Réessayez — rien n'a été perdu.");
+      reloadMenu();
+    } finally { setSaving(false); }
   };
 
   const deleteCat = async (id) => {
     if (!window.confirm("Supprimer cette catégorie et tous ses plats ?")) return;
+    setErr("");
     try {
       await menuService.deleteCategory(id);
       const rem = categories.filter(c => c.id !== id);
       setCategories(rem);
       if (activeTab === id) setActiveTab(rem[0]?.id || null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Échec suppression catégorie", e);
+      setErr("⚠️ La suppression a échoué — réessayez.");
+      reloadMenu();
+    }
   };
 
   const saveItem = async () => {
@@ -194,29 +221,42 @@ export default function RestMenu() {
       accompagnements: clean(formItem.options?.accompagnements),
     };
     const payload = { ...formItem, options, price: Number(formItem.price) };
+    if (saving) return;
+    setSaving(true); setErr("");
     try {
       if (editItem) {
-        await menuService.updateItem(editItem.id, payload);
+        const res = await menuService.updateItem(editItem.id, payload);
+        const upd = res?.item;
         setCategories(prev => prev.map(c => c.id === activeTab
-          ? { ...c, items: c.items.map(i => i.id === editItem.id ? { ...i, ...payload } : i) } : c));
+          ? { ...c, items: c.items.map(i => i.id === editItem.id ? { ...i, ...(upd || payload) } : i) } : c));
       } else {
         const res = await menuService.createItem({ ...payload, category_id: activeTab });
-        const n = res.item || { id: Date.now(), ...payload };
+        const n = res?.item;
+        if (!n?.id) throw new Error("invalid_response"); // jamais de plat fantôme
         setCategories(prev => prev.map(c => c.id === activeTab
           ? { ...c, items: [...(c.items || []), n] } : c));
       }
-    } catch (e) { console.error(e); }
-    setModalItem(false); setEditItem(null);
-    setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
+      setModalItem(false); setEditItem(null);
+      setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
+    } catch (e) {
+      console.error("Échec enregistrement plat", e);
+      setErr("⚠️ Le plat n'a PAS été enregistré (connexion lente ?). Réessayez — rien n'a été perdu.");
+      reloadMenu();
+    } finally { setSaving(false); }
   };
 
   const deleteItem = async (catId, itemId) => {
     if (!window.confirm("Supprimer ce plat ?")) return;
+    setErr("");
     try {
       await menuService.deleteItem(itemId);
       setCategories(prev => prev.map(c => c.id === catId
         ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Échec suppression plat", e);
+      setErr("⚠️ La suppression a échoué — réessayez.");
+      reloadMenu();
+    }
   };
 
   const openEditCat  = (cat)  => { setEditCat(cat); setFormCat({ name: cat.name }); setModalCat(true); };
@@ -246,6 +286,14 @@ export default function RestMenu() {
       <motion.div variants={fadeUp}>
         <PageTitle title="Menu & QR Code" subtitle="Gérez votre menu et le lien QR client" />
       </motion.div>
+
+      {err && (
+        <motion.div variants={fadeUp} style={{ display: "flex", alignItems: "center", gap: 10, background: "#FEF2F2",
+          border: "1px solid #FECACA", color: "#B91C1C", fontSize: 13, borderRadius: 12, padding: "11px 14px", marginBottom: 14 }}>
+          <span style={{ flex: 1 }}>{err}</span>
+          <button onClick={() => setErr("")} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#B91C1C", fontWeight: 700 }}>✕</button>
+        </motion.div>
+      )}
 
       {/* Bannière QR */}
       <motion.div variants={fadeUp} style={{ marginBottom: 14 }}>
@@ -484,8 +532,8 @@ export default function RestMenu() {
           </FormField>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={() => { setModalCat(false); setEditCat(null); }}>Annuler</Btn>
-            <Btn variant="primary" onClick={saveCat} disabled={!formCat.name}>
-              {editCat ? "Enregistrer" : "Créer"}
+            <Btn variant="primary" onClick={saveCat} disabled={saving || !formCat.name}>
+              {saving ? "Enregistrement…" : editCat ? "Enregistrer" : "Créer"}
             </Btn>
           </div>
         </Modal>
@@ -560,8 +608,8 @@ export default function RestMenu() {
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={() => { setModalItem(false); setEditItem(null); }}>Annuler</Btn>
-            <Btn variant="primary" onClick={saveItem} disabled={!formItem.name || !formItem.price}>
-              {editItem ? "Enregistrer" : "Ajouter"}
+            <Btn variant="primary" onClick={saveItem} disabled={saving || !formItem.name || !formItem.price}>
+              {saving ? "Enregistrement…" : editItem ? "Enregistrer" : "Ajouter"}
             </Btn>
           </div>
         </Modal>

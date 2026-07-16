@@ -438,6 +438,16 @@ async function runEventsPhase2Migration() {
     `CREATE INDEX IF NOT EXISTS idx_refresh_user   ON refresh_tokens(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_refresh_family ON refresh_tokens(family_id)`,
     `DELETE FROM refresh_tokens WHERE expires_at < NOW() - interval '7 days'`, // purge des expirés
+    // Catégories de boissons gérées par l'organisateur (liste canonique → plus de doublons de casse)
+    `CREATE TABLE IF NOT EXISTS event_bottle_categories (
+       id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+       name        VARCHAR(60) NOT NULL,
+       position    INTEGER NOT NULL DEFAULT 0,
+       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uniq_evt_bottle_cat ON event_bottle_categories(event_id, LOWER(name))`,
+    `CREATE INDEX IF NOT EXISTS idx_evt_bottle_cat_evt ON event_bottle_categories(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_bottles_evt ON event_bottles(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt  ON event_orders(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_staff_evt   ON event_staff(event_id)`,

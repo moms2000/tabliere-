@@ -23,6 +23,12 @@ export const eventsService = {
   async updateBottle(id, bId, data)      { return (await api.patch(`/events/${id}/bottles/${bId}`, data)).data.data; },
   async deleteBottle(id, bId)            { return (await api.delete(`/events/${id}/bottles/${bId}`)).data; },
 
+  // Catégories de boissons
+  async listCategories(id)               { return (await api.get(`/events/${id}/categories`)).data.data; },
+  async createCategory(id, data)         { return (await api.post(`/events/${id}/categories`, data)).data.data; },
+  async updateCategory(id, cId, data)    { return (await api.patch(`/events/${id}/categories/${cId}`, data)).data; },
+  async deleteCategory(id, cId)          { return (await api.delete(`/events/${id}/categories/${cId}`)).data; },
+
   // Staff
   async listStaff(id)                    { return (await api.get(`/events/${id}/staff`)).data.data; },
   async createStaff(id, data)            { return (await api.post(`/events/${id}/staff`, data)).data.data; },

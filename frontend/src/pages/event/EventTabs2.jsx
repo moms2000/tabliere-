@@ -203,20 +203,24 @@ export function BottlesTab({ event, tables, onChanged }) {
   const [edit, setEdit] = useState(null);
   const [f, setF] = useState({ name: "", category: "Bouteilles", price: 0, description: "" });
   const [qrTable, setQrTable] = useState(null);
+  const [cats, setCats] = useState([]);      // catégories gérées de l'événement
+  const [newCat, setNewCat] = useState(false); // saisie d'une nouvelle catégorie
   const load = () => eventsService.listBottles(event.id).then(d => setBottles(d?.bottles || [])).catch(console.error);
-  useEffect(() => { load(); setEnabled(event.bottles_enabled === true); setMode(event.ordering_mode || "per_order"); }, [event.id]);
+  const loadCats = () => eventsService.listCategories(event.id).then(d => setCats((d?.categories || []).map(c => c.name))).catch(() => {});
+  useEffect(() => { load(); loadCats(); setEnabled(event.bottles_enabled === true); setMode(event.ordering_mode || "per_order"); }, [event.id]);
 
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const saveConfig = async (patch) => { try { await eventsService.update(event.id, patch); onChanged?.(); } catch { alert("Erreur"); } };
   const toggleEnabled = (v) => { setEnabled(v); saveConfig({ bottles_enabled: v }); };
   const changeMode = (m) => { setMode(m); saveConfig({ ordering_mode: m }); };
 
-  const openNew = () => { setEdit(null); setF({ name: "", category: "Bouteilles", price: 0, description: "" }); setModal(true); };
-  const openEdit = (b) => { setEdit(b); setF({ name: b.name, category: b.category, price: b.price, description: b.description || "" }); setModal(true); };
+  const openNew = () => { setEdit(null); setNewCat(false); loadCats(); setF({ name: "", category: cats[0] || "", price: 0, description: "" }); setModal(true); };
+  const openEdit = (b) => { setEdit(b); setNewCat(false); loadCats(); setF({ name: b.name, category: b.category, price: b.price, description: b.description || "" }); setModal(true); };
   const save = async () => {
     if (!f.name) return;
+    if (!String(f.category || "").trim()) { alert("Choisissez une catégorie."); return; }
     const payload = { ...f, price: Number(f.price) || 0 };
-    try { edit ? await eventsService.updateBottle(event.id, edit.id, payload) : await eventsService.createBottle(event.id, payload); setModal(false); load(); }
+    try { edit ? await eventsService.updateBottle(event.id, edit.id, payload) : await eventsService.createBottle(event.id, payload); setModal(false); load(); loadCats(); onChanged?.(); }
     catch { alert("Erreur"); }
   };
   const del = async (b) => { if (!window.confirm(`Retirer « ${b.name} » ?`)) return; try { await eventsService.deleteBottle(event.id, b.id); load(); } catch { alert("Erreur"); } };
@@ -305,7 +309,25 @@ export function BottlesTab({ event, tables, onChanged }) {
       <Modal open={modal} title={edit ? "Modifier" : "Nouvelle bouteille"} onClose={() => setModal(false)}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <FormField label="Nom"><Input value={f.name} onChange={e => set("name", e.target.value)} placeholder="Moët & Chandon" /></FormField>
-          <FormField label="Catégorie"><Input value={f.category} onChange={e => set("category", e.target.value)} placeholder="Champagne" /></FormField>
+          <FormField label="Catégorie">
+            {cats.length > 0 && !newCat ? (
+              <select value={cats.includes(f.category) ? f.category : ""}
+                onChange={e => { if (e.target.value === "__new__") { setNewCat(true); set("category", ""); } else set("category", e.target.value); }}
+                style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "10px 11px", fontSize: 13.5, background: "white", color: DARK, fontFamily: FONT, outline: "none" }}>
+                {!cats.includes(f.category) && <option value="" disabled>Choisir…</option>}
+                {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">＋ Nouvelle catégorie…</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <Input value={f.category} onChange={e => set("category", e.target.value)} placeholder="ex : Champagne" />
+                {cats.length > 0 && (
+                  <button type="button" onClick={() => { setNewCat(false); set("category", cats[0]); }}
+                    style={{ flexShrink: 0, border: `1px solid ${BORDER}`, borderRadius: 9, background: "white", color: MUTED, padding: "0 10px", cursor: "pointer", fontFamily: FONT, fontSize: 12 }}>Liste</button>
+                )}
+              </div>
+            )}
+          </FormField>
         </div>
         <FormField label="Prix (FCFA)"><Input type="number" value={f.price} onChange={e => set("price", e.target.value)} placeholder="75000" /></FormField>
         <FormField label="Description (optionnel)"><Input value={f.description} onChange={e => set("description", e.target.value)} placeholder="75cl, brut" /></FormField>
@@ -315,6 +337,84 @@ export function BottlesTab({ event, tables, onChanged }) {
         </div>
       </Modal>
     </div>
+  );
+}
+
+// ═══ CATÉGORIES ════════════════════════════════════════════════════════════════
+const catIconBtn = (c) => ({ border: `1px solid ${BORDER}`, background: "white", color: c, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 });
+
+export function CategoriesTab({ event }) {
+  const [cats, setCats] = useState(null);
+  const [name, setName] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => eventsService.listCategories(event.id).then(d => setCats(d?.categories || [])).catch(() => setCats([]));
+  useEffect(() => { load(); }, [event.id]);
+
+  const add = async () => {
+    const n = name.trim(); if (!n) return;
+    setBusy(true);
+    try { await eventsService.createCategory(event.id, { name: n }); setName(""); load(); }
+    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+    finally { setBusy(false); }
+  };
+  const rename = async (c) => {
+    const n = editName.trim();
+    if (!n || n === c.name) { setEditId(null); return; }
+    try { await eventsService.updateCategory(event.id, c.id, { name: n }); setEditId(null); load(); }
+    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+  };
+  const del = async (c) => {
+    if (!window.confirm(`Supprimer la catégorie « ${c.name} » ?`)) return;
+    try { await eventsService.deleteCategory(event.id, c.id); load(); }
+    catch (e) { alert(e.response?.data?.message || "Erreur"); }
+  };
+
+  if (!cats) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <Wine size={17} color={P} /><span style={{ fontSize: 15, fontWeight: 700, color: DARK }}>Catégories de boissons</span>
+      </div>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
+        Créez vos catégories (Champagne, Cognac, Softs…). À l'ajout d'une bouteille vous la classerez directement dans la bonne — fini les doublons.
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+          placeholder="Nouvelle catégorie (ex : Whisky)"
+          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px", fontSize: 13.5, fontFamily: FONT, outline: "none", color: DARK }} />
+        <Btn variant="primary" icon={Plus} onClick={add} disabled={busy || !name.trim()}>Ajouter</Btn>
+      </div>
+      {cats.length === 0 ? <Empty text="Aucune catégorie. Ajoutez-en une ci-dessus." /> : (
+        <div style={{ display: "grid", gap: 8 }}>
+          {cats.map(c => (
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "9px 12px" }}>
+              {editId === c.id ? (
+                <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => e.key === "Enter" && rename(c)} autoFocus
+                  style={{ flex: 1, border: `1px solid ${P}`, borderRadius: 8, padding: "7px 10px", fontSize: 13.5, fontFamily: FONT, outline: "none", color: DARK }} />
+              ) : (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{c.name}</span>
+                  <span style={{ fontSize: 11.5, color: MUTED }}>{c.bottle_count || 0} boisson{(c.bottle_count || 0) > 1 ? "s" : ""}</span>
+                </div>
+              )}
+              {editId === c.id ? (
+                <>
+                  <button onClick={() => rename(c)} style={catIconBtn(GREEN)}><Check size={15} /></button>
+                  <button onClick={() => setEditId(null)} style={catIconBtn(MUTED)}><X size={15} /></button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => { setEditId(c.id); setEditName(c.name); }} style={catIconBtn(MUTED)}><Pencil size={14} /></button>
+                  <button onClick={() => del(c)} style={catIconBtn("#993C1D")}><Trash2 size={14} /></button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

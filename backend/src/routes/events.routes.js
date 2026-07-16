@@ -13,6 +13,10 @@ router.get("/:slug",         ctrl.getBySlug);
 
 // ── Bouteilles / Staff / Promoteurs / Dashboard (propriétaire) ──────────────
 router.get   ("/:id/dashboard",            ...orga, ctrl.getDashboard);
+router.get   ("/:id/categories",           ...orga, ctrl.listCategories);
+router.post  ("/:id/categories",           ...orga, ctrl.createCategory);
+router.patch ("/:id/categories/:catId",    ...orga, ctrl.updateCategory);
+router.delete("/:id/categories/:catId",    ...orga, ctrl.deleteCategory);
 router.get   ("/:id/bottles",              ...orga, ctrl.listBottles);
 router.post  ("/:id/bottles",              ...orga, ctrl.createBottle);
 router.patch ("/:id/bottles/:bottleId",    ...orga, ctrl.updateBottle);

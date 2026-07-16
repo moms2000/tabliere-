@@ -325,6 +325,7 @@ export default function RestPlanSalle() {
   const [editTable,  setEditTable]  = useState(null);
   const [form, setForm] = useState({ label: "", capacity: 2, zone: "interieur", status: "libre" });
   const [err,  setErr]  = useState("");
+  const [newZone, setNewZone] = useState(false); // saisie d'une zone personnalisée
 
   // Recharge les tables depuis le SERVEUR (seule source de vérité). Appelé au
   // montage et après chaque création/suppression → l'écran ne peut jamais afficher
@@ -380,17 +381,21 @@ export default function RestPlanSalle() {
   };
 
   const handleDragEnd = useCallback(async (tableId, newPos) => {
-    let previous = null;
-    setTables(prev => prev.map(t => {
-      if (t.id === tableId) { previous = { pos_x: t.pos_x, pos_y: t.pos_y }; return { ...t, pos_x: newPos.x, pos_y: newPos.y }; }
-      return t;
-    }));
-    try {
-      await restaurantsService.updateTable(user.resto_id, tableId, { pos_x: Math.round(newPos.x), pos_y: Math.round(newPos.y) });
-    } catch (e) {
-      console.error("Échec sauvegarde position table", e);
-      // Revenir à l'ancienne position pour rester cohérent avec le serveur
-      if (previous) setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...previous } : t));
+    const payload = { pos_x: Math.round(newPos.x), pos_y: Math.round(newPos.y) };
+    // Optimiste : la table RESTE là où tu l'as posée. On ne remet JAMAIS l'ancienne
+    // position (fini le retour en arrière). On sauvegarde avec plusieurs tentatives
+    // pour résister à un réveil à froid du serveur.
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...payload } : t));
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        await restaurantsService.updateTable(user.resto_id, tableId, payload);
+        setErr("");
+        return;
+      } catch (e) {
+        if (attempt < 4) { await new Promise(r => setTimeout(r, 1000 * attempt)); continue; }
+        console.error("Échec sauvegarde position table", e);
+        setErr("⚠️ Position pas encore enregistrée (connexion/serveur lent). La table reste où tu l'as mise — redéplace-la légèrement dans quelques secondes pour réessayer.");
+      }
     }
   }, [user?.resto_id]);
 
@@ -436,8 +441,8 @@ export default function RestPlanSalle() {
     }
   };
 
-  const openNew  = () => { setEditTable(null); setForm({ label: "", capacity: 2, zone: activeZone, status: "libre" }); setModalTable(true); };
-  const openEdit = (t)  => { setEditTable(t); setForm({ label: t.label, capacity: t.capacity, zone: t.zone || "interieur", status: t.status || "libre" }); setModalTable(true); };
+  const openNew  = () => { setEditTable(null); setNewZone(false); setErr(""); setForm({ label: "", capacity: 2, zone: activeZone, status: "libre" }); setModalTable(true); };
+  const openEdit = (t)  => { setEditTable(t); setNewZone(false); setErr(""); setForm({ label: t.label, capacity: t.capacity, zone: t.zone || "interieur", status: t.status || "libre" }); setModalTable(true); };
 
   const zones = [...new Set(["interieur", ...tables.map(t => t.zone || "interieur")])];
   const zoneTables = tables.filter(t => (t.zone || "interieur") === activeZone);
@@ -830,13 +835,32 @@ export default function RestPlanSalle() {
             </FormField>
           </div>
           <FormField label="Zone">
-            <Select value={form.zone} onChange={v => setForm(p => ({ ...p, zone: v }))}
-              options={[
+            {(() => {
+              const DEFAULTS = [
                 { value: "interieur", label: "Salle intérieure" },
                 { value: "terrasse",  label: "Terrasse" },
                 { value: "bar",       label: "Bar / Comptoir" },
                 { value: "vip",       label: "Espace VIP" },
-              ]} />
+              ];
+              const customs = zones.filter(z => !DEFAULTS.some(d => d.value === z));
+              const opts = [
+                ...DEFAULTS,
+                ...customs.map(z => ({ value: z, label: ZONE_META[z]?.label || z })),
+                { value: "__new__", label: "➕ Nouvelle zone…" },
+              ];
+              return newZone ? (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Input value={form.zone} autoFocus placeholder="ex : Salon Rouge, Étage, VIP 2…"
+                    onChange={e => setForm(p => ({ ...p, zone: e.target.value }))} />
+                  <Btn onClick={() => { setNewZone(false); setForm(p => ({ ...p, zone: activeZone || "interieur" })); }}
+                    style={{ flexShrink: 0, fontSize: 12 }}>Liste</Btn>
+                </div>
+              ) : (
+                <Select value={opts.some(o => o.value === form.zone) ? form.zone : "interieur"}
+                  onChange={v => { if (v === "__new__") { setNewZone(true); setForm(p => ({ ...p, zone: "" })); } else setForm(p => ({ ...p, zone: v })); }}
+                  options={opts} />
+              );
+            })()}
           </FormField>
           <FormField label="Statut">
             <Select value={form.status} onChange={v => setForm(p => ({ ...p, status: v }))}
@@ -851,7 +875,7 @@ export default function RestPlanSalle() {
           )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={() => { setModalTable(false); setEditTable(null); setErr(""); }}>Annuler</Btn>
-            <Btn variant="primary" onClick={saveTable} disabled={saving || !form.label || !form.capacity}>
+            <Btn variant="primary" onClick={saveTable} disabled={saving || !form.label || !form.capacity || !String(form.zone || "").trim()}>
               {saving ? "Enregistrement…" : editTable ? "Enregistrer" : "Créer"}
             </Btn>
           </div>

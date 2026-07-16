@@ -423,6 +423,21 @@ async function runEventsPhase2Migration() {
        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
        UNIQUE (event_id, code)
      )`,
+    // Refresh tokens — rotation + révocation (une ligne = un jeton de rafraîchissement)
+    `CREATE TABLE IF NOT EXISTS refresh_tokens (
+       id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+       user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       family_id    UUID NOT NULL,              -- famille (chaîne de rotations d'une même session)
+       used         BOOLEAN NOT NULL DEFAULT FALSE,  -- déjà tourné (échangé contre un nouveau)
+       used_at      TIMESTAMPTZ,
+       revoked      BOOLEAN NOT NULL DEFAULT FALSE,  -- invalidé (logout / reset / vol détecté)
+       replaced_by  UUID,                       -- le jeton qui l'a remplacé (fenêtre de grâce)
+       expires_at   TIMESTAMPTZ NOT NULL,
+       created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_refresh_user   ON refresh_tokens(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_refresh_family ON refresh_tokens(family_id)`,
+    `DELETE FROM refresh_tokens WHERE expires_at < NOW() - interval '7 days'`, // purge des expirés
     `CREATE INDEX IF NOT EXISTS idx_evt_bottles_evt ON event_bottles(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt  ON event_orders(event_id)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_staff_evt   ON event_staff(event_id)`,

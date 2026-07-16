@@ -4,7 +4,8 @@ import crypto from "crypto";
 import axios  from "axios";
 import { query, withTransaction } from "../config/db.js";
 import { cache } from "../config/redis.js";
-import { generateTokens, revokeToken } from "../middleware/auth.js";
+import { revokeToken } from "../middleware/auth.js";
+import { signAccessToken, createRefreshToken, rotateRefreshToken, revokeByToken, revokeAllForUser } from "../utils/refreshTokens.js";
 import { ok, created, unauth } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
@@ -302,7 +303,8 @@ export const login = asyncHandler(async (req, res) => {
   await query("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user.id]).catch(() => {});
   await cache.del(`user:${user.id}`).catch(() => {});
 
-  const { access, refresh } = generateTokens(user.id, user.role);
+  const access = signAccessToken(user.id, user.role);
+  const { token: refresh } = await createRefreshToken(user.id, user.role);
   const { password_hash: _, ...safeUser } = user;
 
   // Ajouter resto_id / resto_slug / resto_name pour les restaurateurs
@@ -327,7 +329,8 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const logout = asyncHandler(async (req, res) => {
-  await revokeToken(req.token);
+  await revokeToken(req.token);                       // blackliste l'access token en cours
+  await revokeByToken(req.body?.refresh_token);       // révoque la session (refresh) côté serveur
   await cache.del(`user:${req.user.id}`).catch(() => {});
   return ok(res, {}, "Déconnecté avec succès");
 });
@@ -336,29 +339,22 @@ export const refresh = asyncHandler(async (req, res) => {
   const { refresh_token } = req.body;
   if (!refresh_token) return unauth(res, "Token de rafraîchissement manquant");
 
-  let decoded;
-  try {
-    decoded = jwt.verify(refresh_token, env.JWT_SECRET);
-  } catch {
-    return unauth(res, "Token invalide ou expiré");
+  // Rotation : valide, révoque l'ancien, émet un nouveau. Détecte la réutilisation
+  // d'un jeton déjà consommé (vol probable) → coupe toute la session.
+  const result = await rotateRefreshToken(refresh_token);
+  if (result.error) {
+    if (result.error === "reuse") logger.warn("Refresh token réutilisé — session révoquée (vol probable)");
+    const msg = {
+      invalid:    "Token invalide ou expiré",
+      no_user:    "Compte introuvable",
+      suspended:  "Compte suspendu",
+      unverified: "E-mail non vérifié",
+      reuse:      "Session expirée, veuillez vous reconnecter",
+    }[result.error] || "Token invalide";
+    return unauth(res, msg);
   }
-  if (decoded.type !== "refresh") return unauth(res, "Token invalide");
-
-  // Relire le rôle et le statut réels en base : sinon un compte rétrogradé ou
-  // suspendu conserverait ses anciens droits tant qu'il détient un refresh token
-  // (valable 30 jours). On régénère avec le rôle DB actuel.
-  const { rows: [user] } = await query(
-    "SELECT id, role, status, email_verified FROM users WHERE id = $1", [decoded.id]
-  );
-  if (!user) return unauth(res, "Compte introuvable");
-  if (["suspendu", "bloque"].includes(user.status)) {
-    return unauth(res, "Compte suspendu");
-  }
-  // Même règle qu'au login : pas de rafraîchissement tant que l'e-mail n'est pas vérifié.
-  if (user.email_verified === false) return unauth(res, "E-mail non vérifié");
-
-  const { access, refresh: newRefresh } = generateTokens(user.id, user.role);
-  return ok(res, { access_token: access, refresh_token: newRefresh });
+  const access = signAccessToken(result.user.id, result.user.role);
+  return ok(res, { access_token: access, refresh_token: result.token });
 });
 
 export const me = asyncHandler(async (req, res) => {
@@ -439,7 +435,8 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   if (["suspendu", "bloque"].includes(user.status)) {
     return ok(res, { verified: true }, "E-mail vérifié avec succès");
   }
-  const { access, refresh } = generateTokens(user.id, user.role);
+  const access = signAccessToken(user.id, user.role);
+  const { token: refresh } = await createRefreshToken(user.id, user.role);
   const { email_verified: _ev, status: _st, ...safeUser } = user;
   return ok(res, { verified: true, user: safeUser, access_token: access, refresh_token: refresh }, "E-mail vérifié avec succès");
 });
@@ -516,6 +513,9 @@ export const resetPassword = asyncHandler(async (req, res) => {
     [password_hash, user.id]
   );
   await cache.del(`user:${user.id}`).catch(() => {});
+  // Sécurité : un changement de mot de passe invalide toutes les sessions existantes
+  // (refresh tokens) → un jeton volé avant le reset ne fonctionne plus.
+  await revokeAllForUser(user.id);
 
   logger.info("Mot de passe réinitialisé", { userId: user.id });
   return ok(res, { reset: true }, "Mot de passe réinitialisé avec succès. Vous pouvez vous connecter.");

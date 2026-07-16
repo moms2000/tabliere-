@@ -13,6 +13,12 @@ export const menuService = {
     return res.data.data;
   },
 
+  // Import en masse (aperçu déjà validé) — transactionnel côté serveur
+  async importMenu(categories) {
+    const res = await api.post("/menu/import", { categories });
+    return res.data.data; // { catAdded, itemAdded }
+  },
+
   async createCategory(restoId, data) {
     const res = await api.post("/menu/categories", data);
     return res.data.data;

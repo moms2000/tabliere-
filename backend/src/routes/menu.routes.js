@@ -23,6 +23,7 @@ const itemSchema = Joi.object({
 });
 
 router.get   ("/:slug/manage",    authenticate, authorize("restaurateur","admin"), ctrl.getFullMenu);
+router.post  ("/import",          authenticate, authorize("restaurateur","admin"), ctrl.importMenu);
 router.post  ("/items",           authenticate, authorize("restaurateur","admin"), validate(itemSchema), ctrl.createItem);
 router.patch ("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.updateItem);
 router.delete("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.deleteItem);

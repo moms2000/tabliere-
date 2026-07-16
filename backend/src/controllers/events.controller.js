@@ -315,23 +315,119 @@ export const listBottlesPublic = asyncHandler(async (req, res) => {
   return ok(res, { event: { name: event.name, slug: event.slug, ordering_mode: event.ordering_mode }, bottles: rows });
 });
 
-// Aligne la casse d'une catégorie sur celle DÉJÀ utilisée dans l'événement pour
-// éviter les doublons (« softs » et « Softs » deviennent une seule catégorie).
-async function canonicalCategory(eventId, raw) {
+// Garantit qu'une catégorie existe dans la liste gérée de l'événement et renvoie
+// sa casse canonique. Évite les doublons de casse (« softs » / « Softs ») et fait
+// apparaître dans l'onglet Catégories toute catégorie créée à la volée.
+async function ensureCategory(eventId, raw) {
   const cat = (String(raw || "").trim() || "Bouteilles").slice(0, 60);
   const { rows } = await query(
-    "SELECT category FROM event_bottles WHERE event_id = $1 AND LOWER(category) = LOWER($2) LIMIT 1",
+    "SELECT name FROM event_bottle_categories WHERE event_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1",
     [eventId, cat]
   );
-  return rows[0]?.category || cat;
+  if (rows[0]) return rows[0].name;
+  await query(
+    `INSERT INTO event_bottle_categories (event_id, name, position)
+     VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM event_bottle_categories WHERE event_id = $1), 0))
+     ON CONFLICT DO NOTHING`,
+    [eventId, cat]
+  ).catch(() => {});
+  return cat;
 }
+
+// Backfill : recense dans la table les catégories déjà utilisées par des bouteilles
+// (migration douce des anciennes catégories en texte libre).
+async function backfillCategories(eventId) {
+  await query(
+    `INSERT INTO event_bottle_categories (event_id, name, position)
+     SELECT $1, MIN(category), 999 FROM event_bottles
+     WHERE event_id = $1 AND category IS NOT NULL AND category <> ''
+       AND NOT EXISTS (SELECT 1 FROM event_bottle_categories c WHERE c.event_id = $1 AND LOWER(c.name) = LOWER(event_bottles.category))
+     GROUP BY LOWER(category)
+     ON CONFLICT DO NOTHING`,
+    [eventId]
+  ).catch(() => {});
+}
+
+// ── GET /events/:id/categories ────────────────────────────────────────────────
+export const listCategories = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  await backfillCategories(event.id);
+  const { rows } = await query(
+    `SELECT c.id, c.name, c.position,
+            (SELECT COUNT(*)::int FROM event_bottles b WHERE b.event_id = c.event_id AND LOWER(b.category) = LOWER(c.name)) AS bottle_count
+     FROM event_bottle_categories c WHERE c.event_id = $1 ORDER BY c.position, LOWER(c.name)`,
+    [event.id]
+  );
+  return ok(res, { categories: rows });
+});
+
+// ── POST /events/:id/categories ───────────────────────────────────────────────
+export const createCategory = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const name = String(req.body?.name || "").trim().slice(0, 60);
+  if (!name) throw new AppError("Nom de catégorie requis", 400);
+  const { rows: [dup] } = await query(
+    "SELECT 1 FROM event_bottle_categories WHERE event_id = $1 AND LOWER(name) = LOWER($2)", [event.id, name]
+  );
+  if (dup) throw new AppError("Cette catégorie existe déjà.", 409);
+  const { rows: [cat] } = await query(
+    `INSERT INTO event_bottle_categories (event_id, name, position)
+     VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM event_bottle_categories WHERE event_id = $1), 0))
+     RETURNING id, name, position`,
+    [event.id, name]
+  );
+  return created(res, { category: cat }, "Catégorie créée");
+});
+
+// ── PATCH /events/:id/categories/:catId — renommer (répercuté sur les bouteilles) ─
+export const updateCategory = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const { rows: [cur] } = await query(
+    "SELECT id, name FROM event_bottle_categories WHERE id = $1 AND event_id = $2", [req.params.catId, event.id]
+  );
+  if (!cur) return notFound(res, "Catégorie introuvable");
+  const name = req.body?.name !== undefined ? String(req.body.name).trim().slice(0, 60) : null;
+  if (name !== null) {
+    if (!name) throw new AppError("Nom requis", 400);
+    const { rows: [dup] } = await query(
+      "SELECT 1 FROM event_bottle_categories WHERE event_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3", [event.id, name, cur.id]
+    );
+    if (dup) throw new AppError("Une autre catégorie porte déjà ce nom.", 409);
+    await query("UPDATE event_bottle_categories SET name = $1 WHERE id = $2", [name, cur.id]);
+    // Répercuter le renommage sur les bouteilles qui portaient l'ancien nom
+    await query("UPDATE event_bottles SET category = $1 WHERE event_id = $2 AND LOWER(category) = LOWER($3)", [name, event.id, cur.name]);
+  }
+  if (req.body?.position !== undefined) {
+    await query("UPDATE event_bottle_categories SET position = $1 WHERE id = $2", [Math.max(0, parseInt(req.body.position, 10) || 0), cur.id]);
+  }
+  return ok(res, {}, "Catégorie mise à jour");
+});
+
+// ── DELETE /events/:id/categories/:catId ──────────────────────────────────────
+export const deleteCategory = asyncHandler(async (req, res) => {
+  const { event, error } = await ownedEvent(req);
+  if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  const { rows: [cur] } = await query(
+    "SELECT id, name FROM event_bottle_categories WHERE id = $1 AND event_id = $2", [req.params.catId, event.id]
+  );
+  if (!cur) return notFound(res, "Catégorie introuvable");
+  const { rows: [used] } = await query(
+    "SELECT COUNT(*)::int AS n FROM event_bottles WHERE event_id = $1 AND LOWER(category) = LOWER($2)", [event.id, cur.name]
+  );
+  if (used.n > 0) throw new AppError(`Catégorie utilisée par ${used.n} boisson(s). Reclassez-les avant de la supprimer.`, 409);
+  await query("DELETE FROM event_bottle_categories WHERE id = $1", [cur.id]);
+  return ok(res, {}, "Catégorie supprimée");
+});
 
 export const createBottle = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const b = req.body || {};
   if (!b.name) throw new AppError("Nom requis", 400);
-  const category = await canonicalCategory(event.id, b.category);
+  const category = await ensureCategory(event.id, b.category);
   const { rows: [bottle] } = await query(
     `INSERT INTO event_bottles (event_id, name, category, price, description, position)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -344,7 +440,7 @@ export const updateBottle = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   // Aligne la casse de la catégorie sur l'existant (anti-doublon)
-  if (req.body.category !== undefined) req.body.category = await canonicalCategory(event.id, req.body.category);
+  if (req.body.category !== undefined) req.body.category = await ensureCategory(event.id, req.body.category);
   const ALLOWED = ["name", "category", "price", "description", "is_active", "position"];
   const updates = [], values = [];
   for (const f of ALLOWED) {

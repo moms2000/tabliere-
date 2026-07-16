@@ -10,7 +10,7 @@ import {
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { useToast } from "../../components/ui/Toast.jsx";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
-import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab, OrdersTab } from "./EventTabs2.jsx";
+import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab, OrdersTab, CategoriesTab } from "./EventTabs2.jsx";
 import EventFloorPlan from "./EventFloorPlan.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
@@ -74,6 +74,7 @@ export default function EventEditor() {
           ["dashboard", "Dashboard"],
           ["details", "Détails"],
           ["plan", `Plan & Tables${tables.length ? " · " + tables.length : ""}`],
+          ["categories", "Catégories"],
           ["bottles", "Bouteilles"],
           ["resa", "Réservations"],
           ["checkin", "Check-in"],
@@ -94,6 +95,7 @@ export default function EventEditor() {
       {tab === "dashboard" && <DashboardTab event={event} />}
       {tab === "details"   && <DetailsTab event={event} onSaved={load} publicUrl={publicUrl} />}
       {tab === "plan"      && <PlanTab event={event} tables={tables} onChanged={load} />}
+      {tab === "categories" && <CategoriesTab event={event} />}
       {tab === "bottles"   && <BottlesTab event={event} tables={tables} onChanged={load} />}
       {tab === "resa"      && <ResaTab event={event} tables={tables} />}
       {tab === "checkin"   && <CheckinTab eventId={event.id} />}

@@ -68,9 +68,13 @@ export default function RestProfil() {
           opening_hours: r.opening_hours || "",
           lunch_hours:   r.lunch_hours   || "",
           dinner_hours:  r.dinner_hours  || "",
+          tables_1:      r.tables_1      || "",
           tables_2:      r.tables_2      || "",
+          tables_3:      r.tables_3      || "",
           tables_4:      r.tables_4      || "",
+          tables_5:      r.tables_5      || "",
           tables_6:      r.tables_6      || "",
+          tables_7:      r.tables_7      || "",
           tables_8:      r.tables_8      || "",
           price_range:   r.price_range   || "",
           capacity:      r.capacity      || "",
@@ -471,10 +475,14 @@ export default function RestProfil() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {[
-                    { label: "Pour 1–2 personnes",  key: "tables_2" },
-                    { label: "Pour 3–4 personnes",  key: "tables_4" },
-                    { label: "Pour 5–6 personnes",  key: "tables_6" },
-                    { label: "Pour 7+ personnes",   key: "tables_8" },
+                    { label: "Pour 1 personne",   key: "tables_1" },
+                    { label: "Pour 2 personnes",  key: "tables_2" },
+                    { label: "Pour 3 personnes",  key: "tables_3" },
+                    { label: "Pour 4 personnes",  key: "tables_4" },
+                    { label: "Pour 5 personnes",  key: "tables_5" },
+                    { label: "Pour 6 personnes",  key: "tables_6" },
+                    { label: "Pour 7 personnes",  key: "tables_7" },
+                    { label: "Pour 8+ personnes", key: "tables_8" },
                   ].map(({ label, key }) => (
                     <div key={key}>
                       <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{label}</div>

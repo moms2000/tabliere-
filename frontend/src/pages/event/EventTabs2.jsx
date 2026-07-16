@@ -16,6 +16,18 @@ const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 const fmt = (n) => Number(n || 0).toLocaleString("fr-FR") + " F";
 const fmtInt = (n) => Number(n || 0).toLocaleString("fr-FR");
 
+// Numéro au format international pour wa.me. En Côte d'Ivoire les numéros locaux
+// (10 chiffres, ex. 0700000000) doivent être préfixés par l'indicatif 225.
+// wa.me n'accepte QUE le format international sans « + » (ex. 2250700000000).
+function waPhone(raw) {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("00")) d = d.slice(2);       // 00225… → 225…
+  if (d.startsWith("225")) return d;             // déjà international (CI)
+  if (d.length <= 10) return "225" + d;          // numéro local ivoirien → préfixe 225
+  return d;                                       // autre indicatif pays déjà présent
+}
+
 // ═══ DASHBOARD ═══════════════════════════════════════════════════════════════
 export function DashboardTab({ event }) {
   const [d, setD] = useState(null);
@@ -680,7 +692,7 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
 
   // Lien WhatsApp (wa.me) pré-rempli avec le code + le lien de la carte du salon
   const waLink = (info) => {
-    const phone = String(info?.phone || "").replace(/\D/g, "");
+    const phone = waPhone(info?.phone);   // format international 225… requis par wa.me
     if (!phone || !info?.pin) return null;
     const slug = data?.event?.slug;
     const carte = slug ? `${window.location.origin}/evenement/${slug}/carte` : "";

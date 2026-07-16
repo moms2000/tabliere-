@@ -17,6 +17,9 @@ export const authenticate = async (req, res, next) => {
     if (revoked) return unauth(res, "Token révoqué");
 
     const decoded = jwt.verify(token, env.JWT_SECRET);
+    // Un refresh token ne doit jamais authentifier une requête API (il ne sert
+    // qu'à /auth/refresh). Anti-usage détourné du jeton de rafraîchissement.
+    if (decoded.type === "refresh") return unauth(res, "Token invalide");
 
     // Cache user pour éviter une requête DB à chaque requête
     const cacheKey = `user:${decoded.id}`;

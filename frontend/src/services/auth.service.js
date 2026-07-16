@@ -1,4 +1,4 @@
-import api, { setTokens, clearTokens } from "./api.js";
+import api, { setTokens, clearTokens, getStoredToken } from "./api.js";
 
 export const authService = {
   async register(data) {
@@ -30,7 +30,9 @@ export const authService = {
   },
 
   async logout() {
-    try { await api.post("/auth/logout"); } catch (_) {}
+    // Envoyer le refresh token pour que le serveur révoque la session (rotation).
+    const refresh_token = getStoredToken("refresh_token");
+    try { await api.post("/auth/logout", { refresh_token }); } catch (_) {}
     clearTokens();
   },
 

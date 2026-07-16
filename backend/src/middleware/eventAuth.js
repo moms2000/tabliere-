@@ -19,8 +19,13 @@ export function signStaffToken(staff) {
 
 // Jeton "responsable de salon" émis après vérification du code PIN. Il évite de
 // renvoyer le PIN à chaque commande (donc plus de brute-force via createOrder).
-export function signOrderToken(payload) {
-  return jwt.sign({ typ: "event_order", ...payload }, env.JWT_SECRET, { expiresIn: "10h" });
+export function signOrderToken(payload, expiresInSec) {
+  // Durée de vie = jusqu'à la clôture des commandes de l'événement (plafond 10 h).
+  // Sans valeur fournie → 10 h par défaut.
+  const opts = Number.isFinite(expiresInSec) && expiresInSec > 0
+    ? { expiresIn: Math.min(Math.floor(expiresInSec), 36000) }
+    : { expiresIn: "10h" };
+  return jwt.sign({ typ: "event_order", ...payload }, env.JWT_SECRET, opts);
 }
 export function verifyOrderToken(token) {
   try { const d = jwt.verify(token, env.JWT_SECRET); return d.typ === "event_order" ? d : null; }

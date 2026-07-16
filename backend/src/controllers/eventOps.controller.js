@@ -69,11 +69,14 @@ export const createOrder = asyncHandler(async (req, res) => {
   const b = req.body || {};
   if (!b.slug && !b.event_id) throw new AppError("Événement requis", 400);
   const { rows: [event] } = await query(
-    `SELECT id, status, bottles_enabled FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`,
+    `SELECT id, status, bottles_enabled,
+            NOW() > COALESCE(ends_at + interval '6 hours', starts_at + interval '12 hours') AS order_closed
+     FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`,
     [b.slug || b.event_id]
   );
   if (!event) return notFound(res, "Événement introuvable");
   if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
+  if (event.order_closed) throw new AppError("Événement terminé — les commandes sont clôturées.", 410);
 
   const { items, total } = await priceItems(event.id, b.items);
 
@@ -115,9 +118,13 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
   if (!/^\d{4}$/.test(pin)) throw new AppError("Code à 4 chiffres requis", 400);
   if (!b.slug && !b.event_id) throw new AppError("Événement requis", 400);
   const { rows: [event] } = await query(
-    `SELECT id, status FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
+    `SELECT id, status,
+            COALESCE(ends_at + interval '6 hours', starts_at + interval '12 hours') AS order_deadline,
+            NOW() > COALESCE(ends_at + interval '6 hours', starts_at + interval '12 hours') AS order_closed
+     FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
   );
   if (!event || event.status !== "publie") return notFound(res, "Événement indisponible");
+  if (event.order_closed) throw new AppError("Événement terminé — les commandes sont clôturées.", 410);
   const { rows } = await query(
     `SELECT r.table_id, t.label AS table_label, COALESCE(r.guest_name, u.full_name) AS guest_name
      FROM event_reservations r
@@ -131,7 +138,10 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
   const r = rows[0];
   // Jeton court à la place du PIN pour les commandes suivantes ; on ne renvoie
   // que le libellé du salon (pas le nom du client — anti-fuite de données tiers).
-  const token = signOrderToken({ event_id: event.id, table_id: r.table_id, table_label: r.table_label, guest_name: r.guest_name });
+  // Le jeton responsable expire à la CLÔTURE des commandes de CET événement :
+  // inutilisable après la soirée, et jamais sur un autre événement (event_id scellé).
+  const expSec = Math.floor((new Date(event.order_deadline).getTime() - Date.now()) / 1000);
+  const token = signOrderToken({ event_id: event.id, table_id: r.table_id, table_label: r.table_label, guest_name: r.guest_name }, expSec);
   return ok(res, { token, table_label: r.table_label }, "Accès responsable validé");
 });
 
@@ -216,10 +226,13 @@ export const createServerOrder = asyncHandler(async (req, res) => {
   const b = req.body || {};
   if (!b.table_id) throw new AppError("Table requise", 400);
   const { rows: [event] } = await query(
-    "SELECT id, status, bottles_enabled FROM events WHERE id = $1", [req.eventScope]
+    `SELECT id, status, bottles_enabled,
+            NOW() > COALESCE(ends_at + interval '6 hours', starts_at + interval '12 hours') AS order_closed
+     FROM events WHERE id = $1`, [req.eventScope]
   );
   if (!event) return notFound(res, "Événement introuvable");
   if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
+  if (event.order_closed) throw new AppError("Événement terminé — les commandes sont clôturées.", 410);
 
   // La table doit exister dans l'événement ET, pour un serveur, lui être assignée.
   const staffId = req.staff?.staff_id || null;

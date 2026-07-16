@@ -9,16 +9,43 @@ const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 const fmt = (n) => Number(n || 0).toLocaleString("fr-FR") + " F";
 const KEY = "tci_staff_session";
+const ACT_KEY = "tci_staff_activity";
+const INACTIVITY_MS = 30 * 60 * 1000; // déconnexion après 30 min SANS interaction
+const touchActivity = () => { try { localStorage.setItem(ACT_KEY, String(Date.now())); } catch {} };
 
 export default function StaffConsole() {
-  const [session, setSession] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } });
+  // La session survit au rafraîchissement (localStorage). Elle n'est effacée que
+  // si le staff est resté INACTIF plus de 30 min (sécurité si l'appareil traîne).
+  const [session, setSession] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (!s) return null;
+      const last = parseInt(localStorage.getItem(ACT_KEY) || "0", 10);
+      if (last && Date.now() - last > INACTIVITY_MS) { localStorage.removeItem(KEY); localStorage.removeItem(ACT_KEY); return null; }
+      return s;
+    } catch { return null; }
+  });
   const [tab, setTab] = useState("checkin");
 
-  const logout = () => { localStorage.removeItem(KEY); setSession(null); };
+  const logout = () => { localStorage.removeItem(KEY); localStorage.removeItem(ACT_KEY); setSession(null); };
   // Session staff expirée/révoquée (401/403) → on déconnecte et on revient au PIN.
   const onExpire = (e) => { if ([401, 403].includes(e?.response?.status)) { logout(); return true; } return false; };
   const firstTab = (r) => (r === "bar" || r === "caisse") ? "orders" : r === "serveur" ? "service" : "checkin";
-  if (!session) return <Login onOk={(s) => { unlockAudio(); localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
+
+  // Suivi d'activité + déconnexion auto après 30 min d'inactivité
+  useEffect(() => {
+    if (!session) return;
+    touchActivity();
+    const evs = ["pointerdown", "keydown", "touchstart"];
+    evs.forEach(e => window.addEventListener(e, touchActivity, { passive: true }));
+    const id = setInterval(() => {
+      const last = parseInt(localStorage.getItem(ACT_KEY) || "0", 10);
+      if (last && Date.now() - last > INACTIVITY_MS) logout();
+    }, 30000);
+    return () => { evs.forEach(e => window.removeEventListener(e, touchActivity)); clearInterval(id); };
+  }, [session]);
+
+  if (!session) return <Login onOk={(s) => { unlockAudio(); touchActivity(); localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
 
   const role = session.staff?.role || "all";
   const canCheckin = role === "all" || role === "checkin";
@@ -298,6 +325,7 @@ function OrderComposer({ table, bottles, eventId, token, onClose, onDone }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [oc, setOc] = useState("__all__"); // catégorie active (navigation rapide)
   const inc = (id, d) => setQty(q => { const n = Math.max(0, Math.min(99, (q[id] || 0) + d)); const c = { ...q }; if (n) c[id] = n; else delete c[id]; return c; });
   const lines = bottles.filter(b => qty[b.id]).map(b => ({ id: b.id, qty: qty[b.id], name: b.name, price: b.price }));
   const total = lines.reduce((s, l) => s + (l.price || 0) * l.qty, 0);
@@ -326,8 +354,22 @@ function OrderComposer({ table, bottles, eventId, token, onClose, onDone }) {
           <button onClick={onClose} style={{ border: "none", background: BG, borderRadius: 8, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} color={MUTED} /></button>
         </div>
 
+        {/* Navigation par catégorie (évite une longue liste à faire défiler) */}
+        {Object.keys(cats).length > 1 && (
+          <div style={{ display: "flex", gap: 7, overflowX: "auto", padding: "10px 18px 0" }}>
+            {[["__all__", "Tout"], ...Object.keys(cats).map(c => [c, c])].map(([k, label]) => (
+              <button key={k} onClick={() => setOc(k)}
+                style={{ flexShrink: 0, border: `1px solid ${oc === k ? P : BORDER}`, background: oc === k ? "#FEF6EC" : "white",
+                  color: oc === k ? "#8a5a10" : MUTED, borderRadius: 18, padding: "5px 13px", fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ overflowY: "auto", padding: "12px 18px", flex: 1 }}>
-          {Object.entries(cats).map(([cat, items]) => (
+          {Object.entries(cats).filter(([cat]) => oc === "__all__" || cat === oc).map(([cat, items]) => (
             <div key={cat} style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{cat}</div>
               <div style={{ display: "grid", gap: 7 }}>

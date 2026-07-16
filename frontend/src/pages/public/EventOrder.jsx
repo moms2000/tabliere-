@@ -21,8 +21,11 @@ export default function EventOrder() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [sp] = useSearchParams();
+  const tableId = sp.get("table") || null;
   const tableLabel = sp.get("label") || null;
 
+  const [view, setView] = useState("carte");   // "carte" | "commandes"
+  const [activeCat, setActiveCat] = useState("__all__");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [nf, setNf] = useState(false);
@@ -44,7 +47,8 @@ export default function EventOrder() {
     if (!/^\d{4}$/.test(pin)) { setPinErr("Entrez le code à 4 chiffres."); return; }
     setPinBusy(true); setPinErr("");
     try {
-      const d = await eventOpsService.verifyOrderPin({ slug, pin });
+      // table_id (issu du QR) : le code doit correspondre à CE salon précis.
+      const d = await eventOpsService.verifyOrderPin({ slug, pin, table_id: tableId });
       setVerified(d); // { token, table_label }
     } catch (e) { setPinErr(e.response?.data?.message || "Code invalide."); }
     finally { setPinBusy(false); }
@@ -171,20 +175,30 @@ export default function EventOrder() {
           </div>
         )}
 
-        {/* Mes commandes (historique + suivi de statut) */}
-        {myOrders.length > 0 && (
-          <div style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
-              <Receipt size={15} color={P} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>Mes commandes</span>
-              <span style={{ fontSize: 11.5, color: MUTED }}>({myOrders.length})</span>
+        {/* Onglets : Carte / Mes commandes */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {[["carte", "Carte"], ["commandes", `Mes commandes${myOrders.length ? ` (${myOrders.length})` : ""}`]].map(([k, label]) => (
+            <button key={k} onClick={() => setView(k)}
+              style={{ flex: 1, borderRadius: 10, padding: "10px 0", cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                background: view === k ? DARK : "white", color: view === k ? "white" : MUTED,
+                border: `0.5px solid ${view === k ? DARK : BORDER}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {view === "commandes" ? (
+          myOrders.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "44px 0", color: MUTED, fontSize: 14 }}>
+              <Receipt size={30} color={BORDER} /><div style={{ marginTop: 10 }}>Aucune commande pour l'instant.</div>
             </div>
+          ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {myOrders.map(o => {
                 const st = ORDER_ST[o.status] || ORDER_ST.en_attente;
                 const items = Array.isArray(o.items) ? o.items : [];
                 return (
-                  <div key={o.id} style={{ border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+                  <div key={o.id} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "11px 13px" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: DARK }}>{o.ref}</div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: "3px 9px", borderRadius: 20 }}>{st.label}</span>
@@ -200,36 +214,51 @@ export default function EventOrder() {
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {bottles.length === 0 ? (
+          )
+        ) : bottles.length === 0 ? (
           <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>La carte n'est pas encore disponible.</div>
-        ) : Object.entries(byCat).map(([cat, list]) => (
-          <div key={cat} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: P, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>{cat}</div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {list.map(b => (
-                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{b.name}</div>
-                    {b.description && <div style={{ fontSize: 11.5, color: MUTED }}>{b.description}</div>}
-                    <div style={{ fontSize: 13, fontWeight: 700, color: P, marginTop: 2 }}>{fmt(b.price)}</div>
-                  </div>
-                  {cart[b.id] ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <button onClick={() => dec(b.id)} style={qtyBtn}><Minus size={15} /></button>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: DARK, minWidth: 16, textAlign: "center" }}>{cart[b.id]}</span>
-                      <button onClick={() => inc(b.id)} style={{ ...qtyBtn, background: P, color: "#1A1000", border: "none" }}><Plus size={15} /></button>
+        ) : (
+          <>
+            {/* Navigation par catégorie (évite une liste trop longue) */}
+            {Object.keys(byCat).length > 1 && (
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
+                {[["__all__", "Tout"], ...Object.keys(byCat).map(c => [c, c])].map(([k, label]) => (
+                  <button key={k} onClick={() => setActiveCat(k)}
+                    style={{ flexShrink: 0, border: `1px solid ${activeCat === k ? P : BORDER}`, background: activeCat === k ? "#FEF6EC" : "white",
+                      color: activeCat === k ? "#8a5a10" : MUTED, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 600,
+                      cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {Object.entries(byCat).filter(([cat]) => activeCat === "__all__" || cat === activeCat).map(([cat, list]) => (
+              <div key={cat} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: P, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>{cat}</div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {list.map(b => (
+                    <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{b.name}</div>
+                        {b.description && <div style={{ fontSize: 11.5, color: MUTED }}>{b.description}</div>}
+                        <div style={{ fontSize: 13, fontWeight: 700, color: P, marginTop: 2 }}>{fmt(b.price)}</div>
+                      </div>
+                      {cart[b.id] ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <button onClick={() => dec(b.id)} style={qtyBtn}><Minus size={15} /></button>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: DARK, minWidth: 16, textAlign: "center" }}>{cart[b.id]}</span>
+                          <button onClick={() => inc(b.id)} style={{ ...qtyBtn, background: P, color: "#1A1000", border: "none" }}><Plus size={15} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => inc(b.id)} style={{ ...qtyBtn, background: P, color: "#1A1000", border: "none", width: "auto", padding: "0 14px", fontWeight: 700, fontSize: 13 }}>Ajouter</button>
+                      )}
                     </div>
-                  ) : (
-                    <button onClick={() => inc(b.id)} style={{ ...qtyBtn, background: P, color: "#1A1000", border: "none", width: "auto", padding: "0 14px", fontWeight: 700, fontSize: 13 }}>Ajouter</button>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Barre panier fixe → ouvre la revue du panier */}

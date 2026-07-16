@@ -125,16 +125,26 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
   );
   if (!event || event.status !== "publie") return notFound(res, "Événement indisponible");
   if (event.order_closed) throw new AppError("Événement terminé — les commandes sont clôturées.", 410);
+
+  // Sécurité : si le QR scanné précise le salon (table_id), le code DOIT correspondre
+  // à CE salon. Ainsi le code du salon A ne déverrouille pas le QR du salon B.
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const tableId = b.table_id && uuidRe.test(b.table_id) ? b.table_id : null;
+  const params = tableId ? [event.id, pin, tableId] : [event.id, pin];
   const { rows } = await query(
     `SELECT r.table_id, t.label AS table_label, COALESCE(r.guest_name, u.full_name) AS guest_name
      FROM event_reservations r
      LEFT JOIN event_tables t ON t.id = r.table_id
      LEFT JOIN users u ON u.id = r.client_id
-     WHERE r.event_id = $1 AND r.order_pin = $2 AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
-    [event.id, pin]
+     WHERE r.event_id = $1 AND r.order_pin = $2 ${tableId ? "AND r.table_id = $3" : ""}
+       AND r.checked_in_at IS NOT NULL AND r.status = 'confirme'`,
+    params
   );
   // Rejet strict : 0 ou (théoriquement) plusieurs correspondances → invalide
-  if (rows.length !== 1) throw new AppError("Code invalide ou salon pas encore arrivé à l'entrée.", 401);
+  if (rows.length !== 1) throw new AppError(
+    tableId ? "Ce code ne correspond pas à ce salon." : "Code invalide ou salon pas encore arrivé à l'entrée.",
+    401
+  );
   const r = rows[0];
   // Jeton court à la place du PIN pour les commandes suivantes ; on ne renvoie
   // que le libellé du salon (pas le nom du client — anti-fuite de données tiers).

@@ -394,7 +394,7 @@ export default function RestPlanSalle() {
       } catch (e) {
         if (attempt < 4) { await new Promise(r => setTimeout(r, 1000 * attempt)); continue; }
         console.error("Échec sauvegarde position table", e);
-        setErr("⚠️ Position pas encore enregistrée (connexion/serveur lent). La table reste où tu l'as mise — redéplace-la légèrement dans quelques secondes pour réessayer.");
+        setErr("Position pas encore enregistrée. La table reste où vous l'avez mise, redéplacez-la légèrement pour réessayer.");
       }
     }
   }, [user?.resto_id]);
@@ -422,7 +422,7 @@ export default function RestPlanSalle() {
       setModalTable(false); setEditTable(null);
     } catch (e) {
       console.error("Échec enregistrement table", e);
-      setErr("⚠️ La table n'a PAS été enregistrée (connexion lente ou serveur en veille). Réessayez dans quelques secondes — rien n'a été perdu.");
+      setErr("La table n'a pas été enregistrée. Réessayez dans quelques secondes, rien n'a été perdu.");
       load(); // resynchroniser avec le serveur (aucune table fantôme affichée)
     } finally { setSaving(false); }
   };
@@ -436,7 +436,7 @@ export default function RestPlanSalle() {
       if (selected?.id === id) setSelected(null);
     } catch (e) {
       console.error("Échec suppression table", e);
-      setErr("⚠️ La suppression a échoué — réessayez.");
+      setErr("La suppression n'a pas abouti. Réessayez.");
       load();
     }
   };
@@ -645,7 +645,7 @@ export default function RestPlanSalle() {
               display: "flex", alignItems: "center", gap: 10,
             }}>
               <span style={{ fontSize: 11, color: "rgba(255,255,255,.6)", flex: 1 }}>
-                Mode configuration — Cliquez sur une table pour la modifier
+                Mode configuration · Cliquez sur une table pour la modifier
               </span>
               {selected && (
                 <>
@@ -846,7 +846,7 @@ export default function RestPlanSalle() {
               const opts = [
                 ...DEFAULTS,
                 ...customs.map(z => ({ value: z, label: ZONE_META[z]?.label || z })),
-                { value: "__new__", label: "➕ Nouvelle zone…" },
+                { value: "__new__", label: "+ Nouvelle zone" },
               ];
               return newZone ? (
                 <div style={{ display: "flex", gap: 6 }}>

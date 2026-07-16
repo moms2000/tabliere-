@@ -104,7 +104,7 @@ export default function MenuImportModal({ onClose, onImported }) {
       onImported?.(r);
       onClose();
     } catch (e2) {
-      setErr(e2.response?.data?.message || "Échec de l'import (connexion lente ?). Réessayez — rien n'a été enregistré.");
+      setErr(e2.response?.data?.message || "L'import n'a pas abouti. Réessayez, rien n'a été enregistré.");
     } finally { setBusy(false); }
   };
 
@@ -139,7 +139,7 @@ export default function MenuImportModal({ onClose, onImported }) {
           {tab === "pdf" ? (
             <div style={{ textAlign: "center", padding: "24px 10px", color: MUTED }}>
               <FileText size={34} color={BORDER} />
-              <div style={{ fontSize: 14, fontWeight: 600, color: DARK, marginTop: 12 }}>Import PDF par IA — bientôt</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: DARK, marginTop: 12 }}>Import PDF par IA, bientôt disponible</div>
               <div style={{ fontSize: 12.5, lineHeight: 1.6, marginTop: 8, maxWidth: 360, margin: "8px auto 0" }}>
                 L'extraction automatique d'un menu PDF nécessite l'activation de l'IA (clé à configurer). En attendant, l'import <strong>Excel / CSV</strong> est 100% fiable et immédiat.
               </div>

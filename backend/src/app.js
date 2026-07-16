@@ -9,6 +9,7 @@ import { poolStats, query } from "./config/db.js";
 import { redis }        from "./config/redis.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter }   from "./middleware/rateLimiter.js";
+import { authenticate, authorize } from "./middleware/auth.js";
 import { logger }       from "./utils/logger.js";
 
 import authRoutes         from "./routes/auth.routes.js";
@@ -134,8 +135,9 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", uptime_s: Math.floor(process.uptime()) });
 });
 
-// Diagnostic détaillé (non utilisé par le health check Render)
-app.get("/health/db", async (_req, res) => {
+// Diagnostic détaillé (mémoire, pool DB) — ADMIN uniquement (non utilisé par le
+// health check Render). Évite d'exposer publiquement l'état interne du serveur.
+app.get("/health/db", authenticate, authorize("admin"), async (_req, res) => {
   const db = poolStats();
   let dbOk = false;
   try {

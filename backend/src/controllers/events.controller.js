@@ -315,15 +315,27 @@ export const listBottlesPublic = asyncHandler(async (req, res) => {
   return ok(res, { event: { name: event.name, slug: event.slug, ordering_mode: event.ordering_mode }, bottles: rows });
 });
 
+// Aligne la casse d'une catégorie sur celle DÉJÀ utilisée dans l'événement pour
+// éviter les doublons (« softs » et « Softs » deviennent une seule catégorie).
+async function canonicalCategory(eventId, raw) {
+  const cat = (String(raw || "").trim() || "Bouteilles").slice(0, 60);
+  const { rows } = await query(
+    "SELECT category FROM event_bottles WHERE event_id = $1 AND LOWER(category) = LOWER($2) LIMIT 1",
+    [eventId, cat]
+  );
+  return rows[0]?.category || cat;
+}
+
 export const createBottle = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const b = req.body || {};
   if (!b.name) throw new AppError("Nom requis", 400);
+  const category = await canonicalCategory(event.id, b.category);
   const { rows: [bottle] } = await query(
     `INSERT INTO event_bottles (event_id, name, category, price, description, position)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [event.id, String(b.name).slice(0, 80), b.category || "Bouteilles", Math.max(0, parseInt(b.price, 10) || 0), b.description || null, Math.max(0, parseInt(b.position, 10) || 0)]
+    [event.id, String(b.name).slice(0, 80), category, Math.max(0, parseInt(b.price, 10) || 0), b.description || null, Math.max(0, parseInt(b.position, 10) || 0)]
   );
   return created(res, { bottle }, "Bouteille ajoutée");
 });
@@ -331,6 +343,8 @@ export const createBottle = asyncHandler(async (req, res) => {
 export const updateBottle = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
+  // Aligne la casse de la catégorie sur l'existant (anti-doublon)
+  if (req.body.category !== undefined) req.body.category = await canonicalCategory(event.id, req.body.category);
   const ALLOWED = ["name", "category", "price", "description", "is_active", "position"];
   const updates = [], values = [];
   for (const f of ALLOWED) {

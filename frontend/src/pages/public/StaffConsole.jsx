@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, Wine, RefreshCw, Check, X, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff } from "lucide-react";
+import { LogOut, Wine, RefreshCw, Check, X, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff, Shield, Eye, EyeOff } from "lucide-react";
 import { eventStaffService, eventOpsService } from "../../services/events.service.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { CheckinTab } from "../event/EventTabs2.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
 
@@ -93,12 +95,20 @@ export default function StaffConsole() {
 }
 
 function Login({ onOk }) {
+  const [mode, setMode] = useState("staff"); // "staff" | "orga"
+  // Staff
   const [slug, setSlug] = useState("");
   const [pin, setPin] = useState("");
+  // Organisateur
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault(); setErr("");
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const submitStaff = async () => {
     if (!slug.trim()) { setErr("Entrez le code de l'événement."); return; }
     if (!pin.trim())  { setErr("Entrez votre PIN."); return; }
     setBusy(true);
@@ -109,24 +119,77 @@ function Login({ onOk }) {
       const st = e2.response?.status;
       setErr(st === 429 ? "Trop de tentatives. Réessayez dans un instant."
         : e2.response?.data?.message || "Code événement ou PIN incorrect.");
-    } finally { setBusy(false); }
+      setBusy(false);
+    }
   };
+  const submitOrga = async () => {
+    if (!email.trim() || !password) { setErr("Entrez votre e-mail et votre mot de passe."); return; }
+    setBusy(true);
+    try {
+      const u = await login(email.trim().toLowerCase(), password, true);
+      navigate(u?.role === "organisateur" ? "/event" : u?.role === "admin" ? "/admin" : "/");
+    } catch (e2) {
+      const st = e2.response?.status;
+      if (st === 403 && e2.response?.data?.code === "EMAIL_NOT_VERIFIED") setErr("Vérifiez votre e-mail avant de vous connecter (consultez vos spams).");
+      else setErr(st === 429 ? "Trop de tentatives. Réessayez dans un instant."
+        : e2.response?.data?.message || "E-mail ou mot de passe incorrect.");
+      setBusy(false);
+    }
+  };
+  const submit = (e) => { e.preventDefault(); setErr(""); mode === "staff" ? submitStaff() : submitOrga(); };
+  const switchMode = (m) => { setMode(m); setErr(""); };
+
+  const isStaff = mode === "staff";
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT }}>
-      <form onSubmit={submit} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 16, padding: "32px 26px", width: "100%", maxWidth: 380 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <BadgeCheck size={22} color={P} />
-          <div style={{ fontSize: 19, fontWeight: 800, color: DARK }}>Console Staff</div>
+      <form onSubmit={submit} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 16, padding: "28px 26px", width: "100%", maxWidth: 380 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          {isStaff ? <BadgeCheck size={22} color={P} /> : <Shield size={22} color={P} />}
+          <div style={{ fontSize: 19, fontWeight: 800, color: DARK }}>{isStaff ? "Console Staff" : "Espace Organisateur"}</div>
         </div>
-        <div style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>Connectez-vous avec le code de l'événement et votre PIN.</div>
+
+        {/* Choix du type de connexion */}
+        <div style={{ display: "flex", gap: 8, background: BG, borderRadius: 12, padding: 4, marginBottom: 18 }}>
+          {[["staff", "Staff"], ["orga", "Organisateur"]].map(([k, label]) => (
+            <button key={k} type="button" onClick={() => switchMode(k)}
+              style={{ flex: 1, border: "none", borderRadius: 9, padding: "9px 0", cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                background: mode === k ? "white" : "transparent", color: mode === k ? DARK : MUTED,
+                boxShadow: mode === k ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {err && <div style={{ background: "#FEF2F2", border: "0.5px solid #FECACA", color: "#DC2626", fontSize: 12.5, borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>{err}</div>}
-        <label style={lbl}>Code événement</label>
-        <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="ex : soiree-afro-vibes" style={inp} autoCapitalize="none" />
-        <label style={{ ...lbl, marginTop: 12 }}>PIN</label>
-        <input value={pin} onChange={e => setPin(e.target.value)} placeholder="••••" inputMode="numeric" style={{ ...inp, letterSpacing: 4, fontWeight: 700 }} />
+
+        {isStaff ? (
+          <>
+            <label style={lbl}>Code événement</label>
+            <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="ex : soiree-afro-vibes" style={inp} autoCapitalize="none" />
+            <label style={{ ...lbl, marginTop: 12 }}>PIN</label>
+            <input value={pin} onChange={e => setPin(e.target.value)} placeholder="••••" inputMode="numeric" style={{ ...inp, letterSpacing: 4, fontWeight: 700 }} />
+          </>
+        ) : (
+          <>
+            <label style={lbl}>E-mail</label>
+            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="vous@exemple.com" style={inp} autoCapitalize="none" autoComplete="email" />
+            <label style={{ ...lbl, marginTop: 12 }}>Mot de passe</label>
+            <div style={{ position: "relative" }}>
+              <input value={password} onChange={e => setPassword(e.target.value)} type={showPwd ? "text" : "password"} placeholder="••••••••" style={{ ...inp, paddingRight: 42 }} autoComplete="current-password" />
+              <button type="button" onClick={() => setShowPwd(v => !v)} aria-label="Afficher le mot de passe"
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: MUTED, padding: 6 }}>
+                {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </>
+        )}
+
         <button type="submit" disabled={busy} style={{ width: "100%", marginTop: 18, border: "none", borderRadius: 11, padding: "13px 0", background: P, color: "#1A1000", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", fontFamily: FONT }}>
           {busy ? "Connexion…" : "Se connecter"}
         </button>
+        <div style={{ fontSize: 11.5, color: MUTED, textAlign: "center", marginTop: 14 }}>
+          {isStaff ? "Code de l'événement + votre PIN (remis par l'organisateur)." : "Vos identifiants habituels d'organisateur."}
+        </div>
       </form>
     </div>
   );
@@ -329,9 +392,14 @@ function OrderComposer({ table, bottles, eventId, token, onClose, onDone }) {
   const inc = (id, d) => setQty(q => { const n = Math.max(0, Math.min(99, (q[id] || 0) + d)); const c = { ...q }; if (n) c[id] = n; else delete c[id]; return c; });
   const lines = bottles.filter(b => qty[b.id]).map(b => ({ id: b.id, qty: qty[b.id], name: b.name, price: b.price }));
   const total = lines.reduce((s, l) => s + (l.price || 0) * l.qty, 0);
-  // Regroupement par catégorie
-  const cats = {};
-  for (const b of bottles) (cats[b.category || "Bouteilles"] ||= []).push(b);
+  // Regroupement par catégorie — insensible à la casse (« softs » et « Softs » = 1 seule).
+  const cats = {}; const catLabel = {};
+  for (const b of bottles) {
+    const raw = (b.category || "Bouteilles").trim();
+    const key = raw.toLowerCase();
+    const label = catLabel[key] || (catLabel[key] = raw); // 1re casse rencontrée = libellé
+    (cats[label] ||= []).push(b);
+  }
 
   const submit = async () => {
     if (!lines.length) { setErr("Ajoutez au moins un article."); return; }

@@ -76,8 +76,14 @@ export default function EventOrder() {
 
   const bottles = data?.bottles || [];
   const byCat = useMemo(() => {
-    const m = {};
-    bottles.forEach(b => { (m[b.category || "Autres"] ||= []).push(b); });
+    // Regroupement insensible à la casse (« softs » et « Softs » = 1 seule catégorie).
+    const m = {}, seen = {};
+    bottles.forEach(b => {
+      const raw = (b.category || "Autres").trim();
+      const key = raw.toLowerCase();
+      const label = seen[key] || (seen[key] = raw);
+      (m[label] ||= []).push(b);
+    });
     return m;
   }, [bottles]);
 

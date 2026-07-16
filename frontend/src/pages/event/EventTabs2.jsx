@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
 import {
   Wine, Plus, Pencil, Trash2, Crown, Armchair, Megaphone, Users, LayoutDashboard,
   QrCode, Check, X, Search, Copy, CheckCheck, FileText, Sheet, Ticket,
   Phone, ChevronDown, ChevronUp, AlertTriangle, MapPin, Wallet, TrendingUp, RefreshCw, DoorOpen,
-  KeyRound, MessageCircle, UserPlus,
+  KeyRound, MessageCircle, UserPlus, Bell, BellOff,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
 import QrScanner from "../../components/QrScanner.jsx";
+import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -536,9 +537,23 @@ const oGhost = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 1
 export function OrdersTab({ eventId, staffToken, onAuthError }) {
   const [orders, setOrders] = useState(null);
   const [filter, setFilter] = useState("actives"); // actives | toutes
-  const load = () => eventOpsService.listOrders(eventId, staffToken)
-    .then(d => setOrders(d?.orders || [])).catch(e => { if (!onAuthError?.(e)) console.error(e); });
-  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [eventId]);
+  const [sound, setSound] = useState(() => localStorage.getItem("tci_order_sound") !== "off");
+  const seenRef = useRef(null);
+  const soundRef = useRef(sound); soundRef.current = sound;
+  const load = () => eventOpsService.listOrders(eventId, staffToken).then(d => {
+    const list = d?.orders || [];
+    const ids = new Set(list.map(o => o.id));
+    if (seenRef.current === null) { seenRef.current = ids; }
+    else {
+      const hasNew = list.some(o => !seenRef.current.has(o.id) && o.status === "en_attente");
+      seenRef.current = ids;
+      if (hasNew && soundRef.current) playOrderAlarm();
+    }
+    setOrders(list);
+  }).catch(e => { if (!onAuthError?.(e)) console.error(e); });
+  // Rafraîchi souvent (8 s) → commandes visibles quasi en temps réel
+  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, [eventId]);
+  const toggleSound = () => { const v = !sound; setSound(v); localStorage.setItem("tci_order_sound", v ? "on" : "off"); unlockAudio(); if (v) playOrderAlarm(); };
   const setStatus = async (o, status) => {
     try { await eventOpsService.setOrderStatus(o.id, status, staffToken, eventId); load(); }
     catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
@@ -569,8 +584,13 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
             style={{ border: `1px solid ${filter === k ? P : BORDER}`, background: filter === k ? "#FEF6EC" : "white",
               color: filter === k ? "#8a5a10" : MUTED, borderRadius: 9, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{l}</button>
         ))}
+        <button onClick={toggleSound} title={sound ? "Alerte sonore activée" : "Alerte sonore coupée"}
+          style={{ marginLeft: "auto", border: `1px solid ${sound ? P : BORDER}`, background: sound ? "#FEF6EC" : "white", borderRadius: 9, padding: "6px 12px",
+            cursor: "pointer", color: sound ? "#8a5a10" : MUTED, display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 600, fontFamily: FONT }}>
+          {sound ? <Bell size={13} /> : <BellOff size={13} />} Son
+        </button>
         <button onClick={load} title="Rafraîchir"
-          style={{ marginLeft: "auto", border: `1px solid ${BORDER}`, background: "white", borderRadius: 9, padding: "6px 12px",
+          style={{ border: `1px solid ${BORDER}`, background: "white", borderRadius: 9, padding: "6px 12px",
             cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontFamily: FONT }}>
           <RefreshCw size={13} /> Actualiser
         </button>

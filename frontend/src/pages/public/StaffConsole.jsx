@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Wine, UserCheck, RefreshCw, Check, X, Clock, BadgeCheck, Armchair, Crown, Plus, Minus, Users } from "lucide-react";
+import { LogOut, Wine, UserCheck, RefreshCw, Check, X, Clock, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff } from "lucide-react";
 import { eventStaffService, eventOpsService } from "../../services/events.service.js";
 import { CheckinTab } from "../event/EventTabs2.jsx";
+import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -17,7 +18,7 @@ export default function StaffConsole() {
   // Session staff expirée/révoquée (401/403) → on déconnecte et on revient au PIN.
   const onExpire = (e) => { if ([401, 403].includes(e?.response?.status)) { logout(); return true; } return false; };
   const firstTab = (r) => (r === "bar" || r === "caisse") ? "orders" : r === "serveur" ? "service" : "checkin";
-  if (!session) return <Login onOk={(s) => { localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
+  if (!session) return <Login onOk={(s) => { unlockAudio(); localStorage.setItem(KEY, JSON.stringify(s)); setSession(s); setTab(firstTab(s.staff.role)); }} />;
 
   const role = session.staff?.role || "all";
   const canCheckin = role === "all" || role === "checkin";
@@ -107,8 +108,23 @@ function Login({ onOk }) {
 function OrdersBoard({ eventId, token, onExpire }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const load = () => eventOpsService.listOrders(eventId, token).then(d => setOrders(d?.orders || [])).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
-  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [eventId]);
+  const [sound, setSound] = useState(() => localStorage.getItem("tci_order_sound") !== "off");
+  const seenRef = useRef(null);   // null = 1er chargement (pas d'alarme)
+  const soundRef = useRef(sound); soundRef.current = sound;
+  const load = () => eventOpsService.listOrders(eventId, token).then(d => {
+    const list = d?.orders || [];
+    const ids = new Set(list.map(o => o.id));
+    if (seenRef.current === null) { seenRef.current = ids; }
+    else {
+      const hasNew = list.some(o => !seenRef.current.has(o.id) && o.status === "en_attente");
+      seenRef.current = ids;
+      if (hasNew && soundRef.current) playOrderAlarm();
+    }
+    setOrders(list);
+  }).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
+  // Rafraîchi souvent (8 s) → commandes visibles quasi en temps réel
+  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, [eventId]);
+  const toggleSound = () => { const v = !sound; setSound(v); localStorage.setItem("tci_order_sound", v ? "on" : "off"); unlockAudio(); if (v) playOrderAlarm(); };
   const setStatus = async (o, status) => { try { await eventOpsService.setOrderStatus(o.id, status, token, eventId); load(); } catch (e) { if (!onExpire?.(e)) alert(e.response?.data?.message || "Erreur"); } };
 
   const ST = { en_attente: ["En attente", "#C47D1A", "#FEF6EC"], servi: ["Servi", GREEN, "#F0F6F2"], paye: ["Payé", "#2563EB", "#EFF6FF"], annule: ["Annulé", "#DC2626", "#FEF2F2"] };
@@ -118,9 +134,16 @@ function OrdersBoard({ eventId, token, onExpire }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}><Wine size={17} color={P} /> Commandes</div>
-        <button onClick={load} style={{ border: `0.5px solid ${BORDER}`, background: "white", borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: MUTED, fontFamily: FONT }}>
-          <RefreshCw size={13} /> Actualiser
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={toggleSound} title={sound ? "Alerte sonore activée" : "Alerte sonore coupée"}
+            style={{ border: `0.5px solid ${sound ? P : BORDER}`, background: sound ? "#FEF6EC" : "white", borderRadius: 8, padding: "6px 10px",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: sound ? "#8a5a10" : MUTED, fontFamily: FONT }}>
+            {sound ? <Bell size={13} /> : <BellOff size={13} />} Son
+          </button>
+          <button onClick={load} style={{ border: `0.5px solid ${BORDER}`, background: "white", borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: MUTED, fontFamily: FONT }}>
+            <RefreshCw size={13} /> Actualiser
+          </button>
+        </div>
       </div>
       {orders.length === 0 ? <div style={{ textAlign: "center", padding: "40px 0", color: MUTED, fontSize: 13 }}>Aucune commande.</div> : (
         <div style={{ display: "grid", gap: 10 }}>
@@ -162,9 +185,22 @@ function ServerBoard({ eventId, token, onExpire }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState(null); // table sur laquelle on commande
-  const load = () => eventOpsService.listServerTables(eventId, token)
-    .then(setData).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
-  useEffect(() => { load(); const id = setInterval(load, 25000); return () => clearInterval(id); }, [eventId]);
+  const [sound, setSound] = useState(() => localStorage.getItem("tci_order_sound") !== "off");
+  const seenRef = useRef(null);
+  const soundRef = useRef(sound); soundRef.current = sound;
+  const load = () => eventOpsService.listServerTables(eventId, token).then(d => {
+    const all = (d?.tables || []).flatMap(t => t.orders || []);
+    const ids = new Set(all.map(o => o.id));
+    if (seenRef.current === null) { seenRef.current = ids; }
+    else {
+      const hasNew = all.some(o => !seenRef.current.has(o.id) && o.status === "en_attente");
+      seenRef.current = ids;
+      if (hasNew && soundRef.current) playOrderAlarm();
+    }
+    setData(d);
+  }).catch(e => { if (!onExpire?.(e)) console.error(e); }).finally(() => setLoading(false));
+  useEffect(() => { load(); const id = setInterval(load, 10000); return () => clearInterval(id); }, [eventId]);
+  const toggleSound = () => { const v = !sound; setSound(v); localStorage.setItem("tci_order_sound", v ? "on" : "off"); unlockAudio(); if (v) playOrderAlarm(); };
 
   const ST = { en_attente: ["En attente", "#C47D1A", "#FEF6EC"], servi: ["Servi", GREEN, "#F0F6F2"], paye: ["Payé", "#2563EB", "#EFF6FF"], annule: ["Annulé", "#DC2626", "#FEF2F2"] };
   if (loading) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
@@ -177,9 +213,16 @@ function ServerBoard({ eventId, token, onExpire }) {
         <div style={{ fontSize: 15, fontWeight: 700, color: DARK, display: "flex", alignItems: "center", gap: 7 }}>
           <Armchair size={17} color={P} /> Mes tables
         </div>
-        <button onClick={load} style={{ border: `0.5px solid ${BORDER}`, background: "white", borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: MUTED, fontFamily: FONT }}>
-          <RefreshCw size={13} /> Actualiser
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={toggleSound} title={sound ? "Alerte sonore activée" : "Alerte sonore coupée"}
+            style={{ border: `0.5px solid ${sound ? P : BORDER}`, background: sound ? "#FEF6EC" : "white", borderRadius: 8, padding: "6px 10px",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: sound ? "#8a5a10" : MUTED, fontFamily: FONT }}>
+            {sound ? <Bell size={13} /> : <BellOff size={13} />} Son
+          </button>
+          <button onClick={load} style={{ border: `0.5px solid ${BORDER}`, background: "white", borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: MUTED, fontFamily: FONT }}>
+            <RefreshCw size={13} /> Actualiser
+          </button>
+        </div>
       </div>
       {tables.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px 20px", color: MUTED, fontSize: 13 }}>

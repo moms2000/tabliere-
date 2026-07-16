@@ -265,16 +265,18 @@ export const deleteTable = asyncHandler(async (req, res) => {
   const event = await eventById(req.params.id);
   if (!event) return notFound(res, "Événement introuvable");
   assertOwner(req, event);
-  // Refuser si la table est référencée par une réservation active (en attente / confirmée)
+  // Refuser si la table est référencée par une réservation active — requête
+  // scellée à l'événement (event_id) pour ne pas sonder les tables d'un autre événement.
   const { rows: [busy] } = await query(
-    "SELECT 1 FROM event_reservations WHERE table_id = $1 AND status IN ('en_attente','confirme') LIMIT 1",
-    [req.params.tableId]
+    "SELECT 1 FROM event_reservations WHERE table_id = $1 AND event_id = $2 AND status IN ('en_attente','confirme') LIMIT 1",
+    [req.params.tableId, event.id]
   );
   if (busy) throw new AppError("Table réservée : annulez d'abord les réservations liées.", 409);
-  await query(
+  const { rowCount } = await query(
     "UPDATE event_tables SET is_active = FALSE, updated_at = NOW() WHERE id = $1 AND event_id = $2",
     [req.params.tableId, event.id]
   );
+  if (!rowCount) return notFound(res, "Table introuvable");
   return ok(res, {}, "Table retirée");
 });
 

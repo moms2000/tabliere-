@@ -336,26 +336,57 @@ const arrivedFromBody = (body, fallback) => {
   return Number.isFinite(n) && n >= 1 ? Math.min(n, ABS_MAX_ARRIVED) : (fallback ?? null);
 };
 
-// Capacité du salon/table d'une réservation (null = pas de table / pas de limite)
-async function tableCapacityForResa(resaId) {
+// Limite d'arrivées d'une réservation = le nombre RÉSERVÉ (party_size), borné par
+// la capacité physique du salon si celle-ci est plus petite. On ne peut donc PAS
+// pointer plus de personnes que ce qui a été réservé pour ce salon.
+async function maxArrivedForResa(resaId) {
   const { rows: [r] } = await query(
-    `SELECT t.capacity FROM event_reservations er
-     JOIN event_tables t ON t.id = er.table_id WHERE er.id = $1`, [resaId]
+    `SELECT er.party_size, t.capacity
+     FROM event_reservations er
+     LEFT JOIN event_tables t ON t.id = er.table_id
+     WHERE er.id = $1`, [resaId]
   );
-  return r?.capacity ?? null;
+  if (!r) return ABS_MAX_ARRIVED;
+  const party = r.party_size || 1;
+  const cap = r.capacity || null;
+  return cap ? Math.min(party, cap) : party;
 }
-// Refuse un nombre d'arrivées supérieur à la capacité du salon
 async function assertArrivedFits(resaId, arrived) {
   if (arrived == null) return;
-  const cap = await tableCapacityForResa(resaId);
-  const limit = cap || ABS_MAX_ARRIVED; // sans table → plafond absolu
+  const limit = await maxArrivedForResa(resaId);
   if (arrived > limit) {
     throw new AppError(
-      cap ? `Ce salon accueille au maximum ${cap} personnes (vous avez saisi ${arrived}).`
-          : `Nombre d'arrivées invalide (max ${ABS_MAX_ARRIVED}).`,
+      `Cette réservation est prévue pour ${limit} personne${limit > 1 ? "s" : ""} maximum (vous avez saisi ${arrived}). Modifiez la réservation si le groupe est plus grand.`,
       400
     );
   }
+}
+
+// Applique le check-in (ou un complément d'arrivées) avec un code UNIQUE. Sous
+// forte concurrence à l'entrée (deux salons différents pointés à la même
+// milliseconde), l'index unique (event_id, order_pin) lève 23505 → on régénère
+// le code et on réessaie. Le même salon repointé garde son code (COALESCE).
+async function applyCheckin(resaId, eventId, arrived) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const pin = await genUniqueOrderPin(eventId);
+    try {
+      const { rows: [resa] } = await query(
+        `UPDATE event_reservations
+           SET checked_in_at = COALESCE(checked_in_at, NOW()),
+               arrived_size  = COALESCE($3, arrived_size, party_size),
+               order_pin     = COALESCE(order_pin, $4),
+               updated_at = NOW()
+         WHERE id = $1 AND event_id = $2
+         RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
+        [resaId, eventId, arrived, pin]
+      );
+      return resa || null;
+    } catch (e) {
+      if (e?.code === "23505") continue; // collision de code → nouvel essai
+      throw e;
+    }
+  }
+  throw new AppError("Impossible de générer un code unique, réessayez.", 500);
 }
 
 // ── POST /event-checkin/:resaId — pointer une arrivée (organisateur/staff) ────
@@ -363,30 +394,33 @@ export const doCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
   await assertEventActive(req.eventScope);
   const undo = req.body?.undo === true;
-  // On ne pointe à l'entrée qu'une réservation CONFIRMÉE (acompte reçu).
-  if (!undo) {
-    const { rows: [chk] } = await query(
-      "SELECT status FROM event_reservations WHERE id = $1 AND event_id = $2", [req.params.resaId, req.eventScope]
+
+  if (undo) {
+    const { rows: [resa] } = await query(
+      `UPDATE event_reservations
+         SET checked_in_at = NULL, arrived_size = NULL, order_pin = NULL, updated_at = NOW()
+       WHERE id = $1 AND event_id = $2
+       RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
+      [req.params.resaId, req.eventScope]
     );
-    if (!chk) return notFound(res, "Réservation introuvable");
-    if (chk.status !== "confirme") throw new AppError("Réservation non confirmée — l'organisateur doit valider l'acompte avant le check-in.", 400);
+    if (!resa) return notFound(res, "Réservation introuvable");
+    if (resa.table_id) await syncTableStatus(resa.id, false);
+    return ok(res, { reservation: resa }, "Check-in annulé");
   }
-  const arrived = undo ? null : arrivedFromBody(req.body);
-  if (!undo) await assertArrivedFits(req.params.resaId, arrived);
-  const pin = undo ? null : await genUniqueOrderPin(req.eventScope);
-  const { rows: [resa] } = await query(
-    `UPDATE event_reservations
-       SET checked_in_at = ${undo ? "NULL" : "COALESCE(checked_in_at, NOW())"},
-           arrived_size  = ${undo ? "NULL" : "COALESCE($3, arrived_size, party_size)"},
-           order_pin     = ${undo ? "NULL" : "COALESCE(order_pin, $4)"},
-           updated_at = NOW()
-     WHERE id = $1 AND event_id = $2
-     RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
-    undo ? [req.params.resaId, req.eventScope] : [req.params.resaId, req.eventScope, arrived, pin]
+
+  // On ne pointe à l'entrée qu'une réservation CONFIRMÉE (acompte reçu).
+  const { rows: [chk] } = await query(
+    "SELECT status FROM event_reservations WHERE id = $1 AND event_id = $2", [req.params.resaId, req.eventScope]
   );
+  if (!chk) return notFound(res, "Réservation introuvable");
+  if (chk.status !== "confirme") throw new AppError("Réservation non confirmée — l'organisateur doit valider l'acompte avant le check-in.", 400);
+
+  const arrived = arrivedFromBody(req.body);
+  await assertArrivedFits(req.params.resaId, arrived);
+  const resa = await applyCheckin(req.params.resaId, req.eventScope, arrived);
   if (!resa) return notFound(res, "Réservation introuvable");
-  if (resa.table_id) await syncTableStatus(resa.id, !undo);
-  return ok(res, { reservation: resa }, undo ? "Check-in annulé" : "Arrivée confirmée");
+  if (resa.table_id) await syncTableStatus(resa.id, true);
+  return ok(res, { reservation: resa }, "Arrivée confirmée");
 });
 
 // ── POST /event-checkin/by-ref — pointer via QR (ref scannée) ─────────────────
@@ -410,15 +444,8 @@ export const checkinByRef = asyncHandler(async (req, res) => {
     );
   }
   await assertArrivedFits(found.id, arrived);
-  const pin = await genUniqueOrderPin(req.eventScope);
-  const { rows: [resa] } = await query(
-    `UPDATE event_reservations
-       SET checked_in_at = NOW(), arrived_size = COALESCE($3, party_size),
-           order_pin = COALESCE(order_pin, $4), updated_at = NOW()
-     WHERE id = $1 AND event_id = $2
-     RETURNING id, ref, party_size, arrived_size, order_pin, checked_in_at, table_id`,
-    [found.id, req.eventScope, arrived, pin]
-  );
+  const resa = await applyCheckin(found.id, req.eventScope, arrived);
+  if (!resa) return notFound(res, "Réservation introuvable");
   if (resa.table_id) await syncTableStatus(resa.id, true);
   return ok(res, { reservation: resa }, "Arrivée confirmée");
 });

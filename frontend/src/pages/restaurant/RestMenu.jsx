@@ -196,7 +196,7 @@ export default function RestMenu() {
       setModalCat(false); setEditCat(null); setFormCat({ name: "" });
     } catch (e) {
       console.error("Échec enregistrement catégorie", e);
-      setErr("⚠️ La catégorie n'a PAS été enregistrée (connexion lente ?). Réessayez — rien n'a été perdu.");
+      setErr("La catégorie n'a pas été enregistrée. Réessayez, rien n'a été perdu.");
       reloadMenu();
     } finally { setSaving(false); }
   };
@@ -211,7 +211,7 @@ export default function RestMenu() {
       if (activeTab === id) setActiveTab(rem[0]?.id || null);
     } catch (e) {
       console.error("Échec suppression catégorie", e);
-      setErr("⚠️ La suppression a échoué — réessayez.");
+      setErr("La suppression n'a pas abouti. Réessayez.");
       reloadMenu();
     }
   };
@@ -243,7 +243,7 @@ export default function RestMenu() {
       setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
     } catch (e) {
       console.error("Échec enregistrement plat", e);
-      setErr("⚠️ Le plat n'a PAS été enregistré (connexion lente ?). Réessayez — rien n'a été perdu.");
+      setErr("Le plat n'a pas été enregistré. Réessayez, rien n'a été perdu.");
       reloadMenu();
     } finally { setSaving(false); }
   };
@@ -257,7 +257,7 @@ export default function RestMenu() {
         ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c));
     } catch (e) {
       console.error("Échec suppression plat", e);
-      setErr("⚠️ La suppression a échoué — réessayez.");
+      setErr("La suppression n'a pas abouti. Réessayez.");
       reloadMenu();
     }
   };
@@ -317,7 +317,7 @@ export default function RestMenu() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: qrActive ? "white" : DARK, marginBottom: 2 }}>
-              Menu QR {qrActive ? "— Activé" : "— Désactivé"}
+              Menu QR {qrActive ? "· Activé" : "· Désactivé"}
             </div>
             <div style={{ fontSize: 12, color: qrActive ? "rgba(255,255,255,.45)" : MUTED }}>
               {qrActive ? menuUrl : "Activez pour permettre aux clients de scanner et voir le menu"}
@@ -358,7 +358,7 @@ export default function RestMenu() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: menuPublic ? "white" : DARK, marginBottom: 2 }}>
-              Menu sur ma page {menuPublic ? "— Visible" : "— Masqué"}
+              Menu sur ma page {menuPublic ? "· Visible" : "· Masqué"}
             </div>
             <div style={{ fontSize: 12, color: menuPublic ? "rgba(255,255,255,.45)" : MUTED }}>
               {menuPublic
@@ -635,7 +635,7 @@ export default function RestMenu() {
           onImported={(r) => {
             reloadMenu();
             setErr("");
-            setOkMsg(`✅ Import réussi : ${r?.itemAdded ?? 0} plat(s) ajouté(s)${r?.catAdded ? `, ${r.catAdded} catégorie(s) créée(s)` : ""}.`);
+            setOkMsg(`Import réussi : ${r?.itemAdded ?? 0} plat(s) ajouté(s)${r?.catAdded ? `, ${r.catAdded} catégorie(s) créée(s)` : ""}.`);
             setTimeout(() => setOkMsg(""), 6000);
           }}
         />

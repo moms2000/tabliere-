@@ -126,7 +126,7 @@ export default function RestProfil() {
         setForm(p => ({ ...p,
           latitude:  pos.coords.latitude.toFixed(6),
           longitude: pos.coords.longitude.toFixed(6) }));
-        setGeoMsg("Position récupérée ✓ — cliquez sur Enregistrer pour valider.");
+        setGeoMsg("Position récupérée. Cliquez sur Enregistrer pour valider.");
       },
       () => setGeoMsg("Impossible d'obtenir la position (autorisation refusée ?)."),
       { enableHighAccuracy: true, timeout: 10000 }

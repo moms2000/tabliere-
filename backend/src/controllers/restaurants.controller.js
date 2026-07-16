@@ -146,8 +146,10 @@ export const getManage = asyncHandler(async (req, res) => {
   if (!resto) return notFound(res, "Restaurant introuvable");
   _assertOwnerOrAdmin(req, resto);
 
+  // Ne renvoyer que les tables ACTIVES : une table supprimée (is_active = FALSE)
+  // ne doit pas réapparaître dans le plan de salle au rechargement.
   const { rows: tables } = await query(
-    "SELECT * FROM restaurant_tables WHERE restaurant_id = $1 ORDER BY label",
+    "SELECT * FROM restaurant_tables WHERE restaurant_id = $1 AND is_active = TRUE ORDER BY label",
     [resto.id]
   );
   // Jeton d'aperçu privé pour prévisualiser la page même « en préparation »

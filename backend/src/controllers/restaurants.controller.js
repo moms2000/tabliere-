@@ -172,7 +172,8 @@ export const update = asyncHandler(async (req, res) => {
     // Activation/désactivation QR par le restaurateur
     "qr_active",
     // Créneaux de service + nombre de tables par taille de groupe
-    "lunch_hours","dinner_hours","tables_2","tables_4","tables_6","tables_8",
+    "lunch_hours","dinner_hours",
+    "tables_1","tables_2","tables_3","tables_4","tables_5","tables_6","tables_7","tables_8",
     // Confirmation automatique ou manuelle des réservations
     "auto_confirm",
     "seating_duration",
@@ -212,7 +213,7 @@ export const update = asyncHandler(async (req, res) => {
       }
     }
     // Champs INTEGER (nombre de tables) : "" → 0, sinon cast numérique
-    if (["tables_2","tables_4","tables_6","tables_8","capacity"].includes(field)) {
+    if (["tables_1","tables_2","tables_3","tables_4","tables_5","tables_6","tables_7","tables_8","capacity"].includes(field)) {
       val = (val === "" || val === null) ? 0 : (parseInt(val, 10) || 0);
     }
     // deposit_min_party : entier >= 1 (défaut 6 si vide/invalide)
@@ -328,9 +329,13 @@ async function ensureRestaurantColumns() {
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS qr_active     BOOLEAN DEFAULT FALSE;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lunch_hours   VARCHAR(100);
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS dinner_hours  VARCHAR(100);
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_1      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_2      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_3      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_4      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_5      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_6      INTEGER DEFAULT 0;
+      ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_7      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS tables_8      INTEGER DEFAULT 0;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS auto_confirm  BOOLEAN DEFAULT TRUE;
       ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS deposit_enabled   BOOLEAN DEFAULT FALSE;

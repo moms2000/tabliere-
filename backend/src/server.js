@@ -556,6 +556,14 @@ async function runPerfIndexes() {
     `CREATE INDEX IF NOT EXISTS idx_evt_resa_evt_status  ON event_reservations(event_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_resa_checkin     ON event_reservations(event_id, checked_in_at)`,
     `CREATE INDEX IF NOT EXISTS idx_evt_orders_evt_status ON event_orders(event_id, status)`,
+    // Code responsable — unicité STRICTE du PIN par événement (anti-collision sous
+    // forte concurrence à l'entrée : deux salons ne peuvent jamais partager un code).
+    // On neutralise d'abord d'éventuels doublons existants avant de poser l'index.
+    `UPDATE event_reservations r SET order_pin = NULL
+       WHERE order_pin IS NOT NULL AND EXISTS (
+         SELECT 1 FROM event_reservations r2
+         WHERE r2.event_id = r.event_id AND r2.order_pin = r.order_pin AND r2.id < r.id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uniq_evt_resa_order_pin ON event_reservations(event_id, order_pin) WHERE order_pin IS NOT NULL`,
     // Paiements — idempotence des webhooks : une référence fournisseur = un paiement
     `CREATE UNIQUE INDEX IF NOT EXISTS uidx_payments_provider_ref ON payments(provider_ref) WHERE provider_ref IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_payments_reservation ON payments(reservation_id)`,

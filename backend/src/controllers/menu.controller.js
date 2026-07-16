@@ -3,7 +3,7 @@
  * Menu public (QR) + gestion restaurateur
  */
 
-import { query } from "../config/db.js";
+import { query, withTransaction } from "../config/db.js";
 import { cache } from "../config/redis.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -207,6 +207,62 @@ export const createItem = asyncHandler(async (req, res) => {
   await cache.delPattern(`menu:public:*`).catch(() => {});
   logger.info("Item menu créé", { itemId: item.id, restoId: cat.restaurant_id });
   return created(res, { item }, "Plat ajouté au menu");
+});
+
+// ── POST /menu/import — import en masse (aperçu déjà validé côté client) ──────
+// Transactionnel : soit TOUT est enregistré, soit rien (aucune perte partielle).
+// Réutilise les catégories existantes (insensible à la casse) et ignore les
+// doublons de plats (même nom dans la même catégorie).
+export const importMenu = asyncHandler(async (req, res) => {
+  await ensureMenuColumns();
+  const restoId = req.user.restaurant_id;
+  if (!restoId) throw new AppError("Aucun restaurant associé à ce compte", 400);
+  const cats = Array.isArray(req.body?.categories) ? req.body.categories : [];
+  if (!cats.length) throw new AppError("Rien à importer", 400);
+  if (cats.length > 100) throw new AppError("Trop de catégories (max 100)", 400);
+
+  const result = await withTransaction(async (client) => {
+    let catAdded = 0, itemAdded = 0;
+    for (const rawCat of cats.slice(0, 100)) {
+      const cname = String(rawCat?.name || "").trim().slice(0, 80);
+      if (!cname) continue;
+      const { rows: [existing] } = await client.query(
+        "SELECT id FROM menu_categories WHERE restaurant_id = $1 AND LOWER(name) = LOWER($2) AND is_active = TRUE LIMIT 1",
+        [restoId, cname]
+      );
+      let catId = existing?.id;
+      if (!catId) {
+        const { rows: [c] } = await client.query(
+          `INSERT INTO menu_categories (restaurant_id, name, position)
+           VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM menu_categories WHERE restaurant_id = $1), 0))
+           RETURNING id`, [restoId, cname]
+        );
+        catId = c.id; catAdded++;
+      }
+      const items = Array.isArray(rawCat?.items) ? rawCat.items.slice(0, 300) : [];
+      for (const it of items) {
+        const iname = String(it?.name || "").trim().slice(0, 120);
+        if (!iname) continue;
+        const price = Math.max(0, Math.round(Number(it?.price) || 0));
+        const desc  = it?.description ? String(it.description).slice(0, 500) : null;
+        const { rows: [dup] } = await client.query(
+          "SELECT 1 FROM menu_items WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1", [catId, iname]
+        );
+        if (dup) continue;
+        await client.query(
+          `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, is_active, position)
+           VALUES ($1, $2, $3, $4, $5, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
+          [catId, restoId, iname, desc, price]
+        );
+        itemAdded++;
+      }
+    }
+    return { catAdded, itemAdded };
+  });
+
+  await cache.delPattern(`menu:public:*`).catch(() => {});
+  logger.info("Import menu", { restoId, ...result });
+  return ok(res, result, `Import réussi : ${result.itemAdded} plat(s) ajouté(s), ${result.catAdded} catégorie(s) créée(s).`);
 });
 
 // ── PATCH /menu/items/:id ─────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "react-qr-code";
-import { Notebook, Plus, Pencil, Trash2, QrCode, ExternalLink, Copy, Check, Share2 } from "lucide-react";
+import { Notebook, Plus, Pencil, Trash2, QrCode, ExternalLink, Copy, Check, Share2, Upload } from "lucide-react";
+import MenuImportModal from "./MenuImportModal.jsx";
 import { Card, SectionHeader, PageTitle, Btn, Toggle, Modal, FormField, Input, PhotoUpload } from "../../components/ui";
 import { menuService }        from "../../services/menu.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
@@ -97,6 +98,8 @@ export default function RestMenu() {
   const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
   const [err,        setErr]        = useState("");
   const [saving,     setSaving]     = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [okMsg,      setOkMsg]      = useState("");
 
   const menuUrl = `${window.location.origin}/menu/${user?.resto_slug || ""}`;
 
@@ -294,6 +297,13 @@ export default function RestMenu() {
           <button onClick={() => setErr("")} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#B91C1C", fontWeight: 700 }}>✕</button>
         </motion.div>
       )}
+      {okMsg && (
+        <motion.div variants={fadeUp} style={{ display: "flex", alignItems: "center", gap: 8, background: "#F0F6F2",
+          border: "1px solid #1D9E7555", color: "#1D9E75", fontSize: 13, fontWeight: 600, borderRadius: 12, padding: "11px 14px", marginBottom: 14 }}>
+          <Check size={16} /> <span style={{ flex: 1 }}>{okMsg}</span>
+          <button onClick={() => setOkMsg("")} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#1D9E75", fontWeight: 700 }}>✕</button>
+        </motion.div>
+      )}
 
       {/* Bannière QR */}
       <motion.div variants={fadeUp} style={{ marginBottom: 14 }}>
@@ -439,10 +449,14 @@ export default function RestMenu() {
                   </div>
                 );
               })}
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}` }}>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `0.5px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 6 }}>
                 <Btn variant="default" icon={Plus} onClick={openNewCat}
                   style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>
                   Catégorie
+                </Btn>
+                <Btn variant="default" icon={Upload} onClick={() => setShowImport(true)}
+                  style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>
+                  Importer (Excel/PDF)
                 </Btn>
               </div>
             </Card>
@@ -613,6 +627,18 @@ export default function RestMenu() {
             </Btn>
           </div>
         </Modal>
+      )}
+
+      {showImport && (
+        <MenuImportModal
+          onClose={() => setShowImport(false)}
+          onImported={(r) => {
+            reloadMenu();
+            setErr("");
+            setOkMsg(`✅ Import réussi : ${r?.itemAdded ?? 0} plat(s) ajouté(s)${r?.catAdded ? `, ${r.catAdded} catégorie(s) créée(s)` : ""}.`);
+            setTimeout(() => setOkMsg(""), 6000);
+          }}
+        />
       )}
     </motion.div>
   );

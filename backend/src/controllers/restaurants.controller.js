@@ -369,7 +369,7 @@ export const createTable = asyncHandler(async (req, res) => {
     `INSERT INTO restaurant_tables (restaurant_id, label, capacity, zone, pos_x, pos_y)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [resto.id, label, capacity || 2, zone || "interieur", pos_x ?? 20, pos_y ?? 20]
+    [resto.id, label, capacity || 2, normalizeZone(zone), pos_x ?? 20, pos_y ?? 20]
   );
 
   await cache.delPattern(`restaurant:*`).catch(() => {});
@@ -387,9 +387,13 @@ function normalizeTableStatus(s) {
 
 // Normalise une zone vers une valeur acceptée
 function normalizeZone(z) {
-  const v = String(z || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const allowed = ["interieur","terrasse","bar","vip","salon_prive"];
-  return allowed.includes(v) ? v : "interieur";
+  const raw = String(z || "").trim().slice(0, 30);
+  if (!raw) return "interieur";
+  // Zones connues → clé canonique (sans accent/majuscule). Zone PERSONNALISÉE →
+  // on conserve le libellé tel quel (ex. « Salon Rouge »).
+  const v = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const known = ["interieur","terrasse","bar","vip","salon_prive"];
+  return known.includes(v) ? v : raw;
 }
 
 export const updateTable = asyncHandler(async (req, res) => {

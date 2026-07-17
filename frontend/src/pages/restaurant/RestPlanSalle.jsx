@@ -422,7 +422,9 @@ export default function RestPlanSalle() {
       setModalTable(false); setEditTable(null);
     } catch (e) {
       console.error("Échec enregistrement table", e);
-      setErr("La table n'a pas été enregistrée. Réessayez dans quelques secondes, rien n'a été perdu.");
+      // Afficher le VRAI motif renvoyé par le serveur (ex. « numéro déjà utilisé »)
+      const msg = e?.response?.data?.message;
+      setErr(msg || "La table n'a pas été enregistrée. Réessayez dans quelques secondes, rien n'a été perdu.");
       load(); // resynchroniser avec le serveur (aucune table fantôme affichée)
     } finally { setSaving(false); }
   };

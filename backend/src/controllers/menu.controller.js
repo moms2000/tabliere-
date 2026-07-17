@@ -16,6 +16,7 @@ async function ensureMenuColumns() {
   if (menuMigrated) return;
   try {
     await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`);
+    await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS subcategory VARCHAR(80)`);
     // Élargir image_url : VARCHAR(500) → TEXT (base64 images = 50k+ chars)
     await query(`ALTER TABLE menu_items ALTER COLUMN image_url TYPE TEXT`);
     // Pareil pour logo_url
@@ -59,6 +60,7 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
                 'image_url',    mi.image_url,
                 'is_available', mi.is_available,
                 'position',     mi.position,
+                'subcategory',  mi.subcategory,
                 'options',      mi.options
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
@@ -96,6 +98,7 @@ export const getFullMenu = asyncHandler(async (req, res) => {
                 'is_active',    mi.is_active,
                 'is_available', mi.is_available,
                 'position',     mi.position,
+                'subcategory',  mi.subcategory,
                 'options',      mi.options
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
@@ -181,6 +184,7 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 export const createItem = asyncHandler(async (req, res) => {
   await ensureMenuColumns();
   const { category_id, name, description, price, image_url, is_active = true, position = 0, options } = req.body;
+  const subcategory = req.body.subcategory ? String(req.body.subcategory).trim().slice(0, 80) : null;
 
   // Vérifier que la catégorie appartient au restaurant
   const { rows: [cat] } = await query(
@@ -198,10 +202,10 @@ export const createItem = asyncHandler(async (req, res) => {
 
   const { rows: [item] } = await query(
     `INSERT INTO menu_items
-       (category_id, restaurant_id, name, description, price, image_url, is_active, position, options)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (category_id, restaurant_id, name, description, price, image_url, is_active, position, options, subcategory)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position, optionsVal]
+    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position, optionsVal, subcategory]
   );
 
   await cache.delPattern(`menu:public:*`).catch(() => {});
@@ -245,14 +249,15 @@ export const importMenu = asyncHandler(async (req, res) => {
         if (!iname) continue;
         const price = Math.max(0, Math.round(Number(it?.price) || 0));
         const desc  = it?.description ? String(it.description).slice(0, 500) : null;
+        const sub   = it?.subcategory ? String(it.subcategory).trim().slice(0, 80) : null;
         const { rows: [dup] } = await client.query(
           "SELECT 1 FROM menu_items WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1", [catId, iname]
         );
         if (dup) continue;
         await client.query(
-          `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, is_active, position)
-           VALUES ($1, $2, $3, $4, $5, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
-          [catId, restoId, iname, desc, price]
+          `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, subcategory, is_active, position)
+           VALUES ($1, $2, $3, $4, $5, $6, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
+          [catId, restoId, iname, desc, price, sub]
         );
         itemAdded++;
       }
@@ -282,7 +287,7 @@ export const updateItem = asyncHandler(async (req, res) => {
     if (!cat) throw new AppError("Catégorie introuvable dans ce restaurant", 400);
   }
 
-  const ALLOWED = ["name","description","price","image_url","is_active","is_available","position","category_id","options"];
+  const ALLOWED = ["name","description","price","image_url","is_active","is_available","position","category_id","options","subcategory"];
   const updates = [];
   const values  = [];
 

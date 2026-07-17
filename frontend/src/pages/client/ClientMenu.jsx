@@ -322,7 +322,14 @@ export default function ClientMenu() {
 
   /* ── Filtre (mémoïsé — évite de re-filtrer tout le catalogue à chaque frappe) ── */
   const allItems = useMemo(
-    () => categories.flatMap(c => (c.items||[]).filter(i => i.is_active !== false && i.is_available !== false).map(i => ({ ...i, catId: c.id, catName: c.name }))),
+    () => categories.flatMap(c => {
+      const its = (c.items || []).filter(i => i.is_active !== false && i.is_available !== false);
+      // Regrouper par sous-catégorie (sans sous-catégorie en premier), ordre préservé
+      const order = [], groups = {};
+      its.forEach(i => { const k = (i.subcategory || "").trim(); if (!(k in groups)) { groups[k] = []; order.push(k); } groups[k].push(i); });
+      order.sort((a, b) => (a === "" ? -1 : b === "" ? 1 : 0));
+      return order.flatMap(k => groups[k]).map(i => ({ ...i, catId: c.id, catName: c.name }));
+    }),
     [categories]
   );
   const filteredItems = useMemo(() => {
@@ -567,7 +574,10 @@ export default function ClientMenu() {
           </div>
         ) : filteredItems.map((item, idx) => {
           const inCart = cart[item.id]?.qty || 0;
-          const isFirst = idx === 0 || filteredItems[idx-1]?.catName !== item.catName;
+          const prev = filteredItems[idx-1];
+          const isFirst = idx === 0 || prev?.catName !== item.catName;
+          const subcat = (item.subcategory || "").trim();
+          const showSubcat = subcat && (isFirst || (prev?.subcategory || "").trim() !== subcat);
           return (
             <div key={item.id}>
               {/* Séparateur catégorie si "Tous" */}
@@ -576,6 +586,12 @@ export default function ClientMenu() {
                   color: MUTED, textTransform: "uppercase", letterSpacing: "1.5px",
                   borderTop: idx > 0 ? `4px solid ${CREAM}` : "none" }}>
                   {item.catName}
+                </div>
+              )}
+              {/* Sous-catégorie */}
+              {showSubcat && (
+                <div style={{ padding: "8px 16px 2px", fontSize: 11.5, fontWeight: 700, color: "#8a5a10" }}>
+                  {subcat}
                 </div>
               )}
 

@@ -95,7 +95,7 @@ export default function RestMenu() {
   const [editItem,   setEditItem]   = useState(null);
   const [editCat,    setEditCat]    = useState(null);
   const [formCat,    setFormCat]    = useState({ name: "" });
-  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
+  const [formItem,   setFormItem]   = useState({ name: "", description: "", price: "", image_url: "", is_active: true, subcategory: "", options: { cuissons: [], accompagnements: [] } });
   const [err,        setErr]        = useState("");
   const [saving,     setSaving]     = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -240,7 +240,7 @@ export default function RestMenu() {
           ? { ...c, items: [...(c.items || []), n] } : c));
       }
       setModalItem(false); setEditItem(null);
-      setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } });
+      setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, subcategory: "", options: { cuissons: [], accompagnements: [] } });
     } catch (e) {
       console.error("Échec enregistrement plat", e);
       setErr("Le plat n'a pas été enregistré. Réessayez, rien n'a été perdu.");
@@ -273,11 +273,11 @@ export default function RestMenu() {
       cuissons:        normalizeChoices(parsedOpts?.cuissons),
       accompagnements: normalizeChoices(parsedOpts?.accompagnements),
     };
-    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active, options });
+    setFormItem({ name: item.name, description: item.description || "", price: item.price, image_url: item.image_url || "", is_active: item.is_active, subcategory: item.subcategory || "", options });
     setModalItem(true);
   };
   const openNewItem  = ()     => {
-    setEditItem(null); setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, options: { cuissons: [], accompagnements: [] } }); setModalItem(true);
+    setEditItem(null); setFormItem({ name: "", description: "", price: "", image_url: "", is_active: true, subcategory: "", options: { cuissons: [], accompagnements: [] } }); setModalItem(true);
   };
 
   const activeCategory = categories.find(c => c.id === activeTab);
@@ -486,41 +486,60 @@ export default function RestMenu() {
               <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, x: 8 }}
                   animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-                  {(activeCategory?.items || []).map((item, i) => (
-                    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12,
-                      padding: "11px 0", borderBottom: `0.5px solid ${BG}`,
-                      opacity: item.is_active ? 1 : 0.45 }}>
-                      {item.image_url ? (
-                        <img src={item.image_url} alt={item.name}
-                          style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                          onError={e => { e.target.style.display = "none"; }} />
-                      ) : (
-                        <div style={{ width: 4, height: 38, borderRadius: 2,
-                          background: item.is_active ? P : BORDER, flexShrink: 0 }} />
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.name}</div>
-                        {item.description && (
-                          <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{item.description}</div>
+                  {(() => {
+                    const renderItem = (item) => (
+                      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12,
+                        padding: "11px 0", borderBottom: `0.5px solid ${BG}`,
+                        opacity: item.is_active ? 1 : 0.45 }}>
+                        {item.image_url ? (
+                          <img src={item.image_url} alt={item.name}
+                            style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                            onError={e => { e.target.style.display = "none"; }} />
+                        ) : (
+                          <div style={{ width: 4, height: 38, borderRadius: 2,
+                            background: item.is_active ? P : BORDER, flexShrink: 0 }} />
                         )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.name}</div>
+                          {item.description && (
+                            <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{item.description}</div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: P, minWidth: 80, textAlign: "right" }}>
+                          {fmt(item.price)}
+                        </div>
+                        <Toggle value={item.is_active}
+                          onChange={() => toggleItem(activeCategory.id, item.id, item.is_active)} />
+                        <button onClick={() => openEditItem(item)}
+                          style={{ border: "none", background: "transparent",
+                            cursor: "pointer", color: MUTED, display: "flex", padding: 4 }}>
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => deleteItem(activeCategory.id, item.id)}
+                          style={{ border: "none", background: "transparent",
+                            cursor: "pointer", color: "#FECACA", display: "flex", padding: 4 }}>
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: P, minWidth: 80, textAlign: "right" }}>
-                        {fmt(item.price)}
+                    );
+                    // Regrouper par sous-catégorie (ordre d'apparition ; sans sous-catégorie en tête, sans titre)
+                    const items = activeCategory?.items || [];
+                    const order = [], groups = {};
+                    for (const it of items) {
+                      const key = (it.subcategory || "").trim();
+                      if (!(key in groups)) { groups[key] = []; order.push(key); }
+                      groups[key].push(it);
+                    }
+                    return order.map(key => (
+                      <div key={key || "__none"}>
+                        {key && (
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#8a5a10", textTransform: "uppercase",
+                            letterSpacing: ".5px", margin: "14px 0 4px" }}>{key}</div>
+                        )}
+                        {groups[key].map(renderItem)}
                       </div>
-                      <Toggle value={item.is_active}
-                        onChange={() => toggleItem(activeCategory.id, item.id, item.is_active)} />
-                      <button onClick={() => openEditItem(item)}
-                        style={{ border: "none", background: "transparent",
-                          cursor: "pointer", color: MUTED, display: "flex", padding: 4 }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => deleteItem(activeCategory.id, item.id)}
-                        style={{ border: "none", background: "transparent",
-                          cursor: "pointer", color: "#FECACA", display: "flex", padding: 4 }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                   {(activeCategory?.items || []).length === 0 && activeTab && (
                     <div style={{ textAlign: "center", padding: "36px 0", color: MUTED, fontSize: 13 }}>
                       <div style={{ marginBottom: 12 }}>Aucun plat</div>
@@ -561,6 +580,11 @@ export default function RestMenu() {
             <Input value={formItem.name}
               onChange={e => setFormItem(p => ({ ...p, name: e.target.value }))}
               placeholder="Poulet grillé sauce graine…" />
+          </FormField>
+          <FormField label="Sous-catégorie (optionnel)">
+            <Input value={formItem.subcategory}
+              onChange={e => setFormItem(p => ({ ...p, subcategory: e.target.value }))}
+              placeholder="ex : Viandes, Poissons, Softs…" />
           </FormField>
           <FormField label="Description (optionnel)">
             <textarea value={formItem.description}

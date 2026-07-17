@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User, PartyPopper, BadgeCheck } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, UtensilsCrossed, User, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { authService } from "../../services/auth.service.js";
 
@@ -113,29 +113,21 @@ function StepChoix({ onChoose }) {
               {
                 type: "organisateur",
                 icon: PartyPopper,
-                title: "Organisateur",
-                sub: "Gérez vos événements et réservations",
+                title: "Organisateur / Staff",
+                sub: "Événements : organisateur, bar, caisse, serveur, check-in",
                 bg: PL,
                 border: `0.5px solid ${P}44`,
               },
-              {
-                type: "staff",
-                icon: BadgeCheck,
-                title: "Staff événement",
-                sub: "Bar, caisse, serveur, check-in (code + PIN)",
-                bg: "#F0F6F2",
-                border: `0.5px solid ${S}44`,
-              },
             ].map(opt => (
               <motion.button key={opt.type} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                onClick={() => opt.type === "staff" ? navigate("/staff") : onChoose(opt.type)}
+                onClick={() => opt.type === "organisateur" ? navigate("/staff") : onChoose(opt.type)}
                 style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
                   borderRadius: 12, border: opt.border, background: opt.bg,
                   cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
                 <div style={{ width: 44, height: 44, borderRadius: 11,
-                  background: (opt.type === "restaurateur" || opt.type === "staff" ? S : P) + "22",
+                  background: (opt.type === "restaurateur" ? S : P) + "22",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <opt.icon size={20} color={opt.type === "restaurateur" || opt.type === "staff" ? S : P} />
+                  <opt.icon size={20} color={opt.type === "restaurateur" ? S : P} />
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: DARK, marginBottom: 3 }}>

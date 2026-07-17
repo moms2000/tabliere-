@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LogOut, Wine, RefreshCw, Check, X, BadgeCheck, Armchair, Crown, Plus, Minus, Users, Bell, BellOff, Shield, Eye, EyeOff } from "lucide-react";
 import { eventStaffService, eventOpsService } from "../../services/events.service.js";
+import { clearTokens } from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { CheckinTab } from "../event/EventTabs2.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
@@ -114,6 +115,8 @@ function Login({ onOk }) {
     setBusy(true);
     try {
       const s = await eventStaffService.login(slug.trim().toLowerCase(), pin.trim());
+      // Isolation : une session staff n'est jamais mêlée à une session utilisateur.
+      clearTokens();
       onOk(s);
     } catch (e2) {
       const st = e2.response?.status;
@@ -126,6 +129,8 @@ function Login({ onOk }) {
     if (!email.trim() || !password) { setErr("Entrez votre e-mail et votre mot de passe."); return; }
     setBusy(true);
     try {
+      // Isolation : une connexion organisateur efface toute session staff résiduelle.
+      localStorage.removeItem(KEY); localStorage.removeItem(ACT_KEY);
       const u = await login(email.trim().toLowerCase(), password, true);
       navigate(u?.role === "organisateur" ? "/event" : u?.role === "admin" ? "/admin" : "/");
     } catch (e2) {
@@ -137,12 +142,23 @@ function Login({ onOk }) {
     }
   };
   const submit = (e) => { e.preventDefault(); setErr(""); mode === "staff" ? submitStaff() : submitOrga(); };
-  const switchMode = (m) => { setMode(m); setErr(""); };
+  // Changer d'onglet vide les champs de l'autre connexion (aucun mélange de saisie).
+  const switchMode = (m) => {
+    setErr("");
+    if (m === "staff") { setEmail(""); setPassword(""); }
+    else { setSlug(""); setPin(""); }
+    setMode(m);
+  };
 
   const isStaff = mode === "staff";
   return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT }}>
-      <form onSubmit={submit} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 16, padding: "28px 26px", width: "100%", maxWidth: 380 }}>
+      <form onSubmit={submit} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 16, padding: "22px 26px 28px", width: "100%", maxWidth: 380 }}>
+        <button type="button" onClick={() => navigate("/connexion")}
+          style={{ alignSelf: "flex-start", background: "transparent", border: "none", cursor: "pointer",
+            fontSize: 12.5, color: MUTED, marginBottom: 14, display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: FONT }}>
+          ← Retour
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           {isStaff ? <BadgeCheck size={22} color={P} /> : <Shield size={22} color={P} />}
           <div style={{ fontSize: 19, fontWeight: 800, color: DARK }}>{isStaff ? "Console Staff" : "Espace Organisateur"}</div>

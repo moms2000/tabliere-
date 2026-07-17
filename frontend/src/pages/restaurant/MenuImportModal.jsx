@@ -10,6 +10,7 @@ const fmt = (n) => Number(n || 0).toLocaleString("fr-FR") + " F";
 const stripAccents = (s) => String(s || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const COL = {
   category:    ["categorie", "category", "cat", "rubrique"],
+  subcategory: ["sous-categorie", "sous categorie", "souscategorie", "subcategory", "sub-category", "sous-cat", "sous rubrique"],
   name:        ["nom", "name", "plat", "produit", "article", "designation", "libelle"],
   price:       ["prix", "price", "tarif", "montant"],
   description: ["description", "desc", "details", "detail"],
@@ -35,12 +36,14 @@ export default function MenuImportModal({ onClose, onImported }) {
   const downloadTemplate = async () => {
     const XLSX = await import("xlsx");
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Catégorie", "Nom", "Prix", "Description"],
-      ["Entrées", "Salade César", 3500, "Salade, poulet grillé, parmesan"],
-      ["Plats", "Attiéké poisson", 5000, "Poisson braisé, attiéké, alloco"],
-      ["Boissons", "Coca-Cola 33cl", 1000, ""],
+      ["Catégorie", "Sous-catégorie", "Nom", "Prix", "Description"],
+      ["Entrées", "", "Salade César", 3500, "Salade, poulet grillé, parmesan"],
+      ["Plats", "Viandes", "Boeuf grillé", 6000, "Sauce au poivre, frites"],
+      ["Plats", "Poissons", "Attiéké poisson", 5000, "Poisson braisé, attiéké, alloco"],
+      ["Boissons", "Softs", "Coca-Cola 33cl", 1000, ""],
+      ["Boissons", "Jus naturels", "Bissap", 1500, ""],
     ]);
-    ws["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 10 }, { wch: 40 }];
+    ws["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 28 }, { wch: 10 }, { wch: 38 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Menu");
     XLSX.writeFile(wb, "modele-menu-tabliereci.xlsx");
@@ -76,7 +79,12 @@ export default function MenuImportModal({ onClose, onImported }) {
         const cat = String(rec.category || "Autres").trim() || "Autres";
         const key = stripAccents(cat);
         if (!map[key]) { map[key] = { name: cat, items: [] }; order.push(key); }
-        map[key].items.push({ name: name.slice(0, 120), price: toPrice(rec.price), description: String(rec.description || "").trim().slice(0, 500) });
+        map[key].items.push({
+          name: name.slice(0, 120),
+          subcategory: String(rec.subcategory || "").trim().slice(0, 80),
+          price: toPrice(rec.price),
+          description: String(rec.description || "").trim().slice(0, 500),
+        });
       }
       const result = order.map(k => map[k]).filter(c => c.items.length);
       if (!result.length) throw new Error("empty");
@@ -84,7 +92,7 @@ export default function MenuImportModal({ onClose, onImported }) {
     } catch (e2) {
       const m = e2.message;
       setErr(m === "headers"
-        ? "Colonnes introuvables. Utilisez le modèle (colonnes : Catégorie, Nom, Prix, Description)."
+        ? "Colonnes introuvables. Utilisez le modèle (colonnes : Catégorie, Sous-catégorie, Nom, Prix, Description)."
         : m === "empty" ? "Le fichier ne contient aucun plat lisible."
         : "Fichier illisible. Utilisez un .xlsx, .xls ou .csv (voir le modèle).");
       setFileName("");
@@ -147,7 +155,7 @@ export default function MenuImportModal({ onClose, onImported }) {
           ) : !preview ? (
             <>
               <div style={{ fontSize: 13, color: "#4a5a52", lineHeight: 1.6, marginBottom: 14 }}>
-                Téléchargez le modèle, remplissez-le (une ligne = un plat), puis réimportez-le. Colonnes : <strong>Catégorie, Nom, Prix, Description</strong>.
+                Téléchargez le modèle, remplissez-le (une ligne = un plat), puis réimportez-le. Colonnes : <strong>Catégorie, Sous-catégorie, Nom, Prix, Description</strong>.
               </div>
               <button onClick={downloadTemplate}
                 style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "white", color: DARK, borderRadius: 10, padding: "10px 14px", cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 600, marginBottom: 12 }}>
@@ -173,7 +181,10 @@ export default function MenuImportModal({ onClose, onImported }) {
                       {c.items.map((it, ii) => (
                         <div key={ii} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderTop: `0.5px solid ${BG}` }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{it.name}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              {it.name}
+                              {it.subcategory && <span style={{ fontSize: 10.5, fontWeight: 600, color: "#8a5a10", background: "#FEF6EC", borderRadius: 6, padding: "1px 7px" }}>{it.subcategory}</span>}
+                            </div>
                             {it.description && <div style={{ fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.description}</div>}
                           </div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: it.price ? P : "#DC2626" }}>{it.price ? fmt(it.price) : "prix ?"}</div>

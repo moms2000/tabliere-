@@ -460,6 +460,7 @@ export default function RestaurantDetail() {
 
   const [resto,   setResto]   = useState(null);
   const [menu,    setMenu]    = useState(null); // catégories du menu si menu_public
+  const [menuCat, setMenuCat] = useState("all"); // catégorie affichée dans l'onglet Menu
   const [tab,     setTab]     = useState("reserver"); // reserver | menu
   usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
   const [loading,  setLoading]  = useState(true);
@@ -856,40 +857,69 @@ export default function RestaurantDetail() {
               <div style={{ fontSize: 12.5, marginTop: 4 }}>Réservez votre table dès maintenant.</div>
             </div>
           )}
-          {tab === "menu" && menu && menu.length > 0 && (
-            <div>
-              {menu.map((cat) => (
-                <div key={cat.id} style={{ marginBottom: 26 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: P, textTransform: "uppercase",
-                    letterSpacing: "0.6px", marginBottom: 12 }}>{cat.name}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-                    {(cat.items || []).map((it) => (
-                      <div key={it.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
-                        borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
-                        {it.image_url && (
-                          <img src={it.image_url} alt={it.name} loading="lazy"
-                            style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
-                        )}
-                        <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
-                            {it.price != null && (
-                              <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
-                                {Number(it.price).toLocaleString("fr-FR")} F
-                              </span>
-                            )}
-                          </div>
-                          {it.description && (
-                            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{it.description}</div>
-                          )}
-                        </div>
-                      </div>
+          {tab === "menu" && menu && menu.length > 0 && (() => {
+            const renderItem = (it) => (
+              <div key={it.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
+                borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
+                {it.image_url && (
+                  <img src={it.image_url} alt={it.name} loading="lazy"
+                    style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
+                    {it.price != null && (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
+                        {Number(it.price).toLocaleString("fr-FR")} F
+                      </span>
+                    )}
+                  </div>
+                  {it.description && (
+                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{it.description}</div>
+                  )}
+                </div>
+              </div>
+            );
+            const shown = menu.filter(cat => menuCat === "all" || cat.id === menuCat);
+            return (
+              <div>
+                {/* Navigation par catégorie (évite une trop longue liste) */}
+                {menu.length > 1 && (
+                  <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 10, marginBottom: 18 }}>
+                    {[["all", "Tout"], ...menu.map(c => [c.id, c.name])].map(([k, label]) => (
+                      <button key={k} onClick={() => setMenuCat(k)}
+                        style={{ flexShrink: 0, border: `1px solid ${menuCat === k ? P : BORDER}`,
+                          background: menuCat === k ? "#FEF6EC" : "white", color: menuCat === k ? "#8a5a10" : MUTED,
+                          borderRadius: 20, padding: "7px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                        {label}
+                      </button>
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+                {shown.map((cat) => {
+                  // Regrouper les plats par sous-catégorie (sans sous-catégorie en tête)
+                  const its = cat.items || [];
+                  const order = [], groups = {};
+                  its.forEach(i => { const key = (i.subcategory || "").trim(); if (!(key in groups)) { groups[key] = []; order.push(key); } groups[key].push(i); });
+                  order.sort((a, b) => (a === "" ? -1 : b === "" ? 1 : 0));
+                  return (
+                    <div key={cat.id} style={{ marginBottom: 26 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: P, textTransform: "uppercase",
+                        letterSpacing: "0.6px", marginBottom: 12 }}>{cat.name}</div>
+                      {order.map(key => (
+                        <div key={key || "__none"}>
+                          {key && <div style={{ fontSize: 12, fontWeight: 700, color: "#8a5a10", margin: "8px 0 8px" }}>{key}</div>}
+                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 6 }}>
+                            {groups[key].map(renderItem)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sidebar — desktop seulement */}

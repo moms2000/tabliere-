@@ -17,7 +17,11 @@ const COL = {
 };
 const colOf = (header) => {
   const h = stripAccents(header);
-  for (const [canon, aliases] of Object.entries(COL)) if (aliases.includes(h)) return canon;
+  // Un en-tête correspond s'il EST l'alias, ou COMMENCE par l'alias suivi d'un
+  // séparateur (espace, parenthèse, tiret…). Ainsi « Prix (FCFA) » → prix,
+  // « Prix en fcfa » → prix, « Sous-catégorie » → sous-catégorie, etc.
+  const hit = (a) => h === a || (h.length > a.length && h.startsWith(a) && /[^a-z0-9]/.test(h.charAt(a.length)));
+  for (const [canon, aliases] of Object.entries(COL)) if (aliases.some(hit)) return canon;
   return null;
 };
 const toPrice = (v) => Math.max(0, Math.round(Number(String(v ?? "").replace(/[^\d]/g, "")) || 0));

@@ -746,7 +746,7 @@ export default function RestaurantDetail() {
         gap: 28, alignItems: "start" }}>
 
         {/* Main */}
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "flex-start",
             justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
             <h1 style={{ fontSize: 26, fontWeight: 700, color: DARK, margin: 0 }}>{resto.name}</h1>
@@ -867,15 +867,15 @@ export default function RestaurantDetail() {
                 )}
                 <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>{it.name}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: DARK, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{it.name}</span>
                     {it.price != null && (
-                      <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: P, whiteSpace: "nowrap", flexShrink: 0 }}>
                         {Number(it.price).toLocaleString("fr-FR")} F
                       </span>
                     )}
                   </div>
                   {it.description && (
-                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{it.description}</div>
+                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5, overflowWrap: "anywhere" }}>{it.description}</div>
                   )}
                 </div>
               </div>
@@ -909,7 +909,7 @@ export default function RestaurantDetail() {
                       {order.map(key => (
                         <div key={key || "__none"}>
                           {key && <div style={{ fontSize: 12, fontWeight: 700, color: "#8a5a10", margin: "8px 0 8px" }}>{key}</div>}
-                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 6 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(0, 1fr)", gap: 14, marginBottom: 6 }}>
                             {groups[key].map(renderItem)}
                           </div>
                         </div>

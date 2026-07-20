@@ -154,6 +154,14 @@ class ErrorBoundary extends React.Component {
               borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
             Recharger la page
           </button>
+          {/* Détail technique (aide au diagnostic sur appareils spécifiques) */}
+          {error?.message && (
+            <div style={{ marginTop: 18, fontSize: 11, color: "#B91C1C", fontFamily: "monospace",
+              wordBreak: "break-word", background: "#FEF2F2", border: "1px solid #FECACA",
+              borderRadius: 8, padding: "8px 10px", textAlign: "left" }}>
+              {String(error.name || "Error")}: {String(error.message || "").slice(0, 400)}
+            </div>
+          )}
         </div>
       </div>
     );

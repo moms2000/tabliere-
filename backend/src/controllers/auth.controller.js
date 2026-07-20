@@ -423,9 +423,12 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     return ok(res, { already_verified: true }, "E-mail déjà vérifié");
   }
 
+  // On NE vide PAS le token ici : beaucoup de messageries et d'antivirus
+  // pré-chargent le lien (ce qui « consomme » le token) avant même que la personne
+  // ne clique. En gardant le token, un second accès affiche « déjà vérifié » au lieu
+  // de « lien expiré ». La sécurité tient : une fois vérifié, le lien ne fait plus rien.
   await query(
-    `UPDATE users SET email_verified = TRUE, email_token = NULL, email_token_expires = NULL
-     WHERE id = $1`,
+    `UPDATE users SET email_verified = TRUE WHERE id = $1`,
     [user.id]
   );
   await cache.del(`user:${user.id}`).catch(() => {});

@@ -1,3 +1,7 @@
+// Polyfill AbortController (utilisé par axios) pour les navigateurs anciens
+// (ex. WebView des bornes Sunmi) qui ne l'ont pas nativement. Doit être importé
+// AVANT axios / tout code réseau.
+import "abortcontroller-polyfill/dist/abortcontroller-polyfill-only";
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";

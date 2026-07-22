@@ -13,6 +13,14 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!token) { setLoading(false); return; }
 
+    // Session staff : on la reconstruit depuis le marqueur local. Le token staff
+    // agit comme l'owner côté API, donc /auth/me renverrait l'owner (tous les
+    // onglets) — on ne l'appelle pas pour un staff.
+    try {
+      const staff = JSON.parse(localStorage.getItem("tci_staff") || "null");
+      if (staff) { setUser({ role: "restaurateur", is_staff: true, ...staff }); setLoading(false); return; }
+    } catch {}
+
     authService.me()
       .then(setUser)
       .catch((e) => {
@@ -45,7 +53,21 @@ export function AuthProvider({ children }) {
     return u;
   }, []);
 
+  // Connexion staff (identifiant + PIN) → session restreinte aux onglets autorisés
+  const loginStaff = useCallback(async (login_id, pin) => {
+    const { staff, restaurant } = await authService.staffLogin(login_id, pin);
+    const u = {
+      role: "restaurateur", is_staff: true, name: staff.name,
+      permissions: Array.isArray(staff.permissions) ? staff.permissions : [],
+      resto_id: restaurant?.id, resto_slug: restaurant?.slug, resto_name: restaurant?.name,
+    };
+    localStorage.setItem("tci_staff", JSON.stringify(u));
+    setUser(u);
+    return u;
+  }, []);
+
   const logout = useCallback(async () => {
+    localStorage.removeItem("tci_staff");
     await authService.logout();
     setUser(null);
   }, []);
@@ -66,7 +88,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, loginStaff, logout, register, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -155,7 +155,7 @@ function StepChoix({ onChoose }) {
 function StepForm({ type, onBack }) {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { login, logout } = useAuth();
+  const { login, loginStaff, logout } = useAuth();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -165,6 +165,9 @@ function StepForm({ type, onBack }) {
   const [loading,  setLoading]  = useState(false);
   const [needsVerif, setNeedsVerif] = useState(""); // email à re-vérifier
   const [resent,   setResent]   = useState(false);
+  const [restoMode, setRestoMode] = useState("owner"); // owner | staff (espace restaurateur)
+  const [loginId,   setLoginId]   = useState("");
+  const [pin,       setPin]       = useState("");
 
   const doResend = async () => {
     try { await authService.resendVerification(needsVerif); setResent(true); } catch { setResent(true); }
@@ -176,10 +179,25 @@ function StepForm({ type, onBack }) {
   const isOrga  = type === "organisateur";
   const accentColor = isResto ? S : P;
 
+  const staffMode = type === "restaurateur" && restoMode === "staff";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    // Connexion d'un membre du staff restaurant (identifiant + code)
+    if (staffMode) {
+      try {
+        await loginStaff(loginId.trim(), pin.trim());
+        navigate("/restaurant", { replace: true });
+      } catch (e2) {
+        setError(e2?.response?.data?.message || "Identifiant ou code incorrect.");
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const user = await login(email, password, remember);
 
@@ -348,6 +366,45 @@ function StepForm({ type, onBack }) {
               </div>
             )}
 
+            {isResto && (
+              <div style={{ display: "flex", gap: 8, background: "#F0EDE6", borderRadius: 10, padding: 4 }}>
+                {[["owner", "Propriétaire"], ["staff", "Staff"]].map(([m, lab]) => (
+                  <button key={m} type="button" onClick={() => { setRestoMode(m); setError(""); }}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: FONT,
+                      fontSize: 13, fontWeight: restoMode === m ? 700 : 500,
+                      background: restoMode === m ? "white" : "transparent", color: restoMode === m ? DARK : MUTED,
+                      boxShadow: restoMode === m ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
+                    {lab}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {staffMode ? (
+              <>
+                <div>
+                  <label style={labelSt}>Identifiant</label>
+                  <div style={wrapSt}>
+                    <User size={14} color={MUTED} />
+                    <input value={loginId} onChange={e => setLoginId(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
+                      placeholder="MARB" required style={inpSt} />
+                  </div>
+                </div>
+                <div>
+                  <label style={labelSt}>Code (4 chiffres)</label>
+                  <div style={wrapSt}>
+                    <Lock size={14} color={MUTED} />
+                    <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      type={showPw ? "text" : "password"} placeholder="1209" inputMode="numeric" required style={inpSt} />
+                    <button type="button" onClick={() => setShowPw(p => !p)}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 0 }}>
+                      {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
             <div>
               <label style={labelSt}>Adresse e-mail</label>
               <div style={wrapSt}>
@@ -377,6 +434,8 @@ function StepForm({ type, onBack }) {
                 </span>
               </div>
             </div>
+              </>
+            )}
 
             <label style={{ display: "flex", alignItems: "center", gap: 10,
               cursor: "pointer", userSelect: "none" }}>

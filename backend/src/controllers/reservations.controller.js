@@ -32,6 +32,49 @@ async function ensureResaColumns() {
   resaMigrated = true;
 }
 
+/**
+ * Trouve et VERROUILLE une table réellement libre pour ce créneau, en respectant
+ * la durée d'assise du restaurant. À appeler DANS une transaction.
+ *  - Si preferredTableId est fourni et qu'il est libre + adapté, on le garde.
+ *  - Sinon on prend la plus petite table libre qui accueille le groupe.
+ *  - Renvoie l'id d'une table, ou null si tout est complet à cet horaire.
+ * Le verrou (FOR UPDATE ... SKIP LOCKED) empêche deux réservations simultanées
+ * de saisir la même table.
+ */
+async function pickFreeTable(client, restaurantId, partySize, reservedAt, durSec, preferredTableId) {
+  if (preferredTableId) {
+    const { rows: [t] } = await client.query(
+      `SELECT id FROM restaurant_tables
+       WHERE id = $1 AND restaurant_id = $2 AND is_active = TRUE AND capacity >= $3
+       FOR UPDATE`,
+      [preferredTableId, restaurantId, partySize]
+    );
+    if (t) {
+      const { rows: [conflict] } = await client.query(
+        `SELECT 1 FROM reservations
+         WHERE table_id = $1 AND status IN ('en_attente','confirme')
+           AND ABS(EXTRACT(EPOCH FROM (reserved_at - $2::timestamptz))) < $3`,
+        [preferredTableId, reservedAt, durSec]
+      );
+      if (!conflict) return preferredTableId;
+    }
+  }
+  const { rows: [free] } = await client.query(
+    `SELECT t.id FROM restaurant_tables t
+     WHERE t.restaurant_id = $1 AND t.is_active = TRUE AND t.capacity >= $2
+       AND NOT EXISTS (
+         SELECT 1 FROM reservations r
+         WHERE r.table_id = t.id AND r.status IN ('en_attente','confirme')
+           AND ABS(EXTRACT(EPOCH FROM (r.reserved_at - $3::timestamptz))) < $4
+       )
+     ORDER BY t.capacity
+     FOR UPDATE OF t SKIP LOCKED
+     LIMIT 1`,
+    [restaurantId, partySize, reservedAt, durSec]
+  );
+  return free?.id || null;
+}
+
 // ── POST /reservations ────────────────────────────────────────────────────────
 export const create = asyncHandler(async (req, res) => {
   await ensureResaColumns();
@@ -86,8 +129,30 @@ export const create = asyncHandler(async (req, res) => {
   const initialStatus = (isResto || autoConfirm) ? "confirme" : "en_attente";
 
   const resa = await withTransaction(async (client) => {
-    // Verrou + re-vérification du conflit DANS la transaction (anti-course)
-    if (table_id) {
+    // Attribution de la table :
+    //  - Client : on lui affecte une table REELLEMENT libre à cet horaire (durée
+    //    d'assise respectée), sinon on REFUSE. Fini les réservations sans table
+    //    (surréservation silencieuse).
+    //  - Restaurateur : garde la main. Walk-in sans table possible ; si une table
+    //    précise est choisie, on vérifie seulement le conflit.
+    let assignedTableId = table_id || null;
+    if (req.user.role === "client") {
+      // On n'exige une table que si le resto a configuré un plan de salle. Sans
+      // table définie, on autorise la réservation comme avant (le resto gère à la main).
+      const { rows: [{ n }] } = await client.query(
+        "SELECT COUNT(*)::int AS n FROM restaurant_tables WHERE restaurant_id = $1 AND is_active = TRUE",
+        [effectiveRestoId]
+      );
+      if (n > 0) {
+        assignedTableId = await pickFreeTable(client, effectiveRestoId, party_size, reserved_at, durSec, table_id);
+        if (!assignedTableId) {
+          throw new AppError(
+            "Aucune table n'est disponible à cet horaire pour ce nombre de personnes. Choisissez un autre créneau.",
+            409, "NO_TABLE_AVAILABLE"
+          );
+        }
+      }
+    } else if (table_id) {
       await client.query("SELECT id FROM restaurant_tables WHERE id = $1 FOR UPDATE", [table_id]);
       const { rows: [conflict] } = await client.query(
         `SELECT id FROM reservations
@@ -106,7 +171,7 @@ export const create = asyncHandler(async (req, res) => {
            (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
             special_request, status, walk_in_name, walk_in_phone)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-        [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
+        [nextref, effectiveRestoId, req.user.id, assignedTableId, reserved_at, party_size,
          special_request || null, initialStatus, walk_in_name, walk_in_phone || null]
       );
       newResa = r;
@@ -116,17 +181,17 @@ export const create = asyncHandler(async (req, res) => {
         `INSERT INTO reservations
            (ref, restaurant_id, client_id, table_id, reserved_at, party_size, special_request, status)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [nextref, effectiveRestoId, req.user.id, table_id || null, reserved_at, party_size,
+        [nextref, effectiveRestoId, req.user.id, assignedTableId, reserved_at, party_size,
          special_request || null, initialStatus]
       );
       newResa = r;
     }
 
     // Marquer la table comme réservée
-    if (table_id) {
+    if (assignedTableId) {
       await client.query(
         "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1",
-        [table_id]
+        [assignedTableId]
       );
     }
 
@@ -633,7 +698,7 @@ export const createGuest = asyncHandler(async (req, res) => {
   }
 
   const { rows: [resto] } = await query(
-    `SELECT id, name, capacity, status, auto_confirm FROM restaurants
+    `SELECT id, name, capacity, status, auto_confirm, seating_duration FROM restaurants
      WHERE id = $1 AND status IN ('actif','en_attente') AND COALESCE(is_published, TRUE) = TRUE`,
     [restaurant_id]
   );
@@ -664,29 +729,44 @@ export const createGuest = asyncHandler(async (req, res) => {
     clientId = gu.id;
   }
 
-  // Réf atomique via la séquence dédiée (resa_ref_seq) : COUNT(*)+1 provoquait
-  // des collisions UNIQUE sous concurrence (deux réservations simultanées →
-  // même ref → 500). nextval est atomique et suit le même format que le trigger.
-  const { rows: [{ nextref }] } = await query(
-    "SELECT 'RES-' || LPAD(nextval('resa_ref_seq')::text, 4, '0') AS nextref"
-  );
-
-  const { rows: [resa] } = await query(
-    `INSERT INTO reservations
-       (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
-        special_request, status, walk_in_name, walk_in_phone)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [nextref, restaurant_id, clientId, table_id || null, reserved_at, party_size,
-     special_request || null, guestStatus, walk_in_name, walk_in_phone || null]
-  );
-
-  // Marquer la table comme réservée (si une table a été assignée)
-  if (table_id) {
-    await query(
-      "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1 AND restaurant_id = $2",
-      [table_id, restaurant_id]
-    ).catch(() => {});
-  }
+  // Attribution d'une table libre ou refus (anti-surréservation), dans une
+  // transaction avec verrou anti-concurrence. Réf atomique via resa_ref_seq.
+  const durSec = (resto.seating_duration || 120) * 60;
+  const resa = await withTransaction(async (client) => {
+    // On n'exige une table que si le resto a configuré un plan de salle.
+    const { rows: [{ n }] } = await client.query(
+      "SELECT COUNT(*)::int AS n FROM restaurant_tables WHERE restaurant_id = $1 AND is_active = TRUE",
+      [restaurant_id]
+    );
+    let assignedTableId = table_id || null;
+    if (n > 0) {
+      assignedTableId = await pickFreeTable(client, restaurant_id, party_size, reserved_at, durSec, table_id);
+      if (!assignedTableId) {
+        throw new AppError(
+          "Aucune table n'est disponible à cet horaire pour ce nombre de personnes. Choisissez un autre créneau.",
+          409, "NO_TABLE_AVAILABLE"
+        );
+      }
+    }
+    const { rows: [{ nextref }] } = await client.query(
+      "SELECT 'RES-' || LPAD(nextval('resa_ref_seq')::text, 4, '0') AS nextref"
+    );
+    const { rows: [r] } = await client.query(
+      `INSERT INTO reservations
+         (ref, restaurant_id, client_id, table_id, reserved_at, party_size,
+          special_request, status, walk_in_name, walk_in_phone)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [nextref, restaurant_id, clientId, assignedTableId, reserved_at, party_size,
+       special_request || null, guestStatus, walk_in_name, walk_in_phone || null]
+    );
+    if (assignedTableId) {
+      await client.query(
+        "UPDATE restaurant_tables SET status = 'reserve' WHERE id = $1 AND restaurant_id = $2",
+        [assignedTableId, restaurant_id]
+      );
+    }
+    return r;
+  });
 
   // SSE → restaurateur
   try {

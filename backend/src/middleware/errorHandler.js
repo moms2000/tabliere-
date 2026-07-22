@@ -2,10 +2,11 @@ import { logger } from "../utils/logger.js";
 
 // Classe d'erreur applicative avec statusCode
 export class AppError extends Error {
-  constructor(message, statusCode = 500) {
+  constructor(message, statusCode = 500, appCode = null) {
     super(message);
     this.statusCode = statusCode;
     this.expose = true;
+    this.appCode = appCode; // code machine optionnel (ex: NO_TABLE_AVAILABLE)
   }
 }
 
@@ -58,5 +59,5 @@ export const errorHandler = (err, req, res, next) => {
   const status  = err.statusCode || err.status || 500;
   const message = err.expose ? err.message : "Erreur serveur interne";
 
-  res.status(status).json({ success: false, message });
+  res.status(status).json({ success: false, message, ...(err.appCode ? { code: err.appCode } : {}) });
 };

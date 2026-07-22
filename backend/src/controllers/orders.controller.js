@@ -7,6 +7,7 @@ import { query } from "../config/db.js";
 import { ok, created, notFound, paginated } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
+import { attachOrderToSession } from "./sessions.controller.js";
 
 // ── Création automatique de la table si elle n'existe pas ──────────────────
 const INIT_SQL = `
@@ -122,6 +123,13 @@ export const createOrder = asyncHandler(async (req, res) => {
      (client_email && String(client_email).trim().toLowerCase()) || null,
      JSON.stringify(safeItems), total, note || null]
   );
+
+  // Alimente la NOTE de la table (identique sur toutes les plateformes). Chaque
+  // téléphone = un convive (device_token), pour les additions séparées.
+  await attachOrderToSession({
+    restoId: restaurant_id, tableLabel: table_label, items: safeItems, source: "qr",
+    conviveName: client_name || null, deviceToken: req.body.device_token || null,
+  });
 
   logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });
   return created(res, { order }, "Commande envoyée avec succès");
@@ -242,6 +250,9 @@ export const createManualOrder = asyncHandler(async (req, res) => {
     [restoId, table_label || null, client_name || null, client_phone || null,
      JSON.stringify(safeItems), total, note || null]
   );
+
+  // Alimente la NOTE de la table (même logique que le QR client)
+  await attachOrderToSession({ restoId, tableLabel: table_label, items: safeItems, source: "server" });
 
   logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
   return created(res, { order }, "Commande créée");

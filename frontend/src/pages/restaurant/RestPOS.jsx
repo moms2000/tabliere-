@@ -10,6 +10,7 @@ import { menuService }   from "../../services/menu.service.js";
 import { ordersService } from "../../services/orders.service.js";
 import { sessionsService } from "../../services/sessions.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
+import { printTicket, itemsToLines, fmtMoney } from "../../utils/printer.js";
 import { useAuth }        from "../../context/AuthContext.jsx";
 
 const P      = "#E8A045";
@@ -157,6 +158,9 @@ export default function RestPOS() {
   const [orders,      setOrders]      = useState([]);
   const [loadOrders,  setLoadOrders]  = useState(false);
   const [sessions,    setSessions]    = useState([]); // notes de table ouvertes
+  const [restoName,   setRestoName]   = useState("");
+  const [printNote,   setPrintNote]   = useState(null); // note à imprimer (modal)
+  const [printing,    setPrinting]    = useState(false);
 
   const restoSlug = user?.resto_slug;
   const restoId   = user?.resto_id;
@@ -175,6 +179,7 @@ export default function RestPOS() {
       setCategories(cats);
       if (cats.length > 0) setActiveCat(cats[0].id);
       setTables(restoData.restaurant?.tables || []);
+      setRestoName(restoData.restaurant?.name || "");
     }).catch(console.error).finally(() => setLoading(false));
   }, [restoSlug, restoId]);
 
@@ -234,6 +239,41 @@ export default function RestPOS() {
     try { await sessionsService.close(id); setSessions(prev => prev.filter(s => s.session.id !== id)); } catch (_) {}
   };
 
+  // ── Impression des reçus (total / par convive) ──
+  const dateNow = () => new Date().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  const printTotal = async (detail) => {
+    setPrinting(true);
+    try {
+      await printTicket({
+        title: restoName || "Restaurant", subtitle: "TablièreCI",
+        tableLabel: detail.session.table_label ? `Table ${detail.session.table_label}` : "",
+        dateText: dateNow(), lines: itemsToLines(detail.items),
+        totalLabel: "TOTAL", totalText: fmtMoney(detail.total), footer: "Merci pour votre visite",
+      });
+    } catch (_) { alert("Impression impossible sur cet appareil."); }
+    setPrinting(false);
+  };
+  const printConvive = async (detail, convive) => {
+    const mine = (detail.items || []).filter(i => i.status !== "cancelled" && i.convive_id === convive.id);
+    const sub = mine.reduce((s, i) => s + (Number(i.unit_price) || 0) * i.qty, 0);
+    setPrinting(true);
+    try {
+      await printTicket({
+        title: restoName || "Restaurant", subtitle: "TablièreCI",
+        tableLabel: `${detail.session.table_label ? "Table " + detail.session.table_label + " · " : ""}${convive.name || "Convive " + convive.num}`,
+        dateText: dateNow(), lines: itemsToLines(mine),
+        totalLabel: "À PAYER", totalText: fmtMoney(sub), footer: "Merci pour votre visite",
+      });
+    } catch (_) { alert("Impression impossible sur cet appareil."); }
+    setPrinting(false);
+  };
+  const printAllConvives = async (detail) => {
+    for (const c of (detail.convives || [])) {
+      const has = (detail.items || []).some(i => i.status !== "cancelled" && i.convive_id === c.id);
+      if (has) { await printConvive(detail, c); await new Promise(r => setTimeout(r, 700)); }
+    }
+  };
+
   useEffect(() => {
     if (posTab === "tables") fetchOrders();
   }, [posTab, fetchOrders]);
@@ -268,14 +308,8 @@ export default function RestPOS() {
         note:         orderNote   || undefined,
         items,
       });
-      // Si une table est indiquée, alimenter sa NOTE (addition cumulative) : chaque
-      // envoi devient une tournée. Ne bloque jamais l'envoi en cuisine si ça échoue.
-      if (tableLabel) {
-        try {
-          const detail = await sessionsService.open(tableLabel);
-          if (detail?.session?.id) await sessionsService.addItems(detail.session.id, items);
-        } catch (_) {}
-      }
+      // La note de table est alimentée côté serveur (backend) pour toutes les
+      // plateformes — rien à faire ici.
       setLastOrder({ ...result.order, items, total: cartTotal });
       setCart({});
       setShowCart(false);
@@ -447,6 +481,10 @@ export default function RestPOS() {
                         <button onClick={() => { setTableLabel(session.table_label || ""); setPosTab("commande"); }}
                           style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `0.5px solid ${P}`, background: "white", color: P, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
                           + Ajouter
+                        </button>
+                        <button onClick={() => setPrintNote({ session, items, total, convives })}
+                          style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: "#1e2e28", color: "white", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                          Imprimer
                         </button>
                         <button onClick={() => closeSession(session.id)}
                           style={{ padding: "7px 12px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: BG, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
@@ -754,6 +792,59 @@ export default function RestPOS() {
                   Ajouter
                 </button>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Impression d'une note : reçu total ou par convive ── */}
+      <AnimatePresence>
+        {printNote && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setPrintNote(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+                width: "min(360px, 92vw)", maxHeight: "82vh", overflowY: "auto", background: "white",
+                borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: DARK, marginBottom: 2 }}>
+                Imprimer {printNote.session.table_label ? `— Table ${printNote.session.table_label}` : ""}
+              </div>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>Choisis un reçu total ou par convive</div>
+              <button onClick={() => printTotal(printNote)} disabled={printing}
+                style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: P,
+                  color: "#1a1000", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginBottom: 14 }}>
+                Reçu total ({fmtMoney(printNote.total)})
+              </button>
+              {(printNote.convives || []).some(c => (printNote.items || []).some(i => i.status !== "cancelled" && i.convive_id === c.id)) && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Par convive</div>
+                  {(printNote.convives || []).map(c => {
+                    const mine = (printNote.items || []).filter(i => i.status !== "cancelled" && i.convive_id === c.id);
+                    if (mine.length === 0) return null;
+                    const sub = mine.reduce((s, i) => s + (Number(i.unit_price) || 0) * i.qty, 0);
+                    return (
+                      <button key={c.id} onClick={() => printConvive(printNote, c)} disabled={printing}
+                        style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "10px 12px",
+                          borderRadius: 10, border: `0.5px solid ${BORDER}`, background: "white", color: DARK,
+                          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginBottom: 8 }}>
+                        <span>{c.name || `Convive ${c.num}`}</span><span style={{ color: P }}>{fmtMoney(sub)}</span>
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => printAllConvives(printNote)} disabled={printing}
+                    style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: `0.5px solid ${P}`, background: PL,
+                      color: "#C47D1A", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginBottom: 8 }}>
+                    Tout imprimer (un reçu par convive)
+                  </button>
+                </>
+              )}
+              <button onClick={() => setPrintNote(null)}
+                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: `0.5px solid ${BORDER}`,
+                  background: "white", color: MUTED, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginTop: 4 }}>
+                Fermer
+              </button>
             </motion.div>
           </>
         )}

@@ -84,6 +84,7 @@ async function processNotification(name, data) {
     confirmation:        { key: "notif_reservations", def: "true"  },
     confirmation_client: { key: "notif_reservations", def: "true"  },
     cancellation:        { key: "notif_reservations", def: "true"  },
+    reservation_declined:{ key: "notif_reservations", def: "true"  },
     payment_success:     { key: "notif_paiements",    def: "false" },
     event_resa_pending:  { key: "notif_reservations", def: "true"  },
     event_resa_confirmed:{ key: "notif_reservations", def: "true"  },
@@ -233,6 +234,37 @@ async function processNotification(name, data) {
           text:    `Bonjour ${resa.full_name}, votre réservation ${resa.ref} chez ${resa.resto_name} a été annulée.${resa.cancel_reason ? ` Motif : ${resa.cancel_reason}` : ""}`,
           html:    `<p>Bonjour <strong>${resa.full_name}</strong>, votre réservation <strong>${resa.ref}</strong> chez <strong>${resa.resto_name}</strong> a été annulée.${resa.cancel_reason ? `<br>Motif : ${resa.cancel_reason}` : ""}</p>`,
         });
+      }
+      break;
+    }
+
+    case "reservation_declined": {
+      // Réservation non confirmée faute de disponibilité (le restaurant a rempli
+      // ses tables sur ce créneau). Prévenir le client par WhatsApp et/ou e-mail.
+      const { rows: [r] } = await query(
+        `SELECT r.ref, r.reserved_at, r.walk_in_phone, r.walk_in_email,
+                u.full_name, u.email AS user_email, u.phone AS user_phone,
+                re.name AS resto_name
+         FROM reservations r
+         JOIN users u ON u.id = r.client_id
+         JOIN restaurants re ON re.id = r.restaurant_id
+         WHERE r.id = $1`,
+        [data.reservationId]
+      );
+      if (!r) break;
+      const phone = r.walk_in_phone || r.user_phone;
+      const email = r.walk_in_email ||
+        (r.user_email && r.user_email !== "guest@tabliereci.net" ? r.user_email : null);
+      const who   = r.full_name && r.full_name !== "Invité TablièreCI" ? r.full_name : "";
+      const msg   = `Bonjour${who ? " " + who : ""}, votre réservation ${r.ref} chez ${r.resto_name} le ${fmtDate(r.reserved_at)} n'a pas pu être confirmée faute de disponibilité sur ce créneau. Vous pouvez choisir un autre horaire sur TablièreCI.`;
+      if (waOn && phone) await whatsappService.sendText(phone, msg).catch(() => {});
+      if (email) {
+        await sendEmail({
+          to:      email,
+          subject: `Réservation ${r.ref} non confirmée — TablièreCI`,
+          text:    msg,
+          html:    `<p>${msg}</p>`,
+        }).catch(() => {});
       }
       break;
     }

@@ -33,7 +33,29 @@ function useIsMobile() {
 }
 
 /* ── Carte produit ──────────────────────────────────────────────────────────── */
-function ProductCard({ item, qty, onAdd, onRemove, color }) {
+// ── Options d'un plat (cuisson = choix unique, accompagnements = choix multiple) ──
+function itemOptions(item) {
+  let o = item?.options;
+  if (typeof o === "string") { try { o = JSON.parse(o); } catch { o = null; } }
+  const norm = (v) => Array.isArray(v)
+    ? v.flatMap(s => String(s).split(/[,;!\n]/)).map(s => s.trim()).filter(Boolean)
+    : (typeof v === "string" ? v.split(/[,;!\n]/).map(s => s.trim()).filter(Boolean) : []);
+  return { cuissons: norm(o?.cuissons), accompagnements: norm(o?.accompagnements) };
+}
+function hasItemOptions(item) {
+  const o = itemOptions(item);
+  return o.cuissons.length > 0 || o.accompagnements.length > 0;
+}
+// Libellé lisible des choix : "À point · Frites, Salade"
+function choicesLabel(choices) {
+  if (!choices) return "";
+  const parts = [];
+  if (choices.cuisson) parts.push(choices.cuisson);
+  if (choices.accompagnements?.length) parts.push(choices.accompagnements.join(", "));
+  return parts.join(" · ");
+}
+
+function ProductCard({ item, qty, onAdd, onRemove, color, hasOptions }) {
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
@@ -85,8 +107,8 @@ function ProductCard({ item, qty, onAdd, onRemove, color }) {
         <div style={{ fontSize: 13, fontWeight: 700, color: color }}>{fmt(item.price)}</div>
       </div>
 
-      {/* Contrôles +/- si en panier */}
-      {qty > 0 && (
+      {/* Contrôles +/- si en panier (pas pour les plats à options : géré au panier) */}
+      {qty > 0 && !hasOptions && (
         <div onClick={e => e.stopPropagation()}
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "6px 10px", borderTop: `0.5px solid ${BORDER}`, background: color + "08" }}>
@@ -127,6 +149,8 @@ export default function RestPOS() {
   const [showCart,    setShowCart]    = useState(false);
   const [error,       setError]       = useState("");
   const [showNote,    setShowNote]    = useState(false);
+  const [optItem,     setOptItem]     = useState(null); // plat en cours de choix d'options
+  const [optChoice,   setOptChoice]   = useState({ cuisson: null, accompagnements: [] });
   // Vue par table
   const [posTab,      setPosTab]      = useState("commande"); // "commande" | "tables"
   const [orders,      setOrders]      = useState([]);
@@ -153,18 +177,40 @@ export default function RestPOS() {
   }, [restoSlug, restoId]);
 
   // ── Panier ──
-  const cartItems = Object.values(cart);
+  // Chaque entrée du panier a une clé : id du plat, ou id::signature-des-options
+  const cartItems = Object.entries(cart).map(([key, v]) => ({ key, ...v }));
   const cartCount = cartItems.reduce((s, { qty }) => s + qty, 0);
   const cartTotal = cartItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
+  // Quantité totale d'un plat, toutes variantes d'options confondues (badge de la carte)
+  const itemQty = (id) => cartItems.reduce((s, e) => s + (e.item.id === id ? e.qty : 0), 0);
 
-  const addItem = useCallback((item) =>
-    setCart(p => ({ ...p, [item.id]: { item, qty: (p[item.id]?.qty || 0) + 1 } })), []);
-  const removeItem = useCallback((id) =>
+  const keyFor = (item, choices) => choices
+    ? `${item.id}::${choices.cuisson || ""}|${(choices.accompagnements || []).slice().sort().join(",")}`
+    : String(item.id);
+  const addLine = useCallback((item, choices) => {
+    const key = keyFor(item, choices);
+    setCart(p => ({ ...p, [key]: { item, choices: choices || null, qty: (p[key]?.qty || 0) + 1 } }));
+  }, []);
+  const removeLine = useCallback((key) =>
     setCart(p => {
-      const qty = (p[id]?.qty || 0) - 1;
-      if (qty <= 0) { const n = { ...p }; delete n[id]; return n; }
-      return { ...p, [id]: { ...p[id], qty } };
+      const qty = (p[key]?.qty || 0) - 1;
+      if (qty <= 0) { const n = { ...p }; delete n[key]; return n; }
+      return { ...p, [key]: { ...p[key], qty } };
     }), []);
+  // Depuis la grille : ouvre le choix d'options si le plat en a, sinon ajoute direct
+  const openAdd = useCallback((item) => {
+    if (hasItemOptions(item)) {
+      const o = itemOptions(item);
+      setOptChoice({ cuisson: o.cuissons[0] || null, accompagnements: [] });
+      setOptItem(item);
+    } else {
+      addLine(item, null);
+    }
+  }, [addLine]);
+  const confirmOptions = () => {
+    if (optItem) addLine(optItem, { cuisson: optChoice.cuisson || null, accompagnements: optChoice.accompagnements || [] });
+    setOptItem(null);
+  };
   const clearCart = () => { setCart({}); setClientName(""); setOrderNote(""); setTableLabel(""); setLastOrder(null); setError(""); };
 
   // ── Charger les commandes pour la vue par table ──
@@ -202,7 +248,10 @@ export default function RestPOS() {
     if (cartItems.length === 0) return;
     setSubmitting(true); setError("");
     try {
-      const items = cartItems.map(({ item, qty }) => ({ id: item.id, name: item.name, price: item.price, qty }));
+      const items = cartItems.map(({ item, qty, choices }) => ({
+        id: item.id, name: item.name, price: item.price, qty,
+        ...(choices && choicesLabel(choices) ? { options: choices, options_label: choicesLabel(choices) } : {}),
+      }));
       const result = await ordersService.createManual({
         table_label:  tableLabel  || undefined,
         client_name:  clientName  || undefined,
@@ -252,7 +301,7 @@ export default function RestPOS() {
       <div style={{ background: BG, borderRadius: 12, padding: "14px 16px", marginBottom: 24, textAlign: "left" }}>
         {lastOrder.items.map((it, i) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: DARK, marginBottom: 6 }}>
-            <span>{it.qty}× {it.name}</span>
+            <span>{it.qty}× {it.name}{it.options_label ? <span style={{ color: "#C47D1A" }}> ({it.options_label})</span> : ""}</span>
             <span style={{ color: MUTED }}>{fmt(it.price * it.qty)}</span>
           </div>
         ))}
@@ -420,7 +469,7 @@ export default function RestPOS() {
                             {/* Articles */}
                             <div style={{ fontSize: 11, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
                               {(order.items || []).map((it, j) => (
-                                <span key={j}>{j > 0 && " · "}<strong style={{ color: DARK }}>{it.qty}×</strong> {it.name}</span>
+                                <span key={j}>{j > 0 && " · "}<strong style={{ color: DARK }}>{it.qty}×</strong> {it.name}{it.options_label ? <span style={{ color: "#C47D1A" }}> ({it.options_label})</span> : ""}</span>
                               ))}
                             </div>
 
@@ -510,9 +559,10 @@ export default function RestPOS() {
                 gap: 10 }}>
               {activeCatItems.map(item => (
                 <ProductCard key={item.id} item={item}
-                  qty={cart[item.id]?.qty || 0}
-                  onAdd={() => addItem(item)}
-                  onRemove={() => removeItem(item.id)}
+                  qty={itemQty(item.id)}
+                  hasOptions={hasItemOptions(item)}
+                  onAdd={() => openAdd(item)}
+                  onRemove={() => removeLine(String(item.id))}
                   color={catColor(activeCatIndex)} />
               ))}
               {activeCatItems.length === 0 && (
@@ -533,7 +583,7 @@ export default function RestPOS() {
               cartItems={cartItems} cartTotal={cartTotal} cartCount={cartCount}
               tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
               setOrderNote={setOrderNote} error={error} submitting={submitting}
-              onSend={sendOrder} onClear={clearCart} onRemove={removeItem} onAdd={addItem}
+              onSend={sendOrder} onClear={clearCart} onRemoveLine={removeLine} onAddLine={addLine}
               showNote={showNote} setShowNote={setShowNote} P={P} PL={PL}
               DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
             />
@@ -566,7 +616,7 @@ export default function RestPOS() {
                 tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
                 setOrderNote={setOrderNote} error={error} submitting={submitting}
                 onSend={() => { sendOrder(); setShowCart(false); }} onClear={clearCart}
-                onRemove={removeItem} onAdd={addItem} showNote={showNote} setShowNote={setShowNote}
+                onRemoveLine={removeLine} onAddLine={addLine} showNote={showNote} setShowNote={setShowNote}
                 P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
               />
             </motion.div>
@@ -574,13 +624,84 @@ export default function RestPOS() {
         )}
       </AnimatePresence>
       </>}
+
+      {/* ── Choix des options d'un plat (cuisson / accompagnements) ── */}
+      <AnimatePresence>
+        {optItem && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setOptItem(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+                width: "min(360px, 92vw)", maxHeight: "80vh", overflowY: "auto", background: "white",
+                borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: DARK, marginBottom: 2 }}>{optItem.name}</div>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>Choisissez les options</div>
+              {(() => { const o = itemOptions(optItem); return (
+                <>
+                  {o.cuissons.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Cuisson</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {o.cuissons.map(c => {
+                          const sel = optChoice.cuisson === c;
+                          return (
+                            <button key={c} type="button" onClick={() => setOptChoice(p => ({ ...p, cuisson: c }))}
+                              style={{ padding: "8px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
+                                border: `1px solid ${sel ? P : BORDER}`, background: sel ? PL : "white",
+                                color: sel ? "#C47D1A" : DARK, fontSize: 13, fontWeight: sel ? 700 : 500 }}>
+                              {c}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {o.accompagnements.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Accompagnements</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {o.accompagnements.map(a => {
+                          const sel = optChoice.accompagnements.includes(a);
+                          return (
+                            <button key={a} type="button"
+                              onClick={() => setOptChoice(p => ({ ...p, accompagnements: sel ? p.accompagnements.filter(x => x !== a) : [...p.accompagnements, a] }))}
+                              style={{ padding: "8px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
+                                border: `1px solid ${sel ? P : BORDER}`, background: sel ? PL : "white",
+                                color: sel ? "#C47D1A" : DARK, fontSize: 13, fontWeight: sel ? 700 : 500 }}>
+                              {sel ? "✓ " : ""}{a}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ); })()}
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button type="button" onClick={() => setOptItem(null)}
+                  style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: `0.5px solid ${BORDER}`,
+                    background: "white", color: MUTED, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                  Annuler
+                </button>
+                <button type="button" onClick={confirmOptions}
+                  style={{ flex: 2, padding: "11px 0", borderRadius: 10, border: "none",
+                    background: P, color: "#1a1000", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  Ajouter
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 /* ── Panneau panier (réutilisé mobile + desktop) ──────────────────────────── */
 function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, orderNote, setOrderNote,
-  error, submitting, onSend, onClear, onRemove, onAdd, showNote, setShowNote,
+  error, submitting, onSend, onClear, onRemoveLine, onAddLine, showNote, setShowNote,
   P, PL, DARK, BG, BORDER, MUTED, FONT, S, fmt }) {
   return (
     <>
@@ -613,21 +734,24 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ShoppingBag size={30} /></div>
             Aucun article sélectionné
           </div>
-        ) : cartItems.map(({ item, qty }) => (
-          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8,
+        ) : cartItems.map(({ key, item, qty, choices }) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: 8,
             padding: "8px 0", borderBottom: `0.5px solid ${BG}` }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.name}</div>
+              {choices && choicesLabel(choices) && (
+                <div style={{ fontSize: 11, color: "#C47D1A", fontWeight: 600, marginTop: 1 }}>{choicesLabel(choices)}</div>
+              )}
               <div style={{ fontSize: 12, color: P, fontWeight: 600 }}>{fmt(item.price)}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button onClick={() => onRemove(item.id)}
+              <button onClick={() => onRemoveLine(key)}
                 style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${BORDER}`,
                   background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Minus size={10} color={MUTED} />
               </button>
               <span style={{ fontSize: 13, fontWeight: 700, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
-              <button onClick={() => onAdd(item)}
+              <button onClick={() => onAddLine(item, choices)}
                 style={{ width: 26, height: 26, borderRadius: "50%", border: "none",
                   background: P, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Plus size={10} color="white" />

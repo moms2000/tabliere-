@@ -40,6 +40,8 @@ const RestCommandes     = lazy(() => import("./pages/restaurant/RestCommandes"))
 const RestPOS           = lazy(() => import("./pages/restaurant/RestPOS"));
 const RestInstants      = lazy(() => import("./pages/restaurant/RestInstants"));
 const RestClients       = lazy(() => import("./pages/restaurant/RestClients"));
+const RestStaff         = lazy(() => import("./pages/restaurant/RestStaff"));
+const RestRecus         = lazy(() => import("./pages/restaurant/RestRecus"));
 
 const EventLayout       = lazy(() => import("./components/layout/EventLayout"));
 const EventList         = lazy(() => import("./pages/event/EventList"));
@@ -295,6 +297,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="profil"       element={<RestProfil />} />
                     <Route path="commandes"    element={<RestCommandes />} />
                     <Route path="pos"          element={<RestPOS />} />
+                    <Route path="recus"        element={<RestRecus />} />
+                    <Route path="equipe"       element={<RestStaff />} />
                   </Route>
 
                   {/* ── Organisateur (Événements) ────────────────────────── */}

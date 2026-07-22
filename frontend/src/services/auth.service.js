@@ -16,6 +16,14 @@ export const authService = {
     return user;
   },
 
+  // Connexion d'un membre du staff restaurant (identifiant + PIN)
+  async staffLogin(login_id, pin) {
+    const res = await api.post("/restaurant-staff/login", { login_id, pin });
+    const { token, staff, restaurant } = res.data.data;
+    setTokens(token, "", true); // token staff (pas de refresh)
+    return { staff, restaurant };
+  },
+
   // Vérification e-mail → auto-connexion si le backend renvoie des tokens
   async verifyEmail(token) {
     const res = await api.get("/auth/verify-email", { params: { token } });

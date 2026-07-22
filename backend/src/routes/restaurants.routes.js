@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Joi from "joi";
 import { validate }                from "../middleware/validate.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize, requireTab } from "../middleware/auth.js";
 import * as ctrl                   from "../controllers/restaurants.controller.js";
 
 const router = Router();
@@ -21,12 +21,14 @@ router.get("/:slug",         ctrl.getOne);
 router.get("/:slug/availability", ctrl.getAvailability);
 
 // ── Restaurateur / Admin ─────────────────────────────────────────────────────
-router.get  ("/:id/manage",        authenticate, authorize("restaurateur","admin"), ctrl.getManage);
-router.patch("/:id",               authenticate, authorize("restaurateur","admin"), ctrl.update);
-router.post ("/:id/qr",            authenticate, authorize("restaurateur","admin"), ctrl.generateQR);
-router.post ("/:id/tables",        authenticate, authorize("restaurateur","admin"), validate(tableSchema), ctrl.createTable);
-router.patch ("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), ctrl.updateTable);
-router.delete("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), ctrl.deleteTable);
-router.post  ("/:id/tables/:tableId/qr",   authenticate, authorize("restaurateur","admin"), ctrl.generateTableQR);
+// getManage = lecture des infos du resto (tables, réglages) nécessaire à plusieurs
+// onglets (plan, service, commandes) → accessible à tout staff ayant un de ces onglets.
+router.get  ("/:id/manage",        authenticate, authorize("restaurateur","admin"), requireTab("plan","pos","commandes","recus","reservations","menu","dashboard","profil","instants","clients"), ctrl.getManage);
+router.patch("/:id",               authenticate, authorize("restaurateur","admin"), requireTab("profil"), ctrl.update);
+router.post ("/:id/qr",            authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.generateQR);
+router.post ("/:id/tables",        authenticate, authorize("restaurateur","admin"), requireTab("plan"), validate(tableSchema), ctrl.createTable);
+router.patch ("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), requireTab("plan"), ctrl.updateTable);
+router.delete("/:id/tables/:tableId",      authenticate, authorize("restaurateur","admin"), requireTab("plan"), ctrl.deleteTable);
+router.post  ("/:id/tables/:tableId/qr",   authenticate, authorize("restaurateur","admin"), requireTab("plan","menu"), ctrl.generateTableQR);
 
 export default router;

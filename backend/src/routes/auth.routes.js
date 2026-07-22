@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Joi from "joi";
 import { validate }     from "../middleware/validate.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, denyStaff } from "../middleware/auth.js";
 import { authLimiter }  from "../middleware/rateLimiter.js";
 import * as ctrl        from "../controllers/auth.controller.js";
 
@@ -62,7 +62,7 @@ router.post("/register",        authLimiter, validate(registerSchema),    ctrl.r
 router.post("/login",           authLimiter, validate(loginSchema),       ctrl.login);
 router.post("/logout",          authenticate,                              ctrl.logout);
 router.post("/refresh",         authLimiter,                               ctrl.refresh);
-router.get ("/me",              authenticate,                              ctrl.me);
+router.get ("/me",              authenticate, denyStaff,                   ctrl.me);
 
 // Code restaurateur
 router.post("/verify-code",     authLimiter, validate(verifyCodeSchema),  ctrl.verifyRestaurateurCode);

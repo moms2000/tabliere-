@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Joi from "joi";
 import { validate }                from "../middleware/validate.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize, requireTab } from "../middleware/auth.js";
 import { reservationLimiter }      from "../middleware/rateLimiter.js";
 import * as ctrl                   from "../controllers/reservations.controller.js";
 
@@ -21,6 +21,7 @@ router.post(
   "/",
   authenticate,
   authorize("client", "restaurateur", "admin"),
+  requireTab("reservations"), // staff : nécessite l'onglet Réservations (sans effet pour un client)
   validate(createSchema),
   ctrl.create
 );
@@ -42,21 +43,22 @@ router.post("/guest", reservationLimiter, validate(
 
 // Liste d'attente (restaurateur/admin) — AVANT les routes /:id pour éviter la
 // collision avec le paramètre dynamique
-router.get   ("/waitlist",      authenticate, authorize("restaurateur","admin"), ctrl.listWaitlist);
-router.post  ("/waitlist",      authenticate, authorize("restaurateur","admin"), ctrl.addWaitlist);
-router.patch ("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.updateWaitlist);
-router.delete("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), ctrl.deleteWaitlist);
+router.get   ("/waitlist",      authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.listWaitlist);
+router.post  ("/waitlist",      authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.addWaitlist);
+router.patch ("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.updateWaitlist);
+router.delete("/waitlist/:id",  authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.deleteWaitlist);
 
-// Base clients (agrégée) — avant /:id pour éviter la collision de route
-router.get   ("/clients",        authenticate, authorize("restaurateur","admin"), ctrl.getClients);
-router.post  ("/clients/import", authenticate, authorize("restaurateur","admin"), ctrl.importClients);
+// Base clients (agrégée, données personnelles) — avant /:id pour éviter la collision de route
+router.get   ("/clients",        authenticate, authorize("restaurateur","admin"), requireTab("clients"), ctrl.getClients);
+router.post  ("/clients/import", authenticate, authorize("restaurateur","admin"), requireTab("clients"), ctrl.importClients);
 
-router.get("/",        authenticate,                          ctrl.list);
-router.get("/:id",     authenticate,                          ctrl.getOne);
-router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"), ctrl.confirm);
-router.patch("/:id/assign-table", authenticate, authorize("restaurateur","admin"), ctrl.assignTable);
-router.patch("/:id/cancel",       authenticate,                                    ctrl.cancel);
-router.patch("/:id/no-show",      authenticate, authorize("restaurateur","admin"), ctrl.noShow);
-router.patch("/:id",              authenticate, authorize("restaurateur","admin"), ctrl.update);
+// list/getOne/cancel servent aussi aux CLIENTS (requireTab ne restreint que le staff)
+router.get("/",        authenticate,                          requireTab("reservations"), ctrl.list);
+router.get("/:id",     authenticate,                          requireTab("reservations"), ctrl.getOne);
+router.patch("/:id/confirm",      authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.confirm);
+router.patch("/:id/assign-table", authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.assignTable);
+router.patch("/:id/cancel",       authenticate,                                    requireTab("reservations"), ctrl.cancel);
+router.patch("/:id/no-show",      authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.noShow);
+router.patch("/:id",              authenticate, authorize("restaurateur","admin"), requireTab("reservations"), ctrl.update);
 
 export default router;

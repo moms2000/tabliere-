@@ -134,6 +134,21 @@ export default function RestaurantLayout() {
   const location = useLocation();
   const toast = useToast();
 
+  // Garde staff : si un membre du staff atteint (par URL directe) un onglet non
+  // autorisé, on le renvoie vers son premier onglet permis. La vraie sécurité est
+  // côté serveur (requireTab) ; ceci évite juste d'afficher une page en erreur.
+  useEffect(() => {
+    if (!user?.is_staff) return;
+    const perms = user.permissions || [];
+    const seg = location.pathname === "/restaurant" ? "dashboard"
+      : location.pathname.replace("/restaurant/", "").split("/")[0];
+    const isOwnerOnly = seg === "equipe";
+    if (isOwnerOnly || (seg && !perms.includes(seg))) {
+      const first = NAV.find(n => !n.ownerOnly && perms.includes(n.key));
+      navigate(first ? first.to : "/connexion", { replace: true });
+    }
+  }, [location.pathname, user, navigate]);
+
   useSSE({
     new_reservation: (d) => toast(
       `Nouvelle réservation ${d.ref} — ${d.party_size} pers. · ${d.client_name || ""}`,

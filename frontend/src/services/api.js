@@ -38,7 +38,7 @@ export const setTokens = (accessToken, refreshToken, remember = true) => {
 };
 
 export const clearTokens = () => {
-  ["access_token", "refresh_token", "tci_remember"].forEach(k => {
+  ["access_token", "refresh_token", "tci_remember", "tci_staff"].forEach(k => {
     localStorage.removeItem(k);
     sessionStorage.removeItem(k);
   });

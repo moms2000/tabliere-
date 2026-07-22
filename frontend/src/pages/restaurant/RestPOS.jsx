@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown, LayoutGrid, Clock, ShoppingBag, Utensils } from "lucide-react";
 import { menuService }   from "../../services/menu.service.js";
 import { ordersService } from "../../services/orders.service.js";
+import { sessionsService } from "../../services/sessions.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth }        from "../../context/AuthContext.jsx";
 
@@ -155,6 +156,7 @@ export default function RestPOS() {
   const [posTab,      setPosTab]      = useState("commande"); // "commande" | "tables"
   const [orders,      setOrders]      = useState([]);
   const [loadOrders,  setLoadOrders]  = useState(false);
+  const [sessions,    setSessions]    = useState([]); // notes de table ouvertes
 
   const restoSlug = user?.resto_slug;
   const restoId   = user?.resto_id;
@@ -221,8 +223,16 @@ export default function RestPOS() {
       const res = await ordersService.list({ limit: 100 });
       setOrders(res.data || []);
     } catch (_) {}
+    try {
+      const s = await sessionsService.list("open");
+      setSessions(s?.sessions || []);
+    } catch (_) {}
     setLoadOrders(false);
   }, [restoId]);
+
+  const closeSession = async (id) => {
+    try { await sessionsService.close(id); setSessions(prev => prev.filter(s => s.session.id !== id)); } catch (_) {}
+  };
 
   useEffect(() => {
     if (posTab === "tables") fetchOrders();
@@ -258,6 +268,14 @@ export default function RestPOS() {
         note:         orderNote   || undefined,
         items,
       });
+      // Si une table est indiquée, alimenter sa NOTE (addition cumulative) : chaque
+      // envoi devient une tournée. Ne bloque jamais l'envoi en cuisine si ça échoue.
+      if (tableLabel) {
+        try {
+          const detail = await sessionsService.open(tableLabel);
+          if (detail?.session?.id) await sessionsService.addItems(detail.session.id, items);
+        } catch (_) {}
+      }
       setLastOrder({ ...result.order, items, total: cartTotal });
       setCart({});
       setShowCart(false);
@@ -396,6 +414,51 @@ export default function RestPOS() {
               Actualiser
             </button>
           </div>
+
+          {/* Notes de table ouvertes (additions cumulées) */}
+          {sessions.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>
+                Notes de table ouvertes
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+                {sessions.map(({ session, items, total, convives }) => {
+                  const live = (items || []).filter(i => i.status !== "cancelled");
+                  const rounds = new Set(live.map(i => i.round)).size;
+                  return (
+                    <div key={session.id} style={{ background: "white", borderRadius: 12, border: `1px solid ${BORDER}`, padding: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: DARK }}>
+                          {session.table_label ? `Table ${session.table_label}` : "Sans table"}
+                        </span>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: P }}>{fmt(total)}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 8 }}>
+                        {live.reduce((s, i) => s + i.qty, 0)} article(s) · {rounds} tournée(s){convives?.length ? ` · ${convives.length} convive(s)` : ""}
+                      </div>
+                      <div style={{ fontSize: 12, color: DARK, lineHeight: 1.6, marginBottom: 10, maxHeight: 120, overflowY: "auto" }}>
+                        {live.map(i => (
+                          <div key={i.id}>
+                            <strong>{i.qty}×</strong> {i.name}{i.options_label ? <span style={{ color: "#C47D1A" }}> ({i.options_label})</span> : ""}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => { setTableLabel(session.table_label || ""); setPosTab("commande"); }}
+                          style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `0.5px solid ${P}`, background: "white", color: P, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                          + Ajouter
+                        </button>
+                        <button onClick={() => closeSession(session.id)}
+                          style={{ padding: "7px 12px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: BG, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                          Clôturer
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {loadOrders ? (
             <div style={{ textAlign: "center", padding: 40, color: MUTED }}>Chargement…</div>

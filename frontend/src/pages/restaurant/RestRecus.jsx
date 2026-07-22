@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Receipt, RefreshCw, Printer, CheckCircle2 } from "lucide-react";
 import { sessionsService } from "../../services/sessions.service.js";
@@ -130,6 +131,7 @@ export default function RestRecus() {
         </div>
       )}
 
+      {createPortal(
       <AnimatePresence>
         {printNote && (
           <>
@@ -180,7 +182,7 @@ export default function RestRecus() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   );
 }

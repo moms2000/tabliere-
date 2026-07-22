@@ -7,8 +7,8 @@ android {
         applicationId "net.tabliereci.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0"
+        versionCode 5
+        versionName "1.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +16,34 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Lues depuis l'environnement au moment du build (jamais stockees dans le projet).
+            // Renseignees par le script build-signed-aab.sh, qui demande les mots de passe
+            // de facon masquee. Sans ces variables, un build release reste non signe.
+            def ksPath = System.getenv("TABLIERE_KEYSTORE")
+            if (ksPath != null) {
+                storeFile file(ksPath)
+                storePassword System.getenv("TABLIERE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("TABLIERE_KEY_ALIAS")
+                keyPassword System.getenv("TABLIERE_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv("TABLIERE_KEYSTORE") != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+
+    buildFeatures {
+        // Active la compilation des interfaces AIDL (imprimante Sunmi). Desactive par
+        // defaut depuis Android Gradle Plugin 8.
+        aidl true
     }
 }
 

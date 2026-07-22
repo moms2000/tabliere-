@@ -51,9 +51,49 @@ function StatusBadge({ status }) {
   );
 }
 
+// Imprimante integree Sunmi (disponible seulement dans l'app sur les terminaux Sunmi)
+function getSunmiPrinter() {
+  const cap = typeof window !== "undefined" ? window.Capacitor : null;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform() && cap.Plugins && cap.Plugins.SunmiPrinter) {
+    return cap.Plugins.SunmiPrinter;
+  }
+  return null;
+}
+
 function PrintReceipt({ order, restoName }) {
-  const print = () => {
+  const printSunmi = async (printer) => {
+    await printer.printReceipt({
+      restoName: restoName || "Restaurant",
+      tableLabel: order.table_label || "",
+      dateText: fmtDate(order.created_at),
+      items: (order.items || []).map(it => ({
+        left:  `${it.qty}x ${it.name}`,
+        right: it.price ? Number(it.price * it.qty).toLocaleString("fr-FR") + " F" : "",
+      })),
+      totalText: order.total ? Number(order.total).toLocaleString("fr-FR") + " F" : "",
+      footer: "Merci pour votre visite",
+    });
+  };
+
+  const print = async () => {
+    const printer = getSunmiPrinter();
+    if (printer) {
+      try {
+        await printSunmi(printer);
+        return;
+      } catch (e) {
+        const msg = String(e?.message || e || "");
+        if (msg.includes("PRINTER_NOT_READY")) {
+          alert("Imprimante non détectée. Patiente un instant et réessaie.");
+          return;
+        }
+        alert("Impression impossible sur cet appareil.");
+        return;
+      }
+    }
+    // Ordinateur : impression via le navigateur
     const w = window.open("", "_blank", "width=400,height=600");
+    if (!w) { alert("Autorise les fenêtres pour imprimer."); return; }
     w.document.write(`
       <html><head><title>Reçu</title>
       <style>

@@ -478,7 +478,7 @@ export const setUserStatus = asyncHandler(async (req, res) => {
 // ---------------------------------------------------------------------------
 export const updateUser = asyncHandler(async (req, res) => {
   const { full_name, email, role, new_password } = req.body;
-  const ALLOWED_ROLES = ["client", "restaurateur", "admin"];
+  const ALLOWED_ROLES = ["client", "restaurateur", "organisateur", "admin"];
   if (role && !ALLOWED_ROLES.includes(role)) throw new AppError("Rôle invalide", 400);
 
   const updates = [];

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Users, Plus, Trash2, Pencil, X, KeyRound } from "lucide-react";
 import { restaurantStaffService } from "../../services/restaurantStaff.service.js";
@@ -126,6 +127,7 @@ export default function RestStaff() {
         </div>
       )}
 
+      {createPortal(
       <AnimatePresence>
         {modal && (
           <>
@@ -197,7 +199,7 @@ export default function RestStaff() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   );
 }

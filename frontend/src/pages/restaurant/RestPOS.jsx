@@ -4,6 +4,7 @@
  * Optimisé pour tablette / mobile en salle
  */
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Minus, Trash2, Send, Zap, RefreshCw, CheckCircle, X, ChevronDown, LayoutGrid, Clock, ShoppingBag, Utensils } from "lucide-react";
 import { menuService }   from "../../services/menu.service.js";
@@ -727,6 +728,7 @@ export default function RestPOS() {
       </>}
 
       {/* ── Choix des options d'un plat (cuisson / accompagnements) ── */}
+      {createPortal(
       <AnimatePresence>
         {optItem && (
           <>
@@ -795,9 +797,10 @@ export default function RestPOS() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
 
       {/* ── Impression d'une note : reçu total ou par convive ── */}
+      {createPortal(
       <AnimatePresence>
         {printNote && (
           <>
@@ -848,7 +851,7 @@ export default function RestPOS() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   );
 }

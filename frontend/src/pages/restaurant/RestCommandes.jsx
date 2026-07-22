@@ -67,7 +67,7 @@ function PrintReceipt({ order, restoName }) {
       tableLabel: order.table_label || "",
       dateText: fmtDate(order.created_at),
       items: (order.items || []).map(it => ({
-        left:  `${it.qty}x ${it.name}`,
+        left:  `${it.qty}x ${it.name}${it.options_label ? "\n   " + it.options_label : ""}`,
         right: it.price ? Number(it.price * it.qty).toLocaleString("fr-FR") + " F" : "",
       })),
       totalText: order.total ? Number(order.total).toLocaleString("fr-FR") + " F" : "",
@@ -113,7 +113,7 @@ function PrintReceipt({ order, restoName }) {
         <hr />
         ${(order.items || []).map(it => `
           <div class="row">
-            <span>${it.qty}× ${it.name}</span>
+            <span>${it.qty}× ${it.name}${it.options_label ? ` <em style="color:#888;font-style:normal;">(${it.options_label})</em>` : ""}</span>
             <span>${it.price ? Number(it.price * it.qty).toLocaleString("fr-FR") + " F" : ""}</span>
           </div>`).join("")}
         <hr />
@@ -424,16 +424,18 @@ export default function RestCommandes() {
                     <div style={{ marginBottom: 8 }}>
                       {(order.items || []).map((it, i) => {
                         const opts = it.options || {};
-                        const details = [opts.cuisson, opts.accompagnement].filter(Boolean);
+                        const accs = Array.isArray(opts.accompagnements) ? opts.accompagnements
+                          : (opts.accompagnement ? [opts.accompagnement] : []);
+                        const details = it.options_label || [opts.cuisson, ...accs].filter(Boolean).join(" · ");
                         return (
                           <div key={i} style={{ fontSize: 12, color: DARK, padding: "3px 0",
                             borderBottom: i < (order.items.length - 1) ? "0.5px solid #f2f0eb" : "none" }}>
                             <div>
                               <strong>{it.qty}×</strong> {it.name}
                             </div>
-                            {details.length > 0 && (
+                            {details && (
                               <div style={{ fontSize: 11, color: P, marginTop: 1 }}>
-                                {details.join(" · ")}
+                                {details}
                               </div>
                             )}
                             {it.note && (

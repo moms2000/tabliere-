@@ -136,7 +136,11 @@ export const create = asyncHandler(async (req, res) => {
     //  - Restaurateur : garde la main. Walk-in sans table possible ; si une table
     //    précise est choisie, on vérifie seulement le conflit.
     let assignedTableId = table_id || null;
-    if (req.user.role === "client") {
+    // Attribution stricte (table réelle ou refus) UNIQUEMENT en auto-confirmation.
+    // En confirmation manuelle, on laisse le créneau ouvert : la demande reste
+    // en attente sans table, plusieurs clients peuvent postuler, et le restaurant
+    // tranche (voir confirm : décline les autres quand c'est complet).
+    if (req.user.role === "client" && autoConfirm) {
       // On n'exige une table que si le resto a configuré un plan de salle. Sans
       // table définie, on autorise la réservation comme avant (le resto gère à la main).
       const { rows: [{ n }] } = await client.query(
@@ -152,6 +156,9 @@ export const create = asyncHandler(async (req, res) => {
           );
         }
       }
+    } else if (req.user.role === "client") {
+      // Confirmation manuelle : pas d'attribution ni de refus à la demande.
+      assignedTableId = null;
     } else if (table_id) {
       await client.query("SELECT id FROM restaurant_tables WHERE id = $1 FOR UPDATE", [table_id]);
       const { rows: [conflict] } = await client.query(
@@ -464,7 +471,7 @@ export const confirm = asyncHandler(async (req, res) => {
     if (tbl.status === "occupe") throw new AppError("Cette table est déjà occupée", 409);
   }
 
-  const updated = await withTransaction(async (client) => {
+  const { updated, declined } = await withTransaction(async (client) => {
     // Si on change de table, libérer l'ancienne
     if (resa.table_id && resa.table_id !== table_id) {
       await client.query(
@@ -489,7 +496,44 @@ export const confirm = asyncHandler(async (req, res) => {
       );
     }
 
-    return r;
+    // Si le restaurant est désormais COMPLET sur ce créneau (toutes ses tables
+    // ont une réservation avec table sur la fenêtre), décliner automatiquement
+    // les autres demandes encore en attente qui ne peuvent plus être placées.
+    let dec = [];
+    const { rows: [{ dur }] } = await client.query(
+      "SELECT COALESCE(seating_duration,120)*60 AS dur FROM restaurants WHERE id = $1",
+      [resa.restaurant_id]
+    );
+    const { rows: [{ total }] } = await client.query(
+      "SELECT COUNT(*)::int AS total FROM restaurant_tables WHERE restaurant_id = $1 AND is_active = TRUE",
+      [resa.restaurant_id]
+    );
+    if (total > 0) {
+      const { rows: [{ free }] } = await client.query(
+        `SELECT COUNT(*)::int AS free FROM restaurant_tables t
+         WHERE t.restaurant_id = $1 AND t.is_active = TRUE
+           AND NOT EXISTS (
+             SELECT 1 FROM reservations rr
+             WHERE rr.table_id = t.id AND rr.status IN ('en_attente','confirme')
+               AND ABS(EXTRACT(EPOCH FROM (rr.reserved_at - $2::timestamptz))) < $3
+           )`,
+        [resa.restaurant_id, r.reserved_at, dur]
+      );
+      if (free === 0) {
+        const { rows } = await client.query(
+          `UPDATE reservations
+           SET status = 'annule', cancel_reason = 'Plus de disponibilité sur ce créneau',
+               cancelled_at = NOW(), updated_at = NOW()
+           WHERE restaurant_id = $1 AND status = 'en_attente' AND id <> $2
+             AND ABS(EXTRACT(EPOCH FROM (reserved_at - $3::timestamptz))) < $4
+           RETURNING id, client_id`,
+          [resa.restaurant_id, r.id, r.reserved_at, dur]
+        );
+        dec = rows;
+      }
+    }
+
+    return { updated: r, declined: dec };
   });
 
   await notificationQueue.add("confirmation_client", { reservationId: resa.id }).catch(() => {});
@@ -501,6 +545,12 @@ export const confirm = asyncHandler(async (req, res) => {
       reserved_at: resa.reserved_at,
     });
   } catch (_) {}
+
+  // Notifier les demandes déclinées faute de disponibilité
+  for (const d of declined) {
+    await notificationQueue.add("reservation_declined", { reservationId: d.id }).catch(() => {});
+    try { emitToUser(d.client_id, "reservation_declined", {}); } catch (_) {}
+  }
 
   logger.info("Réservation confirmée", { resaId: resa.id, ref: resa.ref, table_id });
   return ok(res, { reservation: updated }, "Réservation confirmée");
@@ -739,7 +789,9 @@ export const createGuest = asyncHandler(async (req, res) => {
       [restaurant_id]
     );
     let assignedTableId = table_id || null;
-    if (n > 0) {
+    // Attribution stricte seulement en auto-confirmation. En manuel, on laisse
+    // la demande en attente sans table (le restaurant tranche à la confirmation).
+    if (n > 0 && resto.auto_confirm !== false) {
       assignedTableId = await pickFreeTable(client, restaurant_id, party_size, reserved_at, durSec, table_id);
       if (!assignedTableId) {
         throw new AppError(
@@ -747,6 +799,8 @@ export const createGuest = asyncHandler(async (req, res) => {
           409, "NO_TABLE_AVAILABLE"
         );
       }
+    } else if (resto.auto_confirm === false) {
+      assignedTableId = null;
     }
     const { rows: [{ nextref }] } = await client.query(
       "SELECT 'RES-' || LPAD(nextval('resa_ref_seq')::text, 4, '0') AS nextref"

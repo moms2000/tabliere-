@@ -40,4 +40,9 @@
 
     <!-- Notifications push (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Visibilite du service imprimante Sunmi (requis sur Android 11+ pour s'y connecter) -->
+    <queries>
+        <package android:name="woyou.aidlservice.jiuiv5" />
+    </queries>
 </manifest>

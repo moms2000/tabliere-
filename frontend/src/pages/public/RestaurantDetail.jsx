@@ -260,7 +260,7 @@ function calendarUrl(resto, dateIso, slot, pers) {
 
 /* Contenu des étapes partagé mobile/desktop */
 function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers, resto,
-  special, setSpecial, user, error, booking, handleBook, closeModal, navigate,
+  special, setSpecial, user, error, altSlots, onPickSlot, booking, handleBook, closeModal, navigate,
   resaRef, P, PL, DARK, BG, BORDER, MUTED, FONT,
   guestName, setGuestName, guestPhone, setGuestPhone, guestEmail, setGuestEmail }) {
   return (
@@ -389,6 +389,18 @@ function ModalSteps({ step, setStep, selSlot, setSelSlot, selDate, fmtDate, pers
             </div>
           )}
           {error && <div style={{ marginBottom: 12, padding: "8px 12px", background: "#FAECE7", borderRadius: 8, fontSize: 12, color: "#993C1D" }}>{error}</div>}
+          {altSlots && altSlots.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              {altSlots.map(s => (
+                <button key={s} type="button" onClick={() => onPickSlot(s)} disabled={booking}
+                  style={{ padding: "8px 14px", borderRadius: 999, border: `1px solid ${P}`,
+                    background: PL, color: P, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    fontFamily: FONT }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setStep(1)}
               style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: `0.5px solid ${BORDER}`,
@@ -473,6 +485,7 @@ export default function RestaurantDetail() {
   const [step,     setStep]     = useState(1);
   const [booking,  setBooking]  = useState(false);
   const [error,    setError]    = useState("");
+  const [altSlots, setAltSlots] = useState([]); // créneaux libres proposés si complet
   const [special,  setSpecial]  = useState("");
   const [resaRef,  setResaRef]  = useState(null);
 
@@ -559,9 +572,9 @@ export default function RestaurantDetail() {
 
   const openModal = useCallback(({ date, slot, pers: p }) => {
     setSelDate(date); setSelSlot(slot); setPers(p);
-    setModal(true); setStep(1); setError(""); setSpecial(""); setResaRef(null);
+    setModal(true); setStep(1); setError(""); setAltSlots([]); setSpecial(""); setResaRef(null);
   }, []);
-  const closeModal = () => { setModal(false); setStep(1); setError(""); };
+  const closeModal = () => { setModal(false); setStep(1); setError(""); setAltSlots([]); };
 
   // Pré-ouverture de la réservation depuis les créneaux cliqués sur l'accueil
   const slotOpenedRef = useRef(false);
@@ -600,34 +613,30 @@ export default function RestaurantDetail() {
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
 
-  const handleBook = async () => {
+  const handleBook = async (slotOverride) => {
     if (step === 1) { setStep(2); return; }
     if (step === 2) {
       // Invité sans compte : nom + téléphone obligatoires
       if (!user && !guestName.trim()) { setError("Veuillez indiquer votre nom complet."); return; }
       if (!user && !guestPhone.trim()) { setError("Veuillez indiquer votre numéro de téléphone."); return; }
-      setBooking(true); setError("");
+      // slotOverride est une chaîne quand on relance via un créneau proposé
+      const slot = typeof slotOverride === "string" ? slotOverride : selSlot;
+      if (typeof slotOverride === "string") setSelSlot(slotOverride);
+      setBooking(true); setError(""); setAltSlots([]);
       try {
-        const reserved_at = toDatetime(selDate, selSlot);
-        const dateOnly    = selDate;
-        // Récupérer une table libre à CET horaire (tient compte de la durée d'assise :
-        // une table occupée se libère après la durée → pas de double réservation).
-        const avail = await restaurantsService.getAvailability(slug, dateOnly, pers, reserved_at, preview).catch(() => null);
-        const table = avail?.available_tables?.[0] || null;
-
+        const reserved_at = toDatetime(selDate, slot);
+        // Le serveur attribue lui-même une table réellement libre (durée d'assise
+        // respectée) ou refuse. Plus fiable que de choisir la table côté client.
         const payload     = {
           restaurant_id:   resto.id,
           reserved_at,
           party_size:      pers,
           special_request: special || undefined,
         };
-        if (table) payload.table_id = table.id;
-        // Réservation invité — walk_in fields
         if (!user) {
           payload.walk_in_name  = guestName.trim();
           payload.walk_in_phone = guestPhone.trim() || undefined;
         }
-        const headers = user ? {} : {}; // appel sans auth si invité
         const resa = user
           ? await reservationsService.create(payload)
           : await import("../../services/api.js").then(({ default: api }) =>
@@ -639,7 +648,22 @@ export default function RestaurantDetail() {
         setResaRef(resa?.ref || resa?.reservation?.ref || null);
         setStep(3);
       } catch (e) {
-        setError(e.response?.data?.message || e.message || "Erreur lors de la réservation");
+        if (e?.response?.data?.code === "NO_TABLE_AVAILABLE") {
+          // Complet à cet horaire : proposer les créneaux réellement libres du jour
+          const candidates = ALL_SLOTS.filter(s => !isPastSlot(selDate, s));
+          const checks = await Promise.all(candidates.map(s =>
+            restaurantsService.getAvailability(slug, selDate, pers, toDatetime(selDate, s), preview)
+              .then(d => ({ s, ok: (d?.available_tables?.length || 0) > 0 }))
+              .catch(() => ({ s, ok: false }))
+          ));
+          const free = checks.filter(c => c.ok).map(c => c.s);
+          setAltSlots(free);
+          setError(free.length
+            ? `Complet à ${slot} pour ${pers} personne${pers > 1 ? "s" : ""}. Autres horaires disponibles :`
+            : "Complet à cet horaire, et plus aucune table libre ce jour-là. Essayez une autre date.");
+        } else {
+          setError(e.response?.data?.message || e.message || "Erreur lors de la réservation");
+        }
       } finally {
         setBooking(false);
       }
@@ -1135,7 +1159,7 @@ export default function RestaurantDetail() {
                   step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
                   selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
                   special={special} setSpecial={setSpecial} user={user}
-                  error={error} booking={booking} handleBook={handleBook}
+                  error={error} altSlots={altSlots} onPickSlot={(s) => handleBook(s)} booking={booking} handleBook={handleBook}
                   closeModal={closeModal} navigate={navigate}
                   resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
                   guestName={guestName} setGuestName={setGuestName}
@@ -1166,7 +1190,7 @@ export default function RestaurantDetail() {
                     step={step} setStep={setStep} selSlot={selSlot} setSelSlot={setSelSlot}
                     selDate={selDate} fmtDate={fmtDate} pers={pers} resto={resto}
                     special={special} setSpecial={setSpecial} user={user}
-                    error={error} booking={booking} handleBook={handleBook}
+                    error={error} altSlots={altSlots} onPickSlot={(s) => handleBook(s)} booking={booking} handleBook={handleBook}
                     closeModal={closeModal} navigate={navigate}
                     resaRef={resaRef} P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT}
                   />

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Joi from "joi";
 import { validate }                from "../middleware/validate.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize, requireTab } from "../middleware/auth.js";
 import * as ctrl                   from "../controllers/menu.controller.js";
 
 const router = Router();
@@ -22,13 +22,15 @@ const itemSchema = Joi.object({
   options:      Joi.any().optional(),                       // cuissons / accompagnements (JSONB)
 });
 
-router.get   ("/:slug/manage",    authenticate, authorize("restaurateur","admin"), ctrl.getFullMenu);
-router.post  ("/import",          authenticate, authorize("restaurateur","admin"), ctrl.importMenu);
-router.post  ("/items",           authenticate, authorize("restaurateur","admin"), validate(itemSchema), ctrl.createItem);
-router.patch ("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.updateItem);
-router.delete("/items/:id",       authenticate, authorize("restaurateur","admin"), ctrl.deleteItem);
-router.post  ("/categories",      authenticate, authorize("restaurateur","admin"), ctrl.createCategory);
-router.patch ("/categories/:id",  authenticate, authorize("restaurateur","admin"), ctrl.updateCategory);
-router.delete("/categories/:id",  authenticate, authorize("restaurateur","admin"), ctrl.deleteCategory);
+// Lecture de la carte : nécessaire aussi pour prendre une commande (service, commandes)
+router.get   ("/:slug/manage",    authenticate, authorize("restaurateur","admin"), requireTab("menu","pos","commandes","recus"), ctrl.getFullMenu);
+// Modifications de la carte : réservées à l'onglet Menu
+router.post  ("/import",          authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.importMenu);
+router.post  ("/items",           authenticate, authorize("restaurateur","admin"), requireTab("menu"), validate(itemSchema), ctrl.createItem);
+router.patch ("/items/:id",       authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.updateItem);
+router.delete("/items/:id",       authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.deleteItem);
+router.post  ("/categories",      authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.createCategory);
+router.patch ("/categories/:id",  authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.updateCategory);
+router.delete("/categories/:id",  authenticate, authorize("restaurateur","admin"), requireTab("menu"), ctrl.deleteCategory);
 
 export default router;

@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize, requireTab } from "../middleware/auth.js";
 import * as ctrl from "../controllers/sessions.controller.js";
 
 const router = Router();
 
-// Notes de table — réservé au restaurateur / admin
-router.use(authenticate, authorize("restaurateur", "admin"));
+// Notes de table — restaurateur/admin, et staff ayant Commandes, Service rapide ou Reçus
+router.use(authenticate, authorize("restaurateur", "admin"), requireTab("commandes", "pos", "recus"));
 
 router.get   ("/",                  ctrl.listSessions);
 router.post  ("/",                  ctrl.openSession);

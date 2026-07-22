@@ -37,10 +37,11 @@ export const authenticate = async (req, res, next) => {
     // scopé à son restaurant, avec ses permissions d'onglets.
     if (decoded.typ === "resto_staff") {
       const { rows: [s] } = await query(
-        `SELECT rs.id, rs.restaurant_id, rs.name, rs.permissions, rs.is_active, r.owner_id
+        `SELECT rs.id, rs.restaurant_id, rs.name, rs.permissions, rs.is_active, r.owner_id, r.status AS resto_status
          FROM restaurant_staff rs JOIN restaurants r ON r.id = rs.restaurant_id
          WHERE rs.id = $1`, [decoded.staff_id]);
       if (!s || s.is_active === false) return unauth(res, "Accès staff révoqué");
+      if (["suspendu", "bloque"].includes(s.resto_status)) return forbidden(res, "Restaurant suspendu");
       req.user = {
         id: s.owner_id, role: "restaurateur", restaurant_id: s.restaurant_id,
         is_staff: true, staff_id: s.id, staff_name: s.name,
@@ -85,6 +86,22 @@ export const authorize = (...roles) => (req, res, next) => {
     return forbidden(res, `Accès réservé aux rôles : ${roles.join(", ")}`);
   }
   next();
+};
+
+// Interdit l'accès à un membre du staff (routes du compte personnel du propriétaire).
+export const denyStaff = (req, res, next) => {
+  if (req.user?.is_staff) return forbidden(res, "Action réservée au titulaire du compte.");
+  next();
+};
+
+// Restreint un endpoint aux membres du staff qui ont l'un des onglets requis.
+// Le propriétaire et l'admin ne sont jamais restreints (accès complet à leur resto).
+// C'est l'application SERVEUR des permissions d'onglets (pas seulement l'affichage).
+export const requireTab = (...tabs) => (req, res, next) => {
+  if (!req.user?.is_staff) return next();
+  const perms = Array.isArray(req.user.staff_permissions) ? req.user.staff_permissions : [];
+  if (tabs.some(t => perms.includes(t))) return next();
+  return forbidden(res, "Cet accès n'est pas autorisé pour ce membre du staff.");
 };
 
 // Révoquer un token (logout)

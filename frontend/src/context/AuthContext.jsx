@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const login = useCallback(async (email, password, remember = true) => {
+    localStorage.removeItem("tci_staff"); // jamais de marqueur staff résiduel sur une connexion normale
     const u = await authService.login(email, password, remember);
     setUser(u);
     return u;

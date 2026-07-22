@@ -132,7 +132,15 @@ function Login({ onOk }) {
       // Isolation : une connexion organisateur efface toute session staff résiduelle.
       localStorage.removeItem(KEY); localStorage.removeItem(ACT_KEY);
       const u = await login(email.trim().toLowerCase(), password, true);
-      navigate(u?.role === "organisateur" ? "/event" : u?.role === "admin" ? "/admin" : "/");
+      if (u?.role === "organisateur")      navigate("/event");
+      else if (u?.role === "admin")        navigate("/admin");
+      else if (u?.role === "restaurateur") navigate("/restaurant");
+      else {
+        // Compte valide mais sans accès organisateur : message clair au lieu d'un
+        // renvoi muet vers l'accueil (typiquement un compte client).
+        setErr("Ce compte n'a pas d'accès organisateur. Vérifiez que vous utilisez le compte organisateur fourni, ou contactez l'administrateur pour activer l'accès.");
+        setBusy(false);
+      }
     } catch (e2) {
       const st = e2.response?.status;
       if (st === 403 && e2.response?.data?.code === "EMAIL_NOT_VERIFIED") setErr("Vérifiez votre e-mail avant de vous connecter (consultez vos spams).");

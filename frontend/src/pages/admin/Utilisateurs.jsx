@@ -383,6 +383,7 @@ export default function Utilisateurs() {
                         cursor: "pointer" }}>
                       <option value="client">Client</option>
                       <option value="restaurateur">Restaurateur</option>
+                      <option value="organisateur">Organisateur</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>

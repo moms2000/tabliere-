@@ -4,6 +4,17 @@ import { cache } from "../config/redis.js";
 import { query } from "../config/db.js";
 import { unauth, forbidden } from "../utils/response.js";
 
+// Jeton d'un membre du staff restaurant (login_id + PIN). Il agit comme le
+// restaurateur PROPRIÉTAIRE (mêmes données du resto), mais ses onglets sont
+// restreints côté interface via ses permissions.
+export function signRestaurantStaffToken(staff) {
+  return jwt.sign(
+    { typ: "resto_staff", staff_id: staff.id, restaurant_id: staff.restaurant_id },
+    env.JWT_SECRET,
+    { expiresIn: "12h" }
+  );
+}
+
 // Vérifie le token JWT et charge l'utilisateur
 export const authenticate = async (req, res, next) => {
   try {
@@ -20,6 +31,24 @@ export const authenticate = async (req, res, next) => {
     // Un refresh token ne doit jamais authentifier une requête API (il ne sert
     // qu'à /auth/refresh). Anti-usage détourné du jeton de rafraîchissement.
     if (decoded.type === "refresh") return unauth(res, "Token invalide");
+
+    // ── Token staff restaurant ──────────────────────────────────────────────
+    // Le staff agit comme l'owner (req.user.id = owner_id → pas de souci de FK),
+    // scopé à son restaurant, avec ses permissions d'onglets.
+    if (decoded.typ === "resto_staff") {
+      const { rows: [s] } = await query(
+        `SELECT rs.id, rs.restaurant_id, rs.name, rs.permissions, rs.is_active, r.owner_id
+         FROM restaurant_staff rs JOIN restaurants r ON r.id = rs.restaurant_id
+         WHERE rs.id = $1`, [decoded.staff_id]);
+      if (!s || s.is_active === false) return unauth(res, "Accès staff révoqué");
+      req.user = {
+        id: s.owner_id, role: "restaurateur", restaurant_id: s.restaurant_id,
+        is_staff: true, staff_id: s.id, staff_name: s.name,
+        staff_permissions: Array.isArray(s.permissions) ? s.permissions : [],
+      };
+      req.token = token;
+      return next();
+    }
 
     // Cache user pour éviter une requête DB à chaque requête
     const cacheKey = `user:${decoded.id}`;

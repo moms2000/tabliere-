@@ -71,6 +71,7 @@ async function ensureTables() {
 
 // ── Résolution du restaurant du restaurateur connecté ───────────────────────
 async function resolveRestoId(req) {
+  if (req.user.is_staff && req.user.restaurant_id) return req.user.restaurant_id; // staff → son resto
   if (req.user.role === "admin" && req.query.restaurant_id) return req.query.restaurant_id;
   if (req.query.restaurant_id) {
     const { rows } = await query(

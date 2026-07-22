@@ -95,6 +95,16 @@ const saveOrder = (o) => {
   try { const a = JSON.parse(localStorage.getItem(KEY)||"[]"); a.unshift(o); localStorage.setItem(KEY,JSON.stringify(a.slice(0,20))); } catch(_){}
 };
 const loadOrders = () => { try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch { return []; }};
+// Identifiant stable de l'appareil : chaque téléphone = un convive distinct sur
+// la note de la table (additions séparées possibles quand plusieurs commandent).
+const DEVICE_KEY = "tci_device";
+const deviceToken = () => {
+  try {
+    let t = localStorage.getItem(DEVICE_KEY);
+    if (!t) { t = "d_" + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(DEVICE_KEY, t); }
+    return t;
+  } catch { return null; }
+};
 
 /* ── Composants partagés ─────────────────────────────────────────────────── */
 
@@ -354,6 +364,7 @@ export default function ClientMenu() {
         client_name: clientName||undefined, client_phone: clientPhone||undefined,
         client_email: clientEmail||undefined,
         note: orderNote||undefined, items, total: cartTotal,
+        device_token: deviceToken(),
       });
       const newOrder = {
         id: result?.order?.id || String(Date.now()),

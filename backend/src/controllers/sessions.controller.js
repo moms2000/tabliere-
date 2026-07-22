@@ -141,6 +141,85 @@ async function ownerId(restoId) {
   return r?.owner_id || null;
 }
 
+// Libellé lisible des options : "À point · Frites, Salade"
+function labelFromOptions(options) {
+  let o = options;
+  if (typeof o === "string") { try { o = JSON.parse(o); } catch { o = null; } }
+  if (!o) return null;
+  const parts = [];
+  if (o.cuisson) parts.push(String(o.cuisson));
+  const acc = Array.isArray(o.accompagnements) ? o.accompagnements : (o.accompagnement ? [o.accompagnement] : []);
+  if (acc.length) parts.push(acc.join(", "));
+  return parts.length ? parts.join(" · ").slice(0, 200) : null;
+}
+
+/**
+ * Attache une commande à la NOTE de sa table (get-or-create), quelle que soit la
+ * plateforme d'origine (QR client, terminal serveur, page Commandes). Chaque appel
+ * = une tournée. Optionnellement rattache les articles à un convive (identité
+ * téléphone via deviceToken, ou nom). Sans table_label : ne fait rien.
+ * `items` = articles DÉJÀ re-tarifés serveur ({ id, name, price, qty, options }).
+ * N'échoue jamais bruyamment : renvoie l'id de note ou null.
+ */
+export async function attachOrderToSession({ restoId, tableLabel, items, source = "server", conviveName = null, deviceToken = null }) {
+  if (!tableLabel || !Array.isArray(items) || items.length === 0) return null;
+  try {
+    await ensureTables();
+    const findOpen = async () => {
+      const { rows: [s] } = await query(
+        `SELECT * FROM table_sessions WHERE restaurant_id = $1 AND status = 'open'
+           AND table_label IS NOT DISTINCT FROM $2 LIMIT 1`, [restoId, tableLabel]);
+      return s || null;
+    };
+    let s = await findOpen();
+    if (!s) {
+      try {
+        ({ rows: [s] } = await query(
+          `INSERT INTO table_sessions (restaurant_id, table_label, opened_by) VALUES ($1, $2, $3) RETURNING *`,
+          [restoId, tableLabel, source]));
+      } catch (e) { if (e.code === "23505") s = await findOpen(); else throw e; }
+    }
+    if (!s) return null;
+
+    // Convive (identité téléphone ou nom) — pour les additions séparées
+    let conviveId = null;
+    if (deviceToken || conviveName) {
+      const { rows: [c] } = await query(
+        `SELECT id FROM session_convives WHERE session_id = $1
+           AND ( ($2::text IS NOT NULL AND device_token = $2) OR ($3::text IS NOT NULL AND name = $3) ) LIMIT 1`,
+        [s.id, deviceToken, conviveName]);
+      if (c) conviveId = c.id;
+      else {
+        const { rows: [{ nextnum }] } = await query(
+          "SELECT COALESCE(MAX(num),0)+1 AS nextnum FROM session_convives WHERE session_id = $1", [s.id]);
+        const { rows: [nc] } = await query(
+          "INSERT INTO session_convives (session_id, num, name, device_token) VALUES ($1,$2,$3,$4) RETURNING id",
+          [s.id, nextnum, conviveName, deviceToken]);
+        conviveId = nc.id;
+      }
+    }
+
+    const { rows: [{ nextround }] } = await query(
+      "SELECT COALESCE(MAX(round),0)+1 AS nextround FROM session_items WHERE session_id = $1", [s.id]);
+    for (const it of items) {
+      const optLabel = it.options_label || labelFromOptions(it.options);
+      await query(
+        `INSERT INTO session_items
+           (session_id, convive_id, menu_item_id, name, unit_price, qty, options, options_label, round, source, note)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)`,
+        [s.id, conviveId, Number.isInteger(it.id) ? it.id : (it.menu_item_id || null),
+         it.name, it.price || 0, it.qty, it.options ? JSON.stringify(it.options) : null,
+         optLabel, nextround, source, it.note || null]);
+    }
+    // Temps réel → restaurateur
+    try { const oid = await ownerId(restoId); if (oid) emitToUser(oid, "session_updated", { session_id: s.id, table_label: tableLabel }); } catch (_) {}
+    return s.id;
+  } catch (e) {
+    logger.warn("attachOrderToSession a échoué (commande enregistrée quand même)", { error: e.message });
+    return null;
+  }
+}
+
 // ── POST /sessions — ouvrir (ou récupérer) la note ouverte d'une table ───────
 export const openSession = asyncHandler(async (req, res) => {
   await ensureTables();

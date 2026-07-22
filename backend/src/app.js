@@ -30,6 +30,7 @@ import eventsRoutes        from "./routes/events.routes.js";
 import eventReservationsRoutes from "./routes/eventReservations.routes.js";
 import eventOpsRoutes       from "./routes/eventOps.routes.js";
 import sessionsRoutes       from "./routes/sessions.routes.js";
+import restaurantStaffRoutes from "./routes/restaurantStaff.routes.js";
 import { maintenanceGuard, isMaintenanceOn } from "./middleware/maintenance.js";
 
 const app = express();
@@ -118,6 +119,7 @@ app.use(`${v1}/chat`,          chatRoutes);
 app.use(`${v1}/notifications`, notificationsRoutes);
 app.use(`${v1}/orders`,        ordersRoutes);
 app.use(`${v1}/sessions`,      sessionsRoutes);
+app.use(`${v1}/restaurant-staff`, restaurantStaffRoutes);
 app.use(`${v1}/restaurants`,   reviewsRoutes);
 app.use(`${v1}/reports`,       reportsRoutes);
 app.use(`${v1}/upload`,        uploadRoutes);

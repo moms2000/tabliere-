@@ -49,6 +49,7 @@ async function ensureTable() {
 // restaurant (résolu par owner_id) ; le query param n'est accepté que pour un admin,
 // ou pour un restaurateur si le resto lui appartient réellement.
 async function resolveRestoId(req) {
+  if (req.user.is_staff && req.user.restaurant_id) return req.user.restaurant_id; // staff → son resto
   if (req.user.role === "admin" && req.query.restaurant_id) return req.query.restaurant_id;
   if (req.query.restaurant_id) {
     const { rows } = await query(

@@ -173,7 +173,7 @@ function labelFromOptions(options) {
  * `items` = articles DÉJÀ re-tarifés serveur ({ id, name, price, qty, options }).
  * N'échoue jamais bruyamment : renvoie l'id de note ou null.
  */
-export async function attachOrderToSession({ restoId, tableLabel, items, source = "server", conviveName = null, deviceToken = null }) {
+export async function attachOrderToSession({ restoId, tableLabel, items, source = "server", conviveName = null, deviceToken = null, conviveNum = null }) {
   if (!tableLabel || !Array.isArray(items) || items.length === 0) return null;
   try {
     await ensureTables();
@@ -193,9 +193,21 @@ export async function attachOrderToSession({ restoId, tableLabel, items, source 
     }
     if (!s) return null;
 
-    // Convive (identité téléphone ou nom) — pour les additions séparées
+    // Convive : par numéro (choisi au terminal : Personne 1, 2…), sinon par
+    // identité téléphone/nom (commande QR). Pour les additions séparées.
     let conviveId = null;
-    if (deviceToken || conviveName) {
+    const num = parseInt(conviveNum, 10);
+    if (Number.isInteger(num) && num > 0 && num <= 50) {
+      const { rows: [c] } = await query(
+        "SELECT id FROM session_convives WHERE session_id = $1 AND num = $2", [s.id, num]);
+      if (c) conviveId = c.id;
+      else {
+        const { rows: [nc] } = await query(
+          "INSERT INTO session_convives (session_id, num, name) VALUES ($1,$2,$3) RETURNING id",
+          [s.id, num, conviveName || null]);
+        conviveId = nc.id;
+      }
+    } else if (deviceToken || conviveName) {
       const { rows: [c] } = await query(
         `SELECT id FROM session_convives WHERE session_id = $1
            AND ( ($2::text IS NOT NULL AND device_token = $2) OR ($3::text IS NOT NULL AND name = $3) ) LIMIT 1`,

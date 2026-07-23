@@ -144,6 +144,7 @@ export default function RestPOS() {
   const [activeCat,   setActiveCat]   = useState(null);
   const [cart,        setCart]        = useState({});   // { itemId: { item, qty } }
   const [tableLabel,  setTableLabel]  = useState("");
+  const [persNum,     setPersNum]     = useState("");   // numéro de la personne (addition séparée)
   const [clientName,  setClientName]  = useState("");
   const [orderNote,   setOrderNote]   = useState("");
   const [loading,     setLoading]     = useState(true);
@@ -219,7 +220,12 @@ export default function RestPOS() {
     if (optItem) addLine(optItem, { cuisson: optChoice.cuisson || null, accompagnements: optChoice.accompagnements || [] });
     setOptItem(null);
   };
-  const clearCart = () => { setCart({}); setClientName(""); setOrderNote(""); setTableLabel(""); setLastOrder(null); setError(""); };
+  const clearCart = () => { setCart({}); setClientName(""); setOrderNote(""); setTableLabel(""); setPersNum(""); setLastOrder(null); setError(""); };
+  // Garde la table, passe à la personne suivante (prise de commande table par table)
+  const nextPerson = () => {
+    setPersNum(String((parseInt(persNum, 10) || 0) + 1));
+    setCart({}); setClientName(""); setOrderNote(""); setLastOrder(null); setError("");
+  };
 
   // ── Charger les commandes pour la vue par table ──
   const fetchOrders = useCallback(async () => {
@@ -305,6 +311,7 @@ export default function RestPOS() {
       }));
       const result = await ordersService.createManual({
         table_label:  tableLabel  || undefined,
+        convive_num:  (tableLabel && persNum) ? Number(persNum) : undefined,
         client_name:  clientName  || undefined,
         note:         orderNote   || undefined,
         items,
@@ -364,7 +371,14 @@ export default function RestPOS() {
           <span style={{ color: P }}>{fmt(lastOrder.total)}</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        {lastOrder.table_label && (
+          <button onClick={nextPerson}
+            style={{ padding: "12px 20px", borderRadius: 10, border: `1px solid ${P}`, background: "white",
+              color: "#C47D1A", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+            Table {lastOrder.table_label} · personne suivante
+          </button>
+        )}
         <button onClick={clearCart}
           style={{ padding: "12px 24px", borderRadius: 10, border: "none", background: P,
             color: "#1a1000", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
@@ -415,6 +429,25 @@ export default function RestPOS() {
           <ChevronDown size={12} color="rgba(255,255,255,.5)"
             style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
         </div>
+
+        {/* Sélecteur personne (addition séparée) — utile quand une table est choisie */}
+        {tableLabel && (
+          <div style={{ position: "relative", width: 120 }}>
+            <select value={persNum} onChange={e => setPersNum(e.target.value)}
+              title="Rattacher la commande à une personne pour l'addition séparée"
+              style={{ width: "100%", background: persNum ? P : "rgba(255,255,255,.1)",
+                border: "0.5px solid rgba(255,255,255,.2)", borderRadius: 8, padding: "7px 24px 7px 10px",
+                fontSize: 13, color: persNum ? "#1a1000" : "white", fontWeight: persNum ? 700 : 400,
+                cursor: "pointer", appearance: "none", fontFamily: FONT }}>
+              <option value="">Pers. —</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>Personne {n}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} color={persNum ? "#1a1000" : "rgba(255,255,255,.5)"}
+              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+          </div>
+        )}
 
         {/* Nom client */}
         <input value={clientName} onChange={e => setClientName(e.target.value)}

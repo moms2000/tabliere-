@@ -227,6 +227,9 @@ if ("serviceWorker" in navigator) {
   }
 }
 
+// Rafraîchissement automatique quand une nouvelle version est déployée
+import("./utils/versionCheck.js").then((m) => m.startVersionWatch()).catch(() => {});
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>

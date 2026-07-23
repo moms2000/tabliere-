@@ -37,11 +37,27 @@ export const setTokens = (accessToken, refreshToken, remember = true) => {
   storage.setItem("tci_remember", remember ? "1" : "0");
 };
 
+// Purge TOUTES les données propres à un utilisateur (sauf préférences neutres
+// d'appareil). CRUCIAL : sans ça, le compte suivant sur le même appareil hérite
+// des favoris, de l'état d'accueil et surtout de la session staff du précédent
+// → bascule de compte / fuite de données. Appelé au login ET au logout.
+const KEEP_KEYS = new Set(["tci_lang", "tci_notif_optin", "tci_order_sound", "tci_debug"]);
+export const clearUserScopedData = () => {
+  for (const store of [localStorage, sessionStorage]) {
+    try {
+      Object.keys(store)
+        .filter(k => k.startsWith("tci_") && !KEEP_KEYS.has(k))
+        .forEach(k => store.removeItem(k));
+    } catch { /* storage indisponible */ }
+  }
+};
+
 export const clearTokens = () => {
   ["access_token", "refresh_token", "tci_remember", "tci_staff"].forEach(k => {
     localStorage.removeItem(k);
     sessionStorage.removeItem(k);
   });
+  clearUserScopedData();
 };
 
 // "Remember me" = les tokens vivent dans localStorage (persistants)

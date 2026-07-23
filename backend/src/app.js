@@ -80,7 +80,10 @@ const allowedOrigins = env.isProd
       env.APP_URL,
       "https://tabliereci.net",
       "https://www.tabliereci.net",
-      /\.vercel\.app$/,          // tous les previews Vercel
+      // Previews Vercel UNIQUEMENT : regex ANCRÉE (^...$) + https imposé + un
+      // seul niveau de sous-domaine. Sans l'ancrage, `x.vercel.app.evil.com` ou
+      // `evil.vercel.app` seraient acceptés avec credentials → vol de réponses.
+      /^https:\/\/[a-z0-9-]+\.vercel\.app$/,
     ].filter(Boolean)
   : "*";
 

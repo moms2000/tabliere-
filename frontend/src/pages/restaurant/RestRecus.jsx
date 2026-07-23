@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Receipt, RefreshCw, Printer, CheckCircle2 } from "lucide-react";
+import { Receipt, RefreshCw, Printer, CheckCircle2, Search } from "lucide-react";
 import { sessionsService } from "../../services/sessions.service.js";
 import { printTicket, itemsToLines, fmtMoney } from "../../utils/printer.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -21,6 +21,9 @@ export default function RestRecus() {
   const [splitN, setSplitN]       = useState(2);        // nombre de personnes
   const [assign, setAssign]       = useState({});       // itemId -> [personnes]
   const [names,  setNames]        = useState({});       // numéro -> prénom (optionnel)
+  const [tableSearch, setTableSearch] = useState("");   // recherche par numéro de table
+  const [recPage, setRecPage]     = useState(1);
+  const REC_PAGE_SIZE = 12;
 
   const openSplit = (detail) => {
     setAssign({});
@@ -39,6 +42,16 @@ export default function RestRecus() {
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Recherche par numéro de table (parmi les tables ouvertes) + pagination.
+  const filteredSessions = sessions.filter(s => {
+    const q = tableSearch.trim().toLowerCase();
+    if (!q) return true;
+    return String(s.session?.table_label || "").toLowerCase().includes(q);
+  });
+  const recTotalPages = Math.max(1, Math.ceil(filteredSessions.length / REC_PAGE_SIZE));
+  const pageSessions = filteredSessions.slice((recPage - 1) * REC_PAGE_SIZE, recPage * REC_PAGE_SIZE);
+  useEffect(() => { setRecPage(1); }, [tableSearch, sessions.length]);
 
   const closeNote = async (id) => {
     if (!window.confirm("Clôturer cette note ? Elle disparaîtra des notes ouvertes.")) return;
@@ -157,9 +170,20 @@ export default function RestRecus() {
           <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} /> Actualiser
         </button>
       </div>
-      <p style={{ fontSize: 13, color: MUTED, margin: "0 0 20px" }}>
+      <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
         Chaque table ouverte a sa note. Imprimez un reçu total ou un reçu par personne, puis clôturez.
       </p>
+
+      {/* Recherche par numéro de table */}
+      {sessions.length > 0 && (
+        <div style={{ position: "relative", marginBottom: 18, maxWidth: 280 }}>
+          <Search size={15} color={MUTED} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" }} />
+          <input value={tableSearch} onChange={e => setTableSearch(e.target.value)}
+            placeholder="Rechercher une table (ex : 3)"
+            style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "9px 12px 9px 34px",
+              fontSize: 13, background: "white", outline: "none", fontFamily: FONT, boxSizing: "border-box", color: DARK }} />
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: MUTED, textAlign: "center", padding: 40 }}>Chargement…</div>
@@ -169,9 +193,14 @@ export default function RestRecus() {
           <div>Aucune table ouverte pour l'instant.</div>
           <div style={{ fontSize: 13, marginTop: 4 }}>Les tables apparaissent dès qu'une commande y est passée.</div>
         </div>
+      ) : filteredSessions.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 40, color: MUTED, background: BG, borderRadius: 14 }}>
+          Aucune table ouverte ne correspond à « {tableSearch} ».
+        </div>
       ) : (
+        <>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
-          {sessions.map(({ session, items, total, convives }) => {
+          {pageSessions.map(({ session, items, total, convives }) => {
             const live = (items || []).filter(i => i.status !== "cancelled");
             const rounds = new Set(live.map(i => i.round)).size;
             return (
@@ -209,6 +238,22 @@ export default function RestRecus() {
             );
           })}
         </div>
+        {recTotalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 18 }}>
+            <button onClick={() => setRecPage(p => Math.max(1, p - 1))} disabled={recPage <= 1}
+              style={{ padding: "6px 14px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: "white",
+                color: recPage <= 1 ? BORDER : DARK, fontSize: 12, cursor: recPage <= 1 ? "default" : "pointer", fontFamily: FONT }}>
+              Précédent
+            </button>
+            <span style={{ fontSize: 12, color: MUTED }}>Page {recPage} / {recTotalPages}</span>
+            <button onClick={() => setRecPage(p => Math.min(recTotalPages, p + 1))} disabled={recPage >= recTotalPages}
+              style={{ padding: "6px 14px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: "white",
+                color: recPage >= recTotalPages ? BORDER : DARK, fontSize: 12, cursor: recPage >= recTotalPages ? "default" : "pointer", fontFamily: FONT }}>
+              Suivant
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {createPortal(

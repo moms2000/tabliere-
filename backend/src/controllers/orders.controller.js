@@ -28,6 +28,20 @@ const INIT_SQL = `
   );
   CREATE INDEX IF NOT EXISTS qr_orders_restaurant_id_idx ON qr_orders(restaurant_id);
   CREATE INDEX IF NOT EXISTS qr_orders_created_at_idx    ON qr_orders(created_at DESC);
+
+  -- Cumul quotidien : conserve les statistiques À VIE même après la purge des
+  -- commandes détaillées (>15 j). Disjoint des lignes vives (une commande est
+  -- soit encore dans qr_orders, soit purgée et cumulée ici) → simple addition.
+  CREATE TABLE IF NOT EXISTS qr_order_daily (
+    restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    day           DATE NOT NULL,
+    orders        INTEGER NOT NULL DEFAULT 0,   -- commandes purgées (servies + annulées)
+    revenue       BIGINT  NOT NULL DEFAULT 0,   -- CA net (hors annulées)
+    served        INTEGER NOT NULL DEFAULT 0,
+    cancelled     INTEGER NOT NULL DEFAULT 0,
+    items         JSONB   NOT NULL DEFAULT '{}',-- { "Plat": { qty, revenue } } (hors annulées)
+    PRIMARY KEY (restaurant_id, day)
+  );
 `;
 
 // Migration pour tables existantes
@@ -65,6 +79,51 @@ async function resolveRestoId(req) {
   throw new AppError("Aucun restaurant associé à ce compte", 400);
 }
 
+// Purge des commandes servies/annulées de plus de 15 jours, APRÈS avoir cumulé
+// leurs stats dans qr_order_daily (rétention à vie des chiffres). DELETE … RETURNING
+// puis agrégation en mémoire = atomique, aucun double comptage possible.
+// Throttlé à 1×/6 h par restaurant pour ne pas peser sur chaque requête.
+const RETENTION_DAYS = 15;
+const lastPurge = new Map();
+async function purgeAndRollup(restoId) {
+  const now = Date.now();
+  if (now - (lastPurge.get(restoId) || 0) < 6 * 3600 * 1000) return;
+  lastPurge.set(restoId, now);
+  try {
+    const { rows } = await query(
+      `DELETE FROM qr_orders
+         WHERE restaurant_id = $1 AND status IN ('servi','annule')
+           AND created_at < NOW() - INTERVAL '${RETENTION_DAYS} days'
+       RETURNING to_char(created_at, 'YYYY-MM-DD') AS day, total, status`,
+      [restoId]
+    );
+    if (!rows.length) return;
+    const byDay = new Map();
+    for (const r of rows) {
+      const d = byDay.get(r.day) || { orders: 0, revenue: 0, served: 0, cancelled: 0 };
+      d.orders++;
+      if (r.status === "annule") d.cancelled++;
+      else { d.served++; d.revenue += Number(r.total) || 0; }
+      byDay.set(r.day, d);
+    }
+    for (const [day, d] of byDay) {
+      await query(
+        `INSERT INTO qr_order_daily (restaurant_id, day, orders, revenue, served, cancelled)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (restaurant_id, day) DO UPDATE SET
+           orders    = qr_order_daily.orders    + EXCLUDED.orders,
+           revenue   = qr_order_daily.revenue   + EXCLUDED.revenue,
+           served    = qr_order_daily.served    + EXCLUDED.served,
+           cancelled = qr_order_daily.cancelled + EXCLUDED.cancelled`,
+        [restoId, day, d.orders, d.revenue, d.served, d.cancelled]
+      );
+    }
+    logger.info("Purge commandes >15j + cumul stats", { restoId, purged: rows.length, days: byDay.size });
+  } catch (e) {
+    logger.warn("purgeAndRollup a échoué", { error: e.message });
+  }
+}
+
 // Re-tarification SERVEUR (jamais confiance au prix envoyé par le client, même
 // restaurateur : évite la falsification des chiffres de CA).
 async function repriceItems(restoId, items) {
@@ -76,9 +135,12 @@ async function repriceItems(restoId, items) {
   const safeItems = items.map(it => {
     const m = priceMap.get(String(it.id));
     const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+    // Tag personne par ligne (Personne 1, 2… d'une commande groupée), borné 1..50.
+    const pn = parseInt(it.convive_num, 10);
+    const convive_num = (Number.isInteger(pn) && pn > 0 && pn <= 50) ? pn : undefined;
     return m
-      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty, options: it.options || undefined }
-      : { id: it.id || null, name: String(it.name || "Article").slice(0, 120), price: 0, qty };
+      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty, options: it.options || undefined, options_label: it.options_label || undefined, convive_num }
+      : { id: it.id || null, name: String(it.name || "Article").slice(0, 120), price: 0, qty, convive_num };
   });
   const total = safeItems.reduce((s, it) => s + it.price * it.qty, 0);
   return { safeItems, total };
@@ -146,9 +208,16 @@ export const listOrders = asyncHandler(async (req, res) => {
 
   // Récupérer le restaurant du restaurateur connecté (anti-IDOR)
   const restoId = await resolveRestoId(req);
+  purgeAndRollup(restoId); // purge paresseuse (non bloquante)
 
   const params = [restoId];
   const conds  = ["restaurant_id = $1"];
+
+  // scope : "active" = en attente + en cours (liste de service) ;
+  //         "archive" = servies + annulées (onglet Archives). Défaut : tout.
+  const { scope } = req.query;
+  if (scope === "active") conds.push(`status IN ('en_attente','en_cours')`);
+  else if (scope === "archive") conds.push(`status IN ('servi','annule')`);
 
   if (status) { params.push(status); conds.push(`status = $${params.length}`); }
   if (date_from) { params.push(date_from); conds.push(`created_at >= $${params.length}`); }
@@ -183,19 +252,40 @@ export const getStats = asyncHandler(async (req, res) => {
     year:  "created_at >= NOW() - INTERVAL '365 days'",
   };
   const periodCond = PERIOD_SQL[period] || PERIOD_SQL.month;
+  const DAYS = { day: 1, week: 7, month: 30, year: 365 };
+  const nDays = DAYS[period] || 30;
 
-  // Totaux
-  const { rows: [totals] } = await query(
+  purgeAndRollup(restoId); // purge paresseuse (non bloquante)
+
+  // Totaux LIVE (lignes encore présentes). CA net = hors annulées.
+  const { rows: [live] } = await query(
     `SELECT
-       COUNT(*)                                   AS total_orders,
-       COALESCE(SUM(total), 0)                   AS total_revenue,
-       COALESCE(AVG(total), 0)                   AS avg_order,
-       COUNT(*) FILTER (WHERE status='servi')    AS served,
-       COUNT(*) FILTER (WHERE status='annule')   AS cancelled
+       COUNT(*)                                                   AS total_orders,
+       COALESCE(SUM(total) FILTER (WHERE status <> 'annule'), 0) AS total_revenue,
+       COUNT(*) FILTER (WHERE status='servi')                    AS served,
+       COUNT(*) FILTER (WHERE status='annule')                   AS cancelled
      FROM qr_orders
      WHERE restaurant_id = $1 AND ${periodCond}`,
     [restoId]
   );
+  // Cumul des jours déjà purgés (disjoint des lignes vives → simple addition).
+  const { rows: [roll] } = await query(
+    `SELECT COALESCE(SUM(orders),0) AS orders, COALESCE(SUM(revenue),0) AS revenue,
+            COALESCE(SUM(served),0) AS served, COALESCE(SUM(cancelled),0) AS cancelled
+     FROM qr_order_daily
+     WHERE restaurant_id = $1 AND day >= (CURRENT_DATE - make_interval(days => $2::int))`,
+    [restoId, nDays]
+  );
+  const total_orders  = Number(live.total_orders) + Number(roll.orders);
+  const total_revenue = Number(live.total_revenue) + Number(roll.revenue);
+  const served        = Number(live.served) + Number(roll.served);
+  const cancelled     = Number(live.cancelled) + Number(roll.cancelled);
+  const nonCancelled  = Math.max(1, total_orders - cancelled);
+  const totals = {
+    total_orders, total_revenue,
+    avg_order: Math.round(total_revenue / nonCancelled),
+    served, cancelled,
+  };
 
   // Plats les plus commandés — agrégat JSONB
   const { rows: topItems } = await query(
@@ -212,18 +302,30 @@ export const getStats = asyncHandler(async (req, res) => {
     [restoId]
   );
 
-  // Évolution journalière
-  const { rows: dailyRevenue } = await query(
-    `SELECT
-       DATE(created_at)            AS day,
-       COUNT(*)                    AS orders,
-       COALESCE(SUM(total), 0)    AS revenue
+  // Évolution journalière — lignes vives (net) + jours cumulés, fusionnées par date.
+  const { rows: liveDaily } = await query(
+    `SELECT to_char(DATE(created_at),'YYYY-MM-DD') AS day,
+            COUNT(*)::int AS orders,
+            COALESCE(SUM(total),0)::int AS revenue
      FROM qr_orders
      WHERE restaurant_id = $1 AND ${periodCond} AND status != 'annule'
-     GROUP BY DATE(created_at)
-     ORDER BY day ASC`,
+     GROUP BY DATE(created_at)`,
     [restoId]
   );
+  const { rows: rollDaily } = await query(
+    `SELECT to_char(day,'YYYY-MM-DD') AS day, orders::int AS orders, revenue::int AS revenue
+     FROM qr_order_daily
+     WHERE restaurant_id = $1 AND day >= (CURRENT_DATE - make_interval(days => $2::int))`,
+    [restoId, nDays]
+  );
+  const dayMap = new Map();
+  for (const d of [...liveDaily, ...rollDaily]) {
+    const cur = dayMap.get(d.day) || { day: d.day, orders: 0, revenue: 0 };
+    cur.orders += Number(d.orders) || 0;
+    cur.revenue += Number(d.revenue) || 0;
+    dayMap.set(d.day, cur);
+  }
+  const dailyRevenue = [...dayMap.values()].sort((a, b) => a.day.localeCompare(b.day));
 
   return ok(res, {
     totals,

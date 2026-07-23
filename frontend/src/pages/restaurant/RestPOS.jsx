@@ -187,19 +187,29 @@ export default function RestPOS() {
 
   // ── Panier ──
   // Chaque entrée du panier a une clé : id du plat, ou id::signature-des-options
-  const cartItems = Object.entries(cart).map(([key, v]) => ({ key, ...v }));
+  const cartItems = Object.entries(cart).map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => (a.person || 0) - (b.person || 0)); // regroupe par personne
   const cartCount = cartItems.reduce((s, { qty }) => s + qty, 0);
   const cartTotal = cartItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
   // Quantité totale d'un plat, toutes variantes d'options confondues (badge de la carte)
   const itemQty = (id) => cartItems.reduce((s, e) => s + (e.item.id === id ? e.qty : 0), 0);
 
-  const keyFor = (item, choices) => choices
-    ? `${item.id}::${choices.cuisson || ""}|${(choices.accompagnements || []).slice().sort().join(",")}`
-    : String(item.id);
+  const keyFor = (item, choices, person) => {
+    const base = choices
+      ? `${item.id}::${choices.cuisson || ""}|${(choices.accompagnements || []).slice().sort().join(",")}`
+      : String(item.id);
+    return person ? `${base}##p${person}` : base;
+  };
+  // Ajoute au panier en étiquetant la ligne à la personne active (Personne N).
+  // Un seul panier, plusieurs personnes → un seul envoi = une seule commande.
   const addLine = useCallback((item, choices) => {
-    const key = keyFor(item, choices);
-    setCart(p => ({ ...p, [key]: { item, choices: choices || null, qty: (p[key]?.qty || 0) + 1 } }));
-  }, []);
+    const person = (tableLabel && persNum) ? Number(persNum) : null;
+    const key = keyFor(item, choices, person);
+    setCart(p => ({ ...p, [key]: { item, choices: choices || null, person, qty: (p[key]?.qty || 0) + 1 } }));
+  }, [tableLabel, persNum]);
+  // Incrémente une ligne existante par sa clé (conserve sa personne).
+  const incLine = useCallback((key) =>
+    setCart(p => p[key] ? ({ ...p, [key]: { ...p[key], qty: p[key].qty + 1 } }) : p), []);
   const removeLine = useCallback((key) =>
     setCart(p => {
       const qty = (p[key]?.qty || 0) - 1;
@@ -221,10 +231,10 @@ export default function RestPOS() {
     setOptItem(null);
   };
   const clearCart = () => { setCart({}); setClientName(""); setOrderNote(""); setTableLabel(""); setPersNum(""); setLastOrder(null); setError(""); };
-  // Garde la table, passe à la personne suivante (prise de commande table par table)
-  const nextPerson = () => {
-    setPersNum(String((parseInt(persNum, 10) || 0) + 1));
-    setCart({}); setClientName(""); setOrderNote(""); setLastOrder(null); setError("");
+  // Retardataires : garde la table, repart d'un panier vide pour une commande
+  // additionnelle (elle s'ajoute à la même note de table).
+  const sameTableNewOrder = () => {
+    setCart({}); setClientName(""); setOrderNote(""); setPersNum(""); setLastOrder(null); setError("");
   };
 
   // ── Charger les commandes pour la vue par table ──
@@ -305,13 +315,15 @@ export default function RestPOS() {
     if (cartItems.length === 0) return;
     setSubmitting(true); setError("");
     try {
-      const items = cartItems.map(({ item, qty, choices }) => ({
+      // Chaque ligne porte sa personne (convive_num) → un seul envoi groupé, mais
+      // additions séparées possibles à l'impression du reçu.
+      const items = cartItems.map(({ item, qty, choices, person }) => ({
         id: item.id, name: item.name, price: item.price, qty,
         ...(choices && choicesLabel(choices) ? { options: choices, options_label: choicesLabel(choices) } : {}),
+        ...(person ? { convive_num: person } : {}),
       }));
       const result = await ordersService.createManual({
         table_label:  tableLabel  || undefined,
-        convive_num:  (tableLabel && persNum) ? Number(persNum) : undefined,
         client_name:  clientName  || undefined,
         note:         orderNote   || undefined,
         items,
@@ -373,10 +385,10 @@ export default function RestPOS() {
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
         {lastOrder.table_label && (
-          <button onClick={nextPerson}
+          <button onClick={sameTableNewOrder}
             style={{ padding: "12px 20px", borderRadius: 10, border: `1px solid ${P}`, background: "white",
               color: "#C47D1A", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-            Table {lastOrder.table_label} · personne suivante
+            Table {lastOrder.table_label} · commande en plus
           </button>
         )}
         <button onClick={clearCart}
@@ -430,11 +442,12 @@ export default function RestPOS() {
             style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
         </div>
 
-        {/* Sélecteur personne (addition séparée) — utile quand une table est choisie */}
+        {/* Personne active : les plats ajoutés sont étiquetés à cette personne
+            (addition séparée). On peut changer de personne sans envoyer entre-temps. */}
         {tableLabel && (
           <div style={{ position: "relative", width: 120 }}>
             <select value={persNum} onChange={e => setPersNum(e.target.value)}
-              title="Rattacher la commande à une personne pour l'addition séparée"
+              title="Les plats ajoutés seront étiquetés à cette personne. Changez de personne et continuez : tout part en une seule commande."
               style={{ width: "100%", background: persNum ? P : "rgba(255,255,255,.1)",
                 border: "0.5px solid rgba(255,255,255,.2)", borderRadius: 8, padding: "7px 24px 7px 10px",
                 fontSize: 13, color: persNum ? "#1a1000" : "white", fontWeight: persNum ? 700 : 400,
@@ -718,7 +731,7 @@ export default function RestPOS() {
               cartItems={cartItems} cartTotal={cartTotal} cartCount={cartCount}
               tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
               setOrderNote={setOrderNote} error={error} submitting={submitting}
-              onSend={sendOrder} onClear={clearCart} onRemoveLine={removeLine} onAddLine={addLine}
+              onSend={sendOrder} onClear={clearCart} onRemoveLine={removeLine} onIncLine={incLine}
               showNote={showNote} setShowNote={setShowNote} P={P} PL={PL}
               DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
             />
@@ -751,7 +764,7 @@ export default function RestPOS() {
                 tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
                 setOrderNote={setOrderNote} error={error} submitting={submitting}
                 onSend={() => { sendOrder(); setShowCart(false); }} onClear={clearCart}
-                onRemoveLine={removeLine} onAddLine={addLine} showNote={showNote} setShowNote={setShowNote}
+                onRemoveLine={removeLine} onIncLine={incLine} showNote={showNote} setShowNote={setShowNote}
                 P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
               />
             </motion.div>
@@ -891,7 +904,7 @@ export default function RestPOS() {
 
 /* ── Panneau panier (réutilisé mobile + desktop) ──────────────────────────── */
 function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, orderNote, setOrderNote,
-  error, submitting, onSend, onClear, onRemoveLine, onAddLine, showNote, setShowNote,
+  error, submitting, onSend, onClear, onRemoveLine, onIncLine, showNote, setShowNote,
   P, PL, DARK, BG, BORDER, MUTED, FONT, S, fmt }) {
   return (
     <>
@@ -924,8 +937,17 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ShoppingBag size={30} /></div>
             Aucun article sélectionné
           </div>
-        ) : cartItems.map(({ key, item, qty, choices }) => (
-          <div key={key} style={{ display: "flex", alignItems: "center", gap: 8,
+        ) : cartItems.map(({ key, item, qty, choices, person }, idx) => (
+          <div key={key}>
+            {person && (idx === 0 || cartItems[idx - 1].person !== person) && (
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: P, textTransform: "uppercase",
+                letterSpacing: "0.5px", margin: "8px 0 2px" }}>Personne {person}</div>
+            )}
+            {!person && (idx === 0 || cartItems[idx - 1].person) && cartItems.some(c => c.person) && (
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                letterSpacing: "0.5px", margin: "8px 0 2px" }}>Sans personne</div>
+            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8,
             padding: "8px 0", borderBottom: `0.5px solid ${BG}` }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.name}</div>
@@ -941,7 +963,7 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
                 <Minus size={10} color={MUTED} />
               </button>
               <span style={{ fontSize: 13, fontWeight: 700, color: DARK, minWidth: 16, textAlign: "center" }}>{qty}</span>
-              <button onClick={() => onAddLine(item, choices)}
+              <button onClick={() => onIncLine(key)}
                 style={{ width: 26, height: 26, borderRadius: "50%", border: "none",
                   background: P, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Plus size={10} color="white" />
@@ -950,6 +972,7 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
             <div style={{ fontSize: 12, fontWeight: 600, color: DARK, minWidth: 60, textAlign: "right" }}>
               {fmt(item.price * qty)}
             </div>
+          </div>
           </div>
         ))}
       </div>

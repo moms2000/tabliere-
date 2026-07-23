@@ -44,6 +44,7 @@ export function DashboardTab({ event }) {
   if (!d) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
 
   const r = d.reservations || {}, o = d.orders || {}, v = d.vip || {}, c = d.cash || {}, servers = d.servers || [];
+  const byTable = (d.by_table || []).filter(t => (t.paid || 0) > 0 || (t.reservations || 0) > 0);
   const stat = (label, val, color = DARK, sub) => (
     <div style={{ flex: 1, minWidth: 130, background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
       <div style={{ fontSize: 11.5, color: MUTED }}>{label}</div>
@@ -159,6 +160,26 @@ export function DashboardTab({ event }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))", gap: 12 }}>
+        {/* Montant payé par salon */}
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+            <Crown size={15} color={P} /> Payé par salon
+          </div>
+          {byTable.length === 0 ? <Empty text="Aucun salon payé pour l'instant." /> :
+            byTable.map(t => (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 9px", background: "#fafafa", borderRadius: 8, marginBottom: 5 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, color: DARK, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+                    {t.kind === "vip" && <Crown size={12} color={P} />}{t.label}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: MUTED }}>
+                    {fmtInt(t.reservations)} résa · acompte {fmt(t.deposits)}{(t.bottles_paid || 0) > 0 ? ` · bouteilles ${fmt(t.bottles_paid)}` : ""}
+                  </div>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: GREEN }}>{fmt(t.paid)}</div>
+              </div>
+            ))}
+        </Card>
         {/* Performance serveurs (Phase 4) */}
         <Card>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: DARK, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>

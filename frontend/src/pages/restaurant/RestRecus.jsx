@@ -19,14 +19,19 @@ export default function RestRecus() {
   const [printing, setPrinting] = useState(false);
   const [splitMode, setSplitMode] = useState("total"); // total | equal | person
   const [splitN, setSplitN]       = useState(2);        // nombre de personnes
-  const [assign, setAssign]       = useState({});       // itemId -> personne (1..N)
+  const [assign, setAssign]       = useState({});       // itemId -> [personnes]
+  const [names,  setNames]        = useState({});       // numéro -> prénom (optionnel)
 
   const openSplit = (detail) => {
     setAssign({});
+    const initNames = {};
+    (detail.convives || []).forEach(c => { if (c.name) initNames[c.num] = c.name; });
+    setNames(initNames);
     setSplitN(Math.max(2, (detail.convives || []).length || 2));
     setSplitMode("total");
     setPrintNote(detail);
   };
+  const personName = (p) => (names[p] && names[p].trim()) ? names[p].trim() : `Personne ${p}`;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,7 +89,7 @@ export default function RestRecus() {
         const amount = i === n ? d.total - share * (n - 1) : share;
         await printTicket({
           title: restoName, subtitle: "TablièreCI",
-          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}Part ${i}/${n}`,
+          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}${personName(i)} (${i}/${n})`,
           dateText: dateNow(), lines: itemsToLines(liveItems(d)),
           totalLabel: `A PAYER (PART ${i}/${n})`, totalText: fmtMoney(amount), footer: "Merci pour votre visite",
         });
@@ -129,7 +134,7 @@ export default function RestRecus() {
         });
         await printTicket({
           title: restoName, subtitle: "TablièreCI",
-          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}Personne ${p}`,
+          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}${personName(p)}`,
           dateText: dateNow(), lines,
           totalLabel: "A PAYER", totalText: fmtMoney(sub), footer: "Merci pour votre visite",
         });
@@ -252,6 +257,13 @@ export default function RestRecus() {
                       <button onClick={() => setSplitN(n => Math.min(20, n + 1))} style={stepBtn}>+</button>
                     </div>
                   </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6, marginBottom: 12 }}>
+                    {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
+                      <input key={p} value={names[p] || ""} onChange={e => setNames(n => ({ ...n, [p]: e.target.value }))}
+                        placeholder={`Personne ${p} (prénom)`}
+                        style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", fontSize: 12.5, outline: "none", fontFamily: FONT, background: BG, width: "100%", boxSizing: "border-box" }} />
+                    ))}
+                  </div>
                   <div style={{ textAlign: "center", fontSize: 13, color: MUTED, marginBottom: 14 }}>
                     Chacun paie <strong style={{ color: P, fontSize: 15 }}>{fmtMoney(Math.floor(printNote.total / splitN))}</strong>
                   </div>
@@ -272,6 +284,13 @@ export default function RestRecus() {
                       <span style={{ fontSize: 17, fontWeight: 800, color: DARK, minWidth: 22, textAlign: "center" }}>{splitN}</span>
                       <button onClick={() => setSplitN(n => Math.min(12, n + 1))} style={stepBtn}>+</button>
                     </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6, marginBottom: 10 }}>
+                    {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
+                      <input key={p} value={names[p] || ""} onChange={e => setNames(n => ({ ...n, [p]: e.target.value }))}
+                        placeholder={`Personne ${p} (prénom)`}
+                        style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", fontSize: 12.5, outline: "none", fontFamily: FONT, background: BG, width: "100%", boxSizing: "border-box" }} />
+                    ))}
                   </div>
                   <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>Touche un numéro pour attribuer le plat. Plusieurs numéros = plat partagé à parts égales.</div>
                   <div style={{ maxHeight: 210, overflowY: "auto", marginBottom: 12 }}>
@@ -298,7 +317,7 @@ export default function RestRecus() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                     {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
                       <span key={p} style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 9px", borderRadius: 20, background: PL, color: "#C47D1A" }}>
-                        Pers. {p}: {fmtMoney(Math.round(personTotal(printNote, p, assign)))}
+                        {personName(p)}: {fmtMoney(Math.round(personTotal(printNote, p, assign)))}
                       </span>
                     ))}
                   </div>

@@ -405,6 +405,10 @@ export const doCheckin = asyncHandler(async (req, res) => {
   await assertEventActive(req.eventScope);
   const undo = req.body?.undo === true;
 
+  // Annuler un pointage = réservé à l'organisateur (req.staff absent). Le staff
+  // d'accueil peut pointer les arrivées mais pas les annuler (protection serveur).
+  if (undo && req.staff) throw new AppError("Seul l'organisateur peut annuler un pointage.", 403);
+
   if (undo) {
     const { rows: [resa] } = await query(
       `UPDATE event_reservations

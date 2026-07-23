@@ -878,11 +878,15 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
                         <KeyRound size={14} /> Code
                       </button>
                     )}
-                    <button onClick={() => undo(r)}
-                      style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
-                        background: "#e8e8e8", color: DARK, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                      <X size={14} /> Annuler
-                    </button>
+                    {/* Annuler le pointage = réservé à l'organisateur. Le staff (staffToken)
+                        peut pointer les arrivées mais pas les annuler. */}
+                    {!staffToken && (
+                      <button onClick={() => undo(r)}
+                        style={{ display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 8, padding: "8px 13px",
+                          background: "#e8e8e8", color: DARK, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                        <X size={14} /> Annuler
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button onClick={() => setConfirm({ resa: r, count: r.party_size || 1, byScan: false })}

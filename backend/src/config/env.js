@@ -68,13 +68,28 @@ export const env = {
 // refuse de démarrer si elle n'a pas été surchargée en production.
 // (JWT_REFRESH_SECRET n'est pas encore utilisé pour signer → simple avertissement,
 //  pour ne pas crasher un déploiement où seule JWT_SECRET est définie.)
-if (env.isProd) {
+// On refuse de démarrer avec le secret par défaut DÈS QUE l'on n'est pas en
+// développement local explicite (NODE_ENV === "development"). Ainsi un staging,
+// un preview ou un NODE_ENV mal positionné ne peut pas tourner avec un secret
+// public (qui permettrait de forger des tokens admin — cf. maintenanceGuard qui
+// fait confiance au claim role du token).
+// « Dev local » = NODE_ENV dev/test ET base de données locale. Ainsi un déploiement
+// distant qui aurait oublié NODE_ENV=production (donc retombé sur "development")
+// reste protégé : dès que la base n'est pas localhost, le garde-fou s'applique.
+const dbIsLocal = /localhost|127\.0\.0\.1/.test(env.DATABASE_URL || "");
+const isDevLocal = (env.NODE_ENV === "development" || env.NODE_ENV === "test") && dbIsLocal;
+if (!isDevLocal) {
   if (env.JWT_SECRET === "change_me_in_production_super_secret_key") {
     throw new Error(
-      "[SÉCURITÉ] JWT_SECRET par défaut détecté en production. " +
+      "[SÉCURITÉ] JWT_SECRET par défaut détecté hors développement. " +
       "Définissez une valeur aléatoire forte (>=32 octets) dans les variables d'environnement avant de démarrer."
     );
   }
+  if (String(env.JWT_SECRET).length < 32) {
+    throw new Error("[SÉCURITÉ] JWT_SECRET trop court (< 32 caractères). Utilisez une valeur aléatoire forte.");
+  }
+  // Le refresh partage aujourd'hui JWT_SECRET pour signer ; si un refresh secret
+  // distinct est défini un jour, il ne doit jamais rester à sa valeur par défaut.
   if (env.JWT_REFRESH_SECRET === "change_me_refresh_secret_key") {
     console.warn("[SÉCURITÉ] JWT_REFRESH_SECRET utilise la valeur par défaut — à définir avant utilisation.");
   }

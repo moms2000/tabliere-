@@ -481,6 +481,19 @@ export const updateUser = asyncHandler(async (req, res) => {
   const ALLOWED_ROLES = ["client", "restaurateur", "organisateur", "admin"];
   if (role && !ALLOWED_ROLES.includes(role)) throw new AppError("Rôle invalide", 400);
 
+  // ANTI-ESCALADE : la promotion au rôle "admin" ne passe JAMAIS par l'API
+  // (vecteur de persistance en cas de compromission d'un seul token admin).
+  if (role === "admin") throw new AppError("La promotion administrateur doit se faire manuellement en base.", 403);
+
+  // Protection des autres administrateurs : un admin ne peut pas modifier
+  // (email/mot de passe/rôle) le compte d'un AUTRE admin. Il peut seulement
+  // gérer son propre compte admin ou des comptes non-admin.
+  const { rows: [target] } = await query("SELECT role FROM users WHERE id = $1", [req.params.id]);
+  if (!target) return notFound(res, "Utilisateur introuvable");
+  if (target.role === "admin" && String(req.params.id) !== String(req.user.id)) {
+    throw new AppError("Impossible de modifier le compte d'un autre administrateur.", 403);
+  }
+
   const updates = [];
   const values  = [];
 
@@ -671,6 +684,7 @@ export const batchRestaurantStatus = asyncHandler(async (req, res) => {
   const { ids, status } = req.body;
   const allowed = ["actif", "suspendu", "en_attente"];
   if (!Array.isArray(ids) || ids.length === 0) throw new AppError("ids[] requis", 400);
+  if (ids.length > 200) throw new AppError("Trop d'éléments (200 max par lot).", 400); // garde-fou anti-gel massif
   if (!allowed.includes(status)) throw new AppError(`Statut invalide : ${allowed.join(", ")}`, 400);
 
   const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");
@@ -692,6 +706,7 @@ export const batchUserStatus = asyncHandler(async (req, res) => {
   const { ids, status } = req.body;
   const allowed = ["actif", "bloque", "suspendu"];
   if (!Array.isArray(ids) || ids.length === 0) throw new AppError("ids[] requis", 400);
+  if (ids.length > 200) throw new AppError("Trop d'éléments (200 max par lot).", 400); // garde-fou anti-gel massif
   if (!allowed.includes(status)) throw new AppError(`Statut invalide : ${allowed.join(", ")}`, 400);
 
   const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");

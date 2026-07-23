@@ -32,7 +32,9 @@ export async function initPushNotifications() {
     // Notification cliquée → ouvrir la route éventuelle
     FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
       const route = event?.notification?.data?.route;
-      if (route) window.location.href = route;
+      // Uniquement des chemins INTERNES relatifs ("/...") — jamais une URL absolue
+      // ni protocole-relative ("//evil.com") → pas d'open redirect via un payload.
+      if (route && route.startsWith("/") && !route.startsWith("//")) window.location.href = route;
     });
   } catch (_) {
     // plugin absent (web) ou erreur — ignorer silencieusement

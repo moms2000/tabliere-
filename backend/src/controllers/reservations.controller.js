@@ -93,6 +93,16 @@ export const create = asyncHandler(async (req, res) => {
   const effectiveRestoId = restaurant_id || req.user.restaurant_id;
   if (!effectiveRestoId) throw new AppError("restaurant_id requis", 400);
 
+  // ANTI-ÉLÉVATION : un restaurateur/staff ne peut créer une réservation QUE dans
+  // son propre restaurant. Sans ce contrôle, en passant un restaurant_id arbitraire
+  // dans le corps, il pourrait créer des réservations (walk-in "confirmé") chez un
+  // concurrent. Un client garde le droit de réserver dans n'importe quel resto publié.
+  if (req.user.role === "restaurateur" && String(effectiveRestoId) !== String(req.user.restaurant_id)) {
+    const { rows: [own] } = await query(
+      "SELECT 1 FROM restaurants WHERE id = $1 AND owner_id = $2", [effectiveRestoId, req.user.id]);
+    if (!own) throw new AppError("Accès refusé à ce restaurant", 403);
+  }
+
   // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
     "SELECT id, name, capacity, status, auto_confirm, seating_duration, is_published FROM restaurants WHERE id = $1",

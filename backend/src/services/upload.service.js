@@ -30,6 +30,9 @@ export async function uploadImage(file, { folder = "tabliereci/misc", moderation
     resource_type: "image",
     overwrite: false,
     unique_filename: true,
+    // Cloudinary REJETTE tout ce qui n'est pas réellement décodable dans ces
+    // formats → bloque un SVG/HTML/JS déguisé en "data:image/png" (XSS stocké).
+    allowed_formats: ["png", "jpg", "jpeg", "webp", "gif", "avif"],
   };
   if (moderation) options.moderation = moderation; // ex: "aws_rek" (Instants)
   if (tags)       options.tags = tags;

@@ -164,27 +164,18 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (!resto.qr_active) throw new AppError("Les commandes QR ne sont pas activées pour ce restaurant", 403);
 
   // SÉCURITÉ : ne JAMAIS faire confiance au prix envoyé par le client (route publique).
-  // On récupère le prix réel des plats depuis la carte du restaurant.
-  const ids = [...new Set(items.map(it => it.id).filter(Boolean))];
-  const { rows: menuRows } = ids.length
-    ? await query("SELECT id, name, price FROM menu_items WHERE restaurant_id = $1 AND id = ANY($2)", [restaurant_id, ids])
-    : { rows: [] };
-  const priceMap = new Map(menuRows.map(m => [String(m.id), m]));
-  const safeItems = items.map(it => {
-    const m = priceMap.get(String(it.id));
-    const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
-    return m
-      ? { id: m.id, name: m.name, price: Number(m.price) || 0, qty, options: it.options || undefined }
-      : { id: it.id || null, name: String(it.name || "Article").slice(0, 120), price: 0, qty }; // inconnu → 0 (jamais le prix client)
-  });
-  const total = safeItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+  // On réutilise repriceItems (prix re-tarifés serveur) — qui préserve aussi le
+  // tag convive_num PAR LIGNE, pour que les commandes QR groupées (Personne 1/2/3)
+  // alimentent correctement les additions séparées.
+  const { safeItems, total } = await repriceItems(restaurant_id, items);
 
+  const cut = (v, n) => (v == null ? null : String(v).slice(0, n));
   const { rows: [order] } = await query(
     `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, client_email, items, total, note)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING *`,
-    [restaurant_id, table_label || null, client_name || null, client_phone || null,
-     (client_email && String(client_email).trim().toLowerCase()) || null,
-     JSON.stringify(safeItems), total, note || null]
+    [restaurant_id, cut(table_label, 50), cut(client_name, 255), cut(client_phone, 50),
+     (client_email && String(client_email).trim().toLowerCase().slice(0, 255)) || null,
+     JSON.stringify(safeItems), total, cut(note, 2000)]
   );
 
   // Alimente la NOTE de la table (identique sur toutes les plateformes). Chaque
@@ -208,7 +199,7 @@ export const listOrders = asyncHandler(async (req, res) => {
 
   // Récupérer le restaurant du restaurateur connecté (anti-IDOR)
   const restoId = await resolveRestoId(req);
-  purgeAndRollup(restoId); // purge paresseuse (non bloquante)
+  purgeAndRollup(restoId).catch(() => {}); // purge paresseuse (non bloquante)
 
   const params = [restoId];
   const conds  = ["restaurant_id = $1"];

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { authService } from "../services/auth.service.js";
+import { clearUserScopedData } from "../services/api.js";
 import { initPushNotifications } from "../services/push.js";
 
 const AuthContext = createContext(null);
@@ -48,7 +49,10 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const login = useCallback(async (email, password, remember = true) => {
-    localStorage.removeItem("tci_staff"); // jamais de marqueur staff résiduel sur une connexion normale
+    // Purge TOUTE trace du compte précédent (favoris, session staff, état d'accueil…)
+    // AVANT de charger le nouveau → empêche la bascule/fuite entre comptes.
+    clearUserScopedData();
+    localStorage.removeItem("tci_staff");
     const u = await authService.login(email, password, remember);
     setUser(u);
     return u;
@@ -56,6 +60,7 @@ export function AuthProvider({ children }) {
 
   // Connexion staff (identifiant + PIN) → session restreinte aux onglets autorisés
   const loginStaff = useCallback(async (login_id, pin) => {
+    clearUserScopedData(); // idem : pas d'héritage du compte précédent
     const { staff, restaurant } = await authService.staffLogin(login_id, pin);
     const u = {
       role: "restaurateur", is_staff: true, name: staff.name,
@@ -68,9 +73,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem("tci_staff");
-    await authService.logout();
+    // On coupe l'UI et on purge IMMÉDIATEMENT (avant l'appel réseau qui peut
+    // traîner au cold start) : jamais d'ancien compte affiché pendant le logout.
     setUser(null);
+    localStorage.removeItem("tci_staff");
+    clearUserScopedData();
+    try { await authService.logout(); } catch { /* best-effort */ }
   }, []);
 
   const register = useCallback(async (data) => {

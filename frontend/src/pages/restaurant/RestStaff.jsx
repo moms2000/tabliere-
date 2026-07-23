@@ -134,7 +134,7 @@ export default function RestStaff() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setModal(false)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
-            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
                 width: "min(440px, 94vw)", maxHeight: "88vh", overflowY: "auto", background: "white",
                 borderRadius: 18, zIndex: 61, padding: 22, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>

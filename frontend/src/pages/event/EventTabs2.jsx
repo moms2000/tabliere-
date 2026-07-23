@@ -10,6 +10,8 @@ import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../compone
 import { eventsService, eventOpsService } from "../../services/events.service.js";
 import QrScanner from "../../components/QrScanner.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
+import { printTicket, fmtMoney } from "../../utils/printer.js";
+import { Receipt, Printer } from "lucide-react";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
 const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
@@ -763,6 +765,87 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
         })}
         {shown.length === 0 && <Empty text="Aucune commande pour le moment. Les commandes des salons apparaîtront ici en temps réel." />}
       </div>
+    </div>
+  );
+}
+
+// ── Reçus par salon (événement) — pour serveurs / caisse / organisateur ──────
+export function EventRecusTab({ eventId, staffToken, onAuthError, eventName }) {
+  const [orders, setOrders] = useState(null);
+  const [printing, setPrinting] = useState(false);
+  const load = () => eventOpsService.listOrders(eventId, staffToken)
+    .then(d => setOrders(d?.orders || []))
+    .catch(e => { if (!onAuthError?.(e)) console.error(e); });
+  useEffect(() => { load(); const id = setInterval(load, 12000); return () => clearInterval(id); }, [eventId]);
+
+  if (!orders) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED, fontFamily: FONT }}>Chargement…</div>;
+
+  const groups = {};
+  orders.filter(o => o.status !== "annule").forEach(o => {
+    const k = o.table_label || "Sans salon";
+    if (!groups[k]) groups[k] = { label: k, kind: o.table_kind, orders: [], total: 0 };
+    groups[k].orders.push(o); groups[k].total += (o.total || 0);
+  });
+  const list = Object.values(groups).sort((a, b) => b.total - a.total);
+  const dateNow = () => new Date().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+
+  const printTable = async (g) => {
+    const lines = [];
+    g.orders.forEach(o => (Array.isArray(o.items) ? o.items : []).forEach(it => {
+      const qty = it.qty || 1;
+      lines.push({ left: `${qty}x ${it.name}`, right: it.price ? fmtMoney(it.price * qty) : "" });
+    }));
+    setPrinting(true);
+    try {
+      await printTicket({
+        title: eventName || "Événement", subtitle: "TablièreCI",
+        tableLabel: g.label, dateText: dateNow(), lines,
+        totalLabel: "TOTAL", totalText: fmtMoney(g.total), footer: "Merci pour votre présence",
+      });
+    } catch (_) { alert("Impression impossible sur cet appareil."); }
+    setPrinting(false);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12, fontFamily: FONT }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 13.5, color: MUTED }}>Un reçu par salon (bouteilles commandées).</div>
+        <button onClick={load} style={{ border: `1px solid ${BORDER}`, background: "white", borderRadius: 9, padding: "6px 12px",
+          cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontFamily: FONT }}>
+          <RefreshCw size={13} /> Actualiser
+        </button>
+      </div>
+      {list.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>
+          <Receipt size={34} style={{ opacity: 0.3, marginBottom: 10 }} /><div>Aucune commande pour l'instant.</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+          {list.map(g => (
+            <div key={g.label} style={{ background: "white", border: `0.5px solid ${BORDER}`, borderRadius: 12, padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: DARK, display: "flex", alignItems: "center", gap: 5 }}>
+                  {g.kind === "vip" && <Crown size={13} color={P} />}{g.label}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: P }}>{fmt(g.total)}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: DARK, lineHeight: 1.6, marginBottom: 10, maxHeight: 150, overflowY: "auto" }}>
+                {g.orders.flatMap(o => (Array.isArray(o.items) ? o.items : [])).map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span><strong>{it.qty || 1}×</strong> {it.name}</span>
+                    <span style={{ color: MUTED }}>{it.price ? fmt(it.price * (it.qty || 1)) : ""}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => printTable(g)} disabled={printing}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0",
+                  borderRadius: 9, border: "none", background: "#1e2e28", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                <Printer size={14} /> Imprimer le reçu
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

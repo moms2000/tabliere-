@@ -10,7 +10,7 @@ import {
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { useToast } from "../../components/ui/Toast.jsx";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
-import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab, OrdersTab, CategoriesTab } from "./EventTabs2.jsx";
+import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab, OrdersTab, CategoriesTab, EventRecusTab } from "./EventTabs2.jsx";
 import EventFloorPlan from "./EventFloorPlan.jsx";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
@@ -79,6 +79,7 @@ export default function EventEditor() {
           ["resa", "Réservations"],
           ["checkin", "Check-in"],
           ["orders", "Commandes"],
+          ["recus", "Reçus"],
           ["promoters", "Promoteurs"],
           ["staff", "Staff"],
         ].map(([k, label]) => (
@@ -100,6 +101,7 @@ export default function EventEditor() {
       {tab === "resa"      && <ResaTab event={event} tables={tables} />}
       {tab === "checkin"   && <CheckinTab eventId={event.id} />}
       {tab === "orders"    && <OrdersTab eventId={event.id} />}
+      {tab === "recus"     && <EventRecusTab eventId={event.id} eventName={event.name} />}
       {tab === "promoters" && <PromotersTab event={event} />}
       {tab === "staff"     && <StaffTab event={event} tables={tables} onChanged={load} />}
     </motion.div>

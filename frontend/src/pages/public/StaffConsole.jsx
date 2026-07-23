@@ -5,7 +5,7 @@ import { LogOut, Wine, RefreshCw, Check, X, BadgeCheck, Armchair, Crown, Plus, M
 import { eventStaffService, eventOpsService } from "../../services/events.service.js";
 import { clearTokens } from "../../services/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { CheckinTab } from "../event/EventTabs2.jsx";
+import { CheckinTab, EventRecusTab } from "../event/EventTabs2.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
 
 const P = "#E8A045", DARK = "#1E2E28", BG = "#F8F5EF", BORDER = "#E4DFD8", MUTED = "#9BA89F", GREEN = "#1D9E75";
@@ -54,10 +54,12 @@ export default function StaffConsole() {
   const canCheckin = role === "all" || role === "checkin";
   const canOrders = role === "all" || role === "bar" || role === "caisse";
   const canServe = role === "all" || role === "serveur";
+  const canRecus = canServe || canOrders; // serveur / bar / caisse / all
   const tabs = [
     canServe && ["service", "Mes tables"],
     canCheckin && ["checkin", "Check-in"],
     canOrders && ["orders", "Commandes"],
+    canRecus && ["recus", "Reçus"],
   ].filter(Boolean);
   const active = tabs.find(t => t[0] === tab) ? tab : tabs[0]?.[0];
 
@@ -90,6 +92,7 @@ export default function StaffConsole() {
         {active === "service" && <ServerBoard eventId={session.event.id} token={session.token} onExpire={onExpire} />}
         {active === "checkin" && <CheckinTab eventId={session.event.id} staffToken={session.token} onAuthError={onExpire} />}
         {active === "orders"  && <OrdersBoard eventId={session.event.id} token={session.token} onExpire={onExpire} />}
+        {active === "recus"   && <EventRecusTab eventId={session.event.id} staffToken={session.token} onAuthError={onExpire} eventName={session.event?.name} />}
       </div>
     </div>
   );

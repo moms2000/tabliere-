@@ -45,6 +45,50 @@ async function priceItems(eventId, rawItems) {
   return { items, total };
 }
 
+// Colonnes du forfait bouteilles (migration paresseuse, idempotente)
+let forfaitColsReady = false;
+async function ensureForfaitCols() {
+  if (forfaitColsReady) return;
+  for (const sql of [
+    `ALTER TABLE event_orders ADD COLUMN IF NOT EXISTS gross_total NUMERIC(12,2)`,
+    `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS bottles_included BOOLEAN DEFAULT FALSE`,
+  ]) { try { await query(sql); } catch (_) {} }
+  forfaitColsReady = true;
+}
+
+// Forfait bouteilles : si le salon a bottles_included, son PRIX est un crédit
+// bouteilles. On ne facture que le SURPLUS au-delà du crédit déjà consommé.
+// gross = valeur catalogue de la commande. Renvoie { billable, included, credit, remaining, forfait }.
+async function forfaitBilling(tableId, gross) {
+  if (!tableId) return { billable: gross, included: 0, credit: 0, remaining: 0, forfait: false };
+  const { rows: [t] } = await query("SELECT price, bottles_included FROM event_tables WHERE id = $1", [tableId]);
+  if (!t || !t.bottles_included) return { billable: gross, included: 0, credit: 0, remaining: 0, forfait: false };
+  const credit = Number(t.price) || 0;
+  const { rows: [{ consumed }] } = await query(
+    "SELECT COALESCE(SUM(gross_total),0)::float AS consumed FROM event_orders WHERE table_id = $1 AND status <> 'annule'", [tableId]);
+  const before = Number(consumed) || 0;
+  const billable = Math.max(0, (before + gross) - credit) - Math.max(0, before - credit);
+  return {
+    billable: Math.round(billable),
+    included: Math.round(gross - billable),
+    credit,
+    remaining: Math.max(0, Math.round(credit - (before + gross))),
+    forfait: true,
+  };
+}
+
+// État du crédit forfait d'une table (pour l'affichage : crédit, consommé, restant).
+async function tableCreditInfo(tableId) {
+  if (!tableId) return { forfait: false };
+  const { rows: [t] } = await query("SELECT price, bottles_included FROM event_tables WHERE id = $1", [tableId]);
+  if (!t || !t.bottles_included) return { forfait: false };
+  const credit = Number(t.price) || 0;
+  const { rows: [{ consumed }] } = await query(
+    "SELECT COALESCE(SUM(gross_total),0)::float AS consumed FROM event_orders WHERE table_id = $1 AND status <> 'annule'", [tableId]);
+  const used = Number(consumed) || 0;
+  return { forfait: true, credit, consumed: Math.round(used), remaining: Math.max(0, Math.round(credit - used)) };
+}
+
 // Le propriétaire (req.user, pas de req.staff) a tous les droits.
 // Un staff est limité à son rôle : 'all' partout, 'bar' = commandes, 'checkin' = entrées.
 function assertStaffRole(req, allowed) {
@@ -78,7 +122,8 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (event.status !== "publie" || !event.bottles_enabled) throw new AppError("Les commandes ne sont pas ouvertes", 400);
   if (event.order_closed) throw new AppError("Événement terminé — les commandes sont clôturées.", 410);
 
-  const { items, total } = await priceItems(event.id, b.items);
+  await ensureForfaitCols();
+  const { items, total: gross } = await priceItems(event.id, b.items);
 
   let tableLabel = null, tableId = null, guestName = b.guest_name || null;
 
@@ -102,13 +147,14 @@ export const createOrder = asyncHandler(async (req, res) => {
     }
   }
 
+  const bill = await forfaitBilling(tableId, gross);
   const { rows: [order] } = await query(
-    `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, note)
-     VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, gross_total, note)
+     VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING *`,
-    [event.id, tableId, tableLabel, guestName, JSON.stringify(items), total, b.note || null]
+    [event.id, tableId, tableLabel, guestName, JSON.stringify(items), bill.billable, gross, b.note || null]
   );
-  return created(res, { order }, "Commande envoyée");
+  return created(res, { order: { ...order, forfait: bill.forfait, included: bill.included, credit_remaining: bill.remaining } }, "Commande envoyée");
 });
 
 // ── POST /event-orders/verify-pin — le responsable déverrouille la commande ───
@@ -185,7 +231,8 @@ export const listMyOrders = asyncHandler(async (req, res) => {
      ORDER BY created_at DESC LIMIT 100`,
     [d.event_id, d.table_id]
   );
-  return ok(res, { orders: rows, table_label: d.table_label || null });
+  const forfait = await tableCreditInfo(d.table_id);
+  return ok(res, { orders: rows, table_label: d.table_label || null, forfait });
 });
 
 // ── GET /event-server/tables — les tables assignées au serveur connecté ───────
@@ -199,7 +246,7 @@ export const listServerTables = asyncHandler(async (req, res) => {
   const params = staffId ? [req.eventScope, staffId] : [req.eventScope];
   const { rows: tables } = await query(
     `SELECT t.id, t.label, t.kind, t.capacity, t.price, t.min_order, t.zone, t.status,
-            t.server_id, srv.name AS server_name,
+            t.bottles_included, t.server_id, srv.name AS server_name,
             r.id AS resa_id, r.ref AS resa_ref, r.party_size, r.arrived_size, r.checked_in_at,
             COALESCE(r.guest_name, u.full_name) AS client_name
      FROM event_tables t
@@ -215,14 +262,25 @@ export const listServerTables = asyncHandler(async (req, res) => {
   let ordersByTable = {};
   if (tableIds.length) {
     const { rows: ords } = await query(
-      `SELECT id, ref, table_id, items, total, status, note, created_at
+      `SELECT id, ref, table_id, items, total, gross_total, status, note, created_at
        FROM event_orders WHERE event_id = $1 AND table_id = ANY($2)
        ORDER BY created_at DESC LIMIT 200`,
       [req.eventScope, tableIds]
     );
     for (const o of ords) (ordersByTable[o.table_id] ||= []).push(o);
   }
-  const enriched = tables.map(t => ({ ...t, orders: ordersByTable[t.id] || [] }));
+  const enriched = tables.map(t => {
+    const orders = ordersByTable[t.id] || [];
+    let forfait = null;
+    if (t.bottles_included) {
+      const credit = Number(t.price) || 0;
+      const consumed = orders
+        .filter(o => o.status !== "annule")
+        .reduce((s, o) => s + (Number(o.gross_total) || 0), 0);
+      forfait = { credit, consumed: Math.round(consumed), remaining: Math.max(0, Math.round(credit - consumed)) };
+    }
+    return { ...t, orders, forfait };
+  });
   // Carte des bouteilles (pour composer une commande côté serveur)
   const { rows: bottles } = await query(
     "SELECT id, name, category, price FROM event_bottles WHERE event_id = $1 AND is_active = TRUE ORDER BY category, position, name",
@@ -256,15 +314,17 @@ export const createServerOrder = asyncHandler(async (req, res) => {
     throw new AppError("Cette table ne vous est pas assignée", 403);
   }
 
-  const { items, total } = await priceItems(event.id, b.items);
+  await ensureForfaitCols();
+  const { items, total: gross } = await priceItems(event.id, b.items);
   const guestName = req.staff?.name ? `Serveur ${req.staff.name}` : (b.guest_name || null);
+  const bill = await forfaitBilling(table.id, gross);
   const { rows: [order] } = await query(
-    `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, note)
-     VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO event_orders (ref, event_id, table_id, table_label, guest_name, items, total, gross_total, note)
+     VALUES ('EVO-' || LPAD(nextval('event_order_ref_seq')::text, 4, '0'), $1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING *`,
-    [event.id, table.id, table.label, guestName, JSON.stringify(items), total, b.note || null]
+    [event.id, table.id, table.label, guestName, JSON.stringify(items), bill.billable, gross, b.note || null]
   );
-  return created(res, { order }, "Commande envoyée");
+  return created(res, { order: { ...order, forfait: bill.forfait, included: bill.included, credit_remaining: bill.remaining } }, "Commande envoyée");
 });
 
 // ── PATCH /event-orders/:id/status ────────────────────────────────────────────

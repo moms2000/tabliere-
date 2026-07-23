@@ -463,6 +463,9 @@ async function runEventsPhase2Migration() {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS deposit_message TEXT`,                 // consigne personnalisée
     // Acompte fixe optionnel par table (prioritaire sur le %)
     `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS deposit_amount INTEGER DEFAULT 0`,
+    // Forfait bouteilles : le prix du salon devient un crédit bouteilles ; seul le surplus est facturé
+    `ALTER TABLE event_tables ADD COLUMN IF NOT EXISTS bottles_included BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE event_orders  ADD COLUMN IF NOT EXISTS gross_total NUMERIC(12,2)`,
     // Suivi d'acompte + réservations invité (sans compte, créées manuellement)
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS guest_email   VARCHAR(255)`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_amount INTEGER`,

@@ -252,8 +252,9 @@ export const createManualOrder = asyncHandler(async (req, res) => {
      JSON.stringify(safeItems), total, note || null]
   );
 
-  // Alimente la NOTE de la table (même logique que le QR client)
-  await attachOrderToSession({ restoId, tableLabel: table_label, items: safeItems, source: "server" });
+  // Alimente la NOTE de la table (même logique que le QR client). Le terminal peut
+  // preciser le numero de la personne (Personne 1, 2…) pour les additions separees.
+  await attachOrderToSession({ restoId, tableLabel: table_label, items: safeItems, source: "server", conviveNum: req.body.convive_num || null });
 
   logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
   return created(res, { order }, "Commande créée");

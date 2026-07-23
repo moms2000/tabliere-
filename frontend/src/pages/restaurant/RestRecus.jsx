@@ -60,7 +60,7 @@ export default function RestRecus() {
     try {
       await printTicket({
         title: restoName, subtitle: "TablièreCI",
-        tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}${c.name || "Convive " + c.num}`,
+        tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}${c.name || "Personne " + c.num}`,
         dateText: dateNow(), lines: itemsToLines(mine),
         totalLabel: "À PAYER", totalText: fmtMoney(sub), footer: "Merci pour votre visite",
       });
@@ -94,18 +94,43 @@ export default function RestRecus() {
     setPrinting(false);
   };
 
-  // Chacun ses plats : on imprime un reçu par personne, avec les plats qu'on lui a attribués
-  const printPerson = async (d, n, assignMap) => {
+  // Personnes attribuées à un plat (par défaut la personne 1). Un plat attribué à
+  // plusieurs personnes est partagé à parts égales entre elles.
+  const getAssignees = (map, it) => (map[it.id] && map[it.id].length ? map[it.id] : [1]);
+  const toggleAssign = (itemId, p) => setAssign(a => {
+    const cur = a[itemId] && a[itemId].length ? a[itemId] : [1];
+    let next = cur.includes(p) ? cur.filter(x => x !== p) : [...cur, p];
+    if (next.length === 0) next = [p]; // toujours au moins une personne
+    return { ...a, [itemId]: next.sort((x, y) => x - y) };
+  });
+  // Part d'une personne (plats partagés comptés au prorata)
+  const personTotal = (d, p, map) =>
+    liveItems(d).reduce((s, it) => {
+      const as = getAssignees(map, it);
+      return as.includes(p) ? s + (Number(it.unit_price) || 0) * it.qty / as.length : s;
+    }, 0);
+
+  // Chacun ses plats : un reçu par personne (plats partagés = portion au prorata)
+  const printPerson = async (d, n, map) => {
     setPrinting(true);
     try {
       for (let p = 1; p <= n; p++) {
-        const mine = liveItems(d).filter(it => (assignMap[it.id] || 1) === p);
+        const mine = liveItems(d).filter(it => getAssignees(map, it).includes(p));
         if (mine.length === 0) continue;
-        const sub = mine.reduce((s, it) => s + (Number(it.unit_price) || 0) * it.qty, 0);
+        let sub = 0;
+        const lines = mine.map(it => {
+          const as = getAssignees(map, it);
+          const portion = Math.round((Number(it.unit_price) || 0) * it.qty / as.length);
+          sub += portion;
+          return {
+            left: `${it.qty}x ${it.name}${it.options_label ? ` (${it.options_label})` : ""}${as.length > 1 ? ` [partage ÷${as.length}]` : ""}`,
+            right: fmtMoney(portion),
+          };
+        });
         await printTicket({
           title: restoName, subtitle: "TablièreCI",
           tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}Personne ${p}`,
-          dateText: dateNow(), lines: itemsToLines(mine),
+          dateText: dateNow(), lines,
           totalLabel: "A PAYER", totalText: fmtMoney(sub), footer: "Merci pour votre visite",
         });
         await new Promise(r => setTimeout(r, 700));
@@ -113,9 +138,6 @@ export default function RestRecus() {
     } catch (_) { alert("Impression impossible sur cet appareil."); }
     setPrinting(false);
   };
-  const personTotal = (d, p, assignMap) =>
-    liveItems(d).filter(it => (assignMap[it.id] || 1) === p)
-      .reduce((s, it) => s + (Number(it.unit_price) || 0) * it.qty, 0);
 
   return (
     <div style={{ fontFamily: FONT, padding: 20, maxWidth: 1000, margin: "0 auto" }}>
@@ -251,7 +273,7 @@ export default function RestRecus() {
                       <button onClick={() => setSplitN(n => Math.min(12, n + 1))} style={stepBtn}>+</button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>Attribue chaque plat à une personne (le numéro).</div>
+                  <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>Touche un numéro pour attribuer le plat. Plusieurs numéros = plat partagé à parts égales.</div>
                   <div style={{ maxHeight: 210, overflowY: "auto", marginBottom: 12 }}>
                     {liveItems(printNote).map(it => (
                       <div key={it.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: `0.5px solid ${BG}` }}>
@@ -260,9 +282,9 @@ export default function RestRecus() {
                         </div>
                         <div style={{ display: "flex", gap: 4 }}>
                           {Array.from({ length: splitN }, (_, k) => k + 1).map(p => {
-                            const on = (assign[it.id] || 1) === p;
+                            const on = getAssignees(assign, it).includes(p);
                             return (
-                              <button key={p} onClick={() => setAssign(a => ({ ...a, [it.id]: p }))}
+                              <button key={p} onClick={() => toggleAssign(it.id, p)}
                                 style={{ width: 26, height: 26, borderRadius: 8, border: `1px solid ${on ? P : BORDER}`, cursor: "pointer",
                                   background: on ? P : "white", color: on ? "#1a1000" : MUTED, fontSize: 12, fontWeight: 700, fontFamily: FONT }}>
                                 {p}
@@ -276,7 +298,7 @@ export default function RestRecus() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                     {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
                       <span key={p} style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 9px", borderRadius: 20, background: PL, color: "#C47D1A" }}>
-                        Pers. {p}: {fmtMoney(personTotal(printNote, p, assign))}
+                        Pers. {p}: {fmtMoney(Math.round(personTotal(printNote, p, assign)))}
                       </span>
                     ))}
                   </div>
@@ -292,7 +314,7 @@ export default function RestRecus() {
                 <button onClick={() => printAll(printNote)} disabled={printing}
                   style={{ width: "100%", padding: "11px 0", borderRadius: 11, border: `0.5px solid ${P}`, background: "white",
                     color: "#C47D1A", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginTop: 12 }}>
-                  Reçus par convive (commandes QR)
+                  Imprimer par personne (répartition déjà faite)
                 </button>
               )}
 

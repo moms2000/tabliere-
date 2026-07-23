@@ -17,6 +17,16 @@ export default function RestRecus() {
   const [loading, setLoading]   = useState(true);
   const [printNote, setPrintNote] = useState(null);
   const [printing, setPrinting] = useState(false);
+  const [splitMode, setSplitMode] = useState("total"); // total | equal | person
+  const [splitN, setSplitN]       = useState(2);        // nombre de personnes
+  const [assign, setAssign]       = useState({});       // itemId -> personne (1..N)
+
+  const openSplit = (detail) => {
+    setAssign({});
+    setSplitN(Math.max(2, (detail.convives || []).length || 2));
+    setSplitMode("total");
+    setPrintNote(detail);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +73,49 @@ export default function RestRecus() {
       if (has) { await printConvive(d, c); await new Promise(r => setTimeout(r, 700)); }
     }
   };
+  const liveItems = (d) => (d.items || []).filter(i => i.status !== "cancelled");
+
+  // Parts égales : chacun paie le même montant (le dernier absorbe l'arrondi)
+  const printEqual = async (d, n) => {
+    const share = Math.floor(d.total / n);
+    setPrinting(true);
+    try {
+      for (let i = 1; i <= n; i++) {
+        const amount = i === n ? d.total - share * (n - 1) : share;
+        await printTicket({
+          title: restoName, subtitle: "TablièreCI",
+          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}Part ${i}/${n}`,
+          dateText: dateNow(), lines: itemsToLines(liveItems(d)),
+          totalLabel: `A PAYER (PART ${i}/${n})`, totalText: fmtMoney(amount), footer: "Merci pour votre visite",
+        });
+        await new Promise(r => setTimeout(r, 700));
+      }
+    } catch (_) { alert("Impression impossible sur cet appareil."); }
+    setPrinting(false);
+  };
+
+  // Chacun ses plats : on imprime un reçu par personne, avec les plats qu'on lui a attribués
+  const printPerson = async (d, n, assignMap) => {
+    setPrinting(true);
+    try {
+      for (let p = 1; p <= n; p++) {
+        const mine = liveItems(d).filter(it => (assignMap[it.id] || 1) === p);
+        if (mine.length === 0) continue;
+        const sub = mine.reduce((s, it) => s + (Number(it.unit_price) || 0) * it.qty, 0);
+        await printTicket({
+          title: restoName, subtitle: "TablièreCI",
+          tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}Personne ${p}`,
+          dateText: dateNow(), lines: itemsToLines(mine),
+          totalLabel: "A PAYER", totalText: fmtMoney(sub), footer: "Merci pour votre visite",
+        });
+        await new Promise(r => setTimeout(r, 700));
+      }
+    } catch (_) { alert("Impression impossible sur cet appareil."); }
+    setPrinting(false);
+  };
+  const personTotal = (d, p, assignMap) =>
+    liveItems(d).filter(it => (assignMap[it.id] || 1) === p)
+      .reduce((s, it) => s + (Number(it.unit_price) || 0) * it.qty, 0);
 
   return (
     <div style={{ fontFamily: FONT, padding: 20, maxWidth: 1000, margin: "0 auto" }}>
@@ -114,10 +167,10 @@ export default function RestRecus() {
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setPrintNote({ session, items, total, convives })}
+                  <button onClick={() => openSplit({ session, items, total, convives })}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0",
                       borderRadius: 9, border: "none", background: "#1e2e28", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-                    <Printer size={14} /> Imprimer
+                    <Printer size={14} /> Partager / Imprimer
                   </button>
                   <button onClick={() => closeNote(session.id)}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 12px", borderRadius: 9,
@@ -143,40 +196,109 @@ export default function RestRecus() {
                 width: "min(380px, 94vw)", maxHeight: "84vh", overflowY: "auto", background: "white",
                 borderRadius: 16, zIndex: 61, padding: 22, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
               <div style={{ fontSize: 17, fontWeight: 800, color: DARK, marginBottom: 2 }}>
-                Imprimer {printNote.session.table_label ? `— Table ${printNote.session.table_label}` : ""}
+                Partager l'addition{printNote.session.table_label ? ` — Table ${printNote.session.table_label}` : ""}
               </div>
-              <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 16 }}>Reçu total ou par convive</div>
-              <button onClick={() => printTotal(printNote)} disabled={printing}
-                style={{ width: "100%", padding: "13px 0", borderRadius: 11, border: "none", background: P,
-                  color: "#1a1000", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginBottom: 16 }}>
-                Reçu total ({fmtMoney(printNote.total)})
-              </button>
-              {(printNote.convives || []).some(c => (printNote.items || []).some(i => i.status !== "cancelled" && i.convive_id === c.id)) && (
+              <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Total {fmtMoney(printNote.total)}</div>
+
+              <div style={{ display: "flex", gap: 6, background: "#F0EDE6", borderRadius: 10, padding: 4, marginBottom: 16 }}>
+                {[["total", "Un seul paie"], ["equal", "Parts égales"], ["person", "Chacun ses plats"]].map(([m, lab]) => (
+                  <button key={m} type="button" onClick={() => setSplitMode(m)}
+                    style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: FONT,
+                      fontSize: 12, fontWeight: splitMode === m ? 700 : 500, lineHeight: 1.2,
+                      background: splitMode === m ? "white" : "transparent", color: splitMode === m ? DARK : MUTED,
+                      boxShadow: splitMode === m ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
+                    {lab}
+                  </button>
+                ))}
+              </div>
+
+              {splitMode === "total" && (
+                <button onClick={() => printTotal(printNote)} disabled={printing}
+                  style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", background: P,
+                    color: "#1a1000", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  Imprimer le reçu total ({fmtMoney(printNote.total)})
+                </button>
+              )}
+
+              {splitMode === "equal" && (
                 <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Par convive</div>
-                  {(printNote.convives || []).map(c => {
-                    const mine = (printNote.items || []).filter(i => i.status !== "cancelled" && i.convive_id === c.id);
-                    if (mine.length === 0) return null;
-                    const sub = mine.reduce((s, i) => s + (Number(i.unit_price) || 0) * i.qty, 0);
-                    return (
-                      <button key={c.id} onClick={() => printConvive(printNote, c)} disabled={printing}
-                        style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "11px 13px",
-                          borderRadius: 11, border: `0.5px solid ${BORDER}`, background: "white", color: DARK,
-                          fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginBottom: 8 }}>
-                        <span>{c.name || `Convive ${c.num}`}</span><span style={{ color: P }}>{fmtMoney(sub)}</span>
-                      </button>
-                    );
-                  })}
-                  <button onClick={() => printAll(printNote)} disabled={printing}
-                    style={{ width: "100%", padding: "11px 0", borderRadius: 11, border: `0.5px solid ${P}`, background: PL,
-                      color: "#C47D1A", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginBottom: 8 }}>
-                    Tout imprimer (un reçu par convive)
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <span style={{ fontSize: 13.5, color: DARK }}>Nombre de personnes</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <button onClick={() => setSplitN(n => Math.max(2, n - 1))} style={stepBtn}>−</button>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: DARK, minWidth: 22, textAlign: "center" }}>{splitN}</span>
+                      <button onClick={() => setSplitN(n => Math.min(20, n + 1))} style={stepBtn}>+</button>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: MUTED, marginBottom: 14 }}>
+                    Chacun paie <strong style={{ color: P, fontSize: 15 }}>{fmtMoney(Math.floor(printNote.total / splitN))}</strong>
+                  </div>
+                  <button onClick={() => printEqual(printNote, splitN)} disabled={printing}
+                    style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", background: P,
+                      color: "#1a1000", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                    Imprimer {splitN} reçus
                   </button>
                 </>
               )}
+
+              {splitMode === "person" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontSize: 13.5, color: DARK }}>Nombre de personnes</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <button onClick={() => setSplitN(n => Math.max(2, n - 1))} style={stepBtn}>−</button>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: DARK, minWidth: 22, textAlign: "center" }}>{splitN}</span>
+                      <button onClick={() => setSplitN(n => Math.min(12, n + 1))} style={stepBtn}>+</button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>Attribue chaque plat à une personne (le numéro).</div>
+                  <div style={{ maxHeight: 210, overflowY: "auto", marginBottom: 12 }}>
+                    {liveItems(printNote).map(it => (
+                      <div key={it.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: `0.5px solid ${BG}` }}>
+                        <div style={{ flex: 1, fontSize: 12.5, color: DARK }}>
+                          {it.qty}× {it.name}{it.options_label ? <span style={{ color: "#C47D1A" }}> ({it.options_label})</span> : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {Array.from({ length: splitN }, (_, k) => k + 1).map(p => {
+                            const on = (assign[it.id] || 1) === p;
+                            return (
+                              <button key={p} onClick={() => setAssign(a => ({ ...a, [it.id]: p }))}
+                                style={{ width: 26, height: 26, borderRadius: 8, border: `1px solid ${on ? P : BORDER}`, cursor: "pointer",
+                                  background: on ? P : "white", color: on ? "#1a1000" : MUTED, fontSize: 12, fontWeight: 700, fontFamily: FONT }}>
+                                {p}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                    {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
+                      <span key={p} style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 9px", borderRadius: 20, background: PL, color: "#C47D1A" }}>
+                        Pers. {p}: {fmtMoney(personTotal(printNote, p, assign))}
+                      </span>
+                    ))}
+                  </div>
+                  <button onClick={() => printPerson(printNote, splitN, assign)} disabled={printing}
+                    style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", background: P,
+                      color: "#1a1000", fontSize: 14.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                    Imprimer les reçus par personne
+                  </button>
+                </>
+              )}
+
+              {(printNote.convives || []).some(c => (printNote.items || []).some(i => i.status !== "cancelled" && i.convive_id === c.id)) && (
+                <button onClick={() => printAll(printNote)} disabled={printing}
+                  style={{ width: "100%", padding: "11px 0", borderRadius: 11, border: `0.5px solid ${P}`, background: "white",
+                    color: "#C47D1A", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT, marginTop: 12 }}>
+                  Reçus par convive (commandes QR)
+                </button>
+              )}
+
               <button onClick={() => setPrintNote(null)}
                 style={{ width: "100%", padding: "11px 0", borderRadius: 11, border: `0.5px solid ${BORDER}`,
-                  background: "white", color: MUTED, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginTop: 4 }}>
+                  background: "white", color: MUTED, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginTop: 10 }}>
                 Fermer
               </button>
             </motion.div>
@@ -186,3 +308,8 @@ export default function RestRecus() {
     </div>
   );
 }
+
+const stepBtn = {
+  width: 30, height: 30, borderRadius: 8, border: "1px solid #E4DFD8", background: "white",
+  color: "#1E2E28", fontSize: 18, fontWeight: 700, cursor: "pointer", lineHeight: 1, fontFamily: FONT,
+};

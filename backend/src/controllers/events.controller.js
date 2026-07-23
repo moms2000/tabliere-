@@ -567,7 +567,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const { event, error } = await ownedEvent(req);
   if (error) return error === "notfound" ? notFound(res, "Événement introuvable") : forbidden(res, "Accès refusé");
   const id = event.id;
-  const [{ rows: [resa] }, { rows: [vip] }, { rows: [orders] }, { rows: topBottles }, { rows: promoters }, { rows: servers }] = await Promise.all([
+  const [{ rows: [resa] }, { rows: [vip] }, { rows: [orders] }, { rows: topBottles }, { rows: promoters }, { rows: servers }, { rows: byTable }] = await Promise.all([
     query(`SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE status='confirme')::int AS confirmed,
               COUNT(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in,
@@ -602,6 +602,17 @@ export const getDashboard = asyncHandler(async (req, res) => {
            LEFT JOIN event_orders o ON o.table_id = t.id AND o.status <> 'annule'
            WHERE s.event_id = $1 AND s.role IN ('serveur','all')
            GROUP BY s.id, s.name ORDER BY revenue DESC`, [id]).catch(() => ({ rows: [] })),
+    // Montant payé PAR SALON : acomptes des réservations confirmées + bouteilles payées
+    query(`SELECT t.id, t.label, t.kind, t.price::int AS price,
+              (SELECT COUNT(*)::int FROM event_reservations r
+                 WHERE r.table_id = t.id AND r.status = 'confirme') AS reservations,
+              (SELECT COALESCE(SUM(r.deposit_amount),0)::int FROM event_reservations r
+                 WHERE r.table_id = t.id AND r.status = 'confirme') AS deposits,
+              (SELECT COALESCE(SUM(o.total),0)::int FROM event_orders o
+                 WHERE o.table_id = t.id AND o.status = 'paye') AS bottles_paid
+           FROM event_tables t
+           WHERE t.event_id = $1 AND t.is_active = TRUE
+           ORDER BY (t.kind = 'vip') DESC, t.label`, [id]).catch(() => ({ rows: [] })),
   ]);
 
   // ── Réconciliation caisse ────────────────────────────────────────────────
@@ -630,5 +641,6 @@ export const getDashboard = asyncHandler(async (req, res) => {
   return ok(res, {
     event: { id: event.id, name: event.name, slug: event.slug, starts_at: event.starts_at, capacity, entry_price: entryPrice },
     reservations: resa, vip, orders, top_bottles: topBottles, promoters, servers, cash,
+    by_table: (byTable || []).map(t => ({ ...t, paid: (t.deposits || 0) + (t.bottles_paid || 0) })),
   });
 });

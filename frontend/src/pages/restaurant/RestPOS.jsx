@@ -735,7 +735,7 @@ export default function RestPOS() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setOptItem(null)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
                 width: "min(360px, 92vw)", maxHeight: "80vh", overflowY: "auto", background: "white",
                 borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
@@ -807,7 +807,7 @@ export default function RestPOS() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setPrintNote(null)}
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
                 width: "min(360px, 92vw)", maxHeight: "82vh", overflowY: "auto", background: "white",
                 borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>

@@ -285,11 +285,25 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 });
 
 // ── GET /event-checkin?event_id= — liste des arrivées (organisateur/staff) ────
+// Colonnes du solde encaissé au check-in (migration paresseuse, idempotente)
+let balanceColsReady = false;
+async function ensureBalanceCols() {
+  if (balanceColsReady) return;
+  for (const sql of [
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS balance_amount NUMERIC(12,2)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS balance_method VARCHAR(30)`,
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS balance_paid_at TIMESTAMPTZ`,
+  ]) { try { await query(sql); } catch (_) {} }
+  balanceColsReady = true;
+}
+
 export const listCheckin = asyncHandler(async (req, res) => {
   assertStaffRole(req, ["checkin"]);
+  await ensureBalanceCols();
   const { rows } = await query(
     `SELECT r.id, r.ref, r.party_size, r.arrived_size, r.status, r.checked_in_at, r.order_pin, r.promoter_code,
             r.special_request, r.created_at,
+            r.deposit_amount, r.balance_amount, r.balance_method, r.balance_paid_at,
             COALESCE(r.guest_name, u.full_name) AS client_name,
             COALESCE(r.guest_phone, u.phone)    AS client_phone,
             r.table_id,
@@ -439,6 +453,23 @@ export const doCheckin = asyncHandler(async (req, res) => {
   if (!resa) return notFound(res, "Réservation introuvable");
   if (resa.table_id) await syncTableStatus(resa.id, true);
   return ok(res, { reservation: resa }, "Arrivée confirmée");
+});
+
+// ── POST /event-checkin/:resaId/balance — encaisser le solde à l'entrée ───────
+export const recordBalance = asyncHandler(async (req, res) => {
+  assertStaffRole(req, ["checkin"]);
+  await ensureBalanceCols();
+  const amount = Math.max(0, Math.round(Number(req.body?.amount) || 0));
+  const method = req.body?.method ? String(req.body.method).slice(0, 30) : null;
+  const { rows: [resa] } = await query(
+    `UPDATE event_reservations
+       SET balance_amount = $1, balance_method = $2, balance_paid_at = NOW(), updated_at = NOW()
+     WHERE id = $3 AND event_id = $4 AND status = 'confirme'
+     RETURNING id, ref, deposit_amount, balance_amount, balance_method, balance_paid_at`,
+    [amount, method, req.params.resaId, req.eventScope]
+  );
+  if (!resa) return notFound(res, "Réservation introuvable");
+  return ok(res, { reservation: resa }, "Solde enregistré");
 });
 
 // ── POST /event-checkin/by-ref — pointer via QR (ref scannée) ─────────────────

@@ -468,6 +468,8 @@ async function runEventsPhase2Migration() {
     `ALTER TABLE event_orders  ADD COLUMN IF NOT EXISTS gross_total NUMERIC(12,2)`,
     // Suivi d'acompte + réservations invité (sans compte, créées manuellement)
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS guest_email   VARCHAR(255)`,
+    // Réservation invité en libre-service : pièce d'identité fournie par le client
+    `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS guest_id_number VARCHAR(40)`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_amount INTEGER`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_method VARCHAR(30)`,
     `ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS deposit_ref    VARCHAR(80)`,

@@ -98,6 +98,58 @@ export const createEventReservation = asyncHandler(async (req, res) => {
   return created(res, { reservation: resa }, "Demande envoyée — en attente de votre acompte");
 });
 
+// ── POST /event-reservations/guest — réserver SANS COMPTE (public) ───────────
+// Le client fournit nom, pièce d'identité, WhatsApp et e-mail (tous obligatoires).
+// La réservation reste 'en_attente' ; dès que l'organisateur confirme l'acompte,
+// le client reçoit par WhatsApp et e-mail le lien vers son QR code. On l'incite
+// tout de même à créer un compte (côté frontend) pour garder ses réservations.
+export const createGuestReservation = asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  if (!b.slug && !b.event_id) throw new AppError("Événement requis", 400);
+  const { rows: [event] } = await query(
+    `SELECT * FROM events WHERE ${b.slug ? "slug = $1" : "id = $1"}`, [b.slug || b.event_id]
+  );
+  if (!event) return notFound(res, "Événement introuvable");
+  if (event.status !== "publie") throw new AppError("Cet événement n'accepte pas encore de réservations", 400);
+  if (!b.table_id) throw new AppError("Veuillez choisir un salon ou une table", 400);
+
+  // Champs invité OBLIGATOIRES
+  const name  = String(b.guest_name || "").trim();
+  const idnum = String(b.guest_id_number || "").trim();
+  const phone = String(b.guest_phone || "").trim();
+  const email = String(b.guest_email || "").trim().toLowerCase();
+  if (name.length < 2)  throw new AppError("Nom et prénoms requis", 400);
+  if (idnum.length < 3) throw new AppError("Numéro d'identifiant requis", 400);
+  if (!/^[0-9+][0-9\s().-]{6,24}$/.test(phone)) throw new AppError("Numéro WhatsApp invalide", 400);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError("Adresse e-mail invalide", 400);
+
+  const partySize = Math.min(100, Math.max(1, parseInt(b.party_size, 10) || 1));
+  const promoter = b.promoter_code ? String(b.promoter_code).trim().toUpperCase().slice(0, 30) : null;
+  const sReq = b.special_request ? String(b.special_request).slice(0, 500) : null;
+
+  const resa = await withTransaction(async (client) => {
+    const t = await loadTableForReservation(client, b.table_id, event.id, partySize);
+    const deposit = depositFor(event, t);
+    // client_id NULL = invité (jamais rattaché à un compte partagé). Attribution de
+    // la table seulement à la confirmation de l'acompte (premier payé, premier servi).
+    const { rows: [r] } = await client.query(
+      `INSERT INTO event_reservations
+         (ref, event_id, client_id, table_id, party_size, guest_name, guest_id_number,
+          guest_phone, guest_email, special_request, promoter_code, deposit_amount, status, is_manual)
+       VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
+               $1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'en_attente', FALSE)
+       RETURNING id, ref, status, deposit_amount`,
+      [event.id, t.id, partySize, name.slice(0, 120), idnum.slice(0, 40),
+       phone.slice(0, 30), email.slice(0, 200), sReq, promoter, deposit]
+    );
+    return r;
+  });
+
+  notificationQueue.add("event_resa_pending", { reservationId: resa.id });
+  return created(res, { reservation: { ref: resa.ref } },
+    "Demande enregistrée. Dès que l'organisateur confirme votre acompte, vous recevrez par WhatsApp et e-mail le lien vers votre QR code.");
+});
+
 // ── POST /event-reservations/manual — réservation créée par l'organisateur ───
 export const createManualReservation = asyncHandler(async (req, res) => {
   const b = req.body || {};

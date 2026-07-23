@@ -272,6 +272,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   await assertEventActive(req.eventScope);
   const status = req.body?.status;
   if (!ORDER_STATUSES.includes(status)) throw new AppError("Statut invalide", 400);
+  // Annuler une commande = réservé à l'organisateur (req.staff absent). Le staff
+  // bar/caisse peut servir/encaisser mais pas annuler (protection serveur).
+  if (status === "annule" && req.staff) throw new AppError("Seul l'organisateur peut annuler une commande.", 403);
   const { rows: [order] } = await query(
     "UPDATE event_orders SET status = $1, updated_at = NOW() WHERE id = $2 AND event_id = $3 RETURNING *",
     [status, req.params.id, req.eventScope]

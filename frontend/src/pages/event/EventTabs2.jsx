@@ -733,7 +733,8 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
                 <div style={{ display: "flex", gap: 6 }}>
                   {o.status === "en_attente" && <button onClick={() => setStatus(o, "servi")} style={oBtn(GREEN)}>Servi</button>}
                   {(o.status === "en_attente" || o.status === "servi") && <button onClick={() => setStatus(o, "paye")} style={oBtn("#185FA5")}>Payé</button>}
-                  {o.status !== "annule" && o.status !== "paye" && <button onClick={() => setStatus(o, "annule")} style={oGhost}>Annuler</button>}
+                  {/* Annuler une commande = réservé à l'organisateur (staffToken absent) */}
+                  {!staffToken && o.status !== "annule" && o.status !== "paye" && <button onClick={() => setStatus(o, "annule")} style={oGhost}>Annuler</button>}
                 </div>
               </div>
             </div>

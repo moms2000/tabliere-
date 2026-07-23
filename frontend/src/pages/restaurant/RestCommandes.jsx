@@ -168,28 +168,40 @@ export default function RestCommandes() {
   const [editOrder,    setEditOrder]    = useState(null);
   const [editCart,     setEditCart]     = useState({});
   const [editNote,     setEditNote]     = useState("");
+  // Pagination + commandes actives (pour les KPI et l'alarme, indépendamment de l'onglet)
+  const PAGE_SIZE = 20;
+  const [page,         setPage]         = useState(1);
+  const [totalPages,   setTotalPages]   = useState(1);
+  const [activeOrders, setActiveOrders] = useState([]); // en attente + en cours
+  const [exporting,    setExporting]    = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.resto_id) return;
     try {
-      const [restoData, ordersData, statsData] = await Promise.all([
+      // scope selon l'onglet : Commandes = actives (en attente/en cours) ;
+      // Archives = servies/annulées (purgées après 15 j côté serveur).
+      const scope = activeTab === "archives" ? "archive" : "active";
+      const [restoData, statsData, activeData, listData] = await Promise.all([
         restaurantsService.getManage(user.resto_id),
-        ordersService.list({ limit: 100, ...(statusFilter ? { status: statusFilter } : {}) }),
         ordersService.getStats({ period }).catch(() => null),
+        ordersService.list({ scope: "active", limit: 100 }), // KPI + alarme, tous onglets
+        ordersService.list({ scope, page, limit: PAGE_SIZE, ...(statusFilter ? { status: statusFilter } : {}) }),
       ]);
       const r = restoData.restaurant || {};
       setRestoName(r.name || "");
       setRestoSlug(r.slug || user.resto_slug || "");
       setQrActive(r.qr_active || false);
       setTables(r.tables || []);
-      const list = ordersData.data || [];
-      setOrders(list);
-      // Détection des NOUVELLES commandes → alarme 30 s + vibration
-      const ids = list.map(o => o.id);
+      setOrders(listData.data || []);
+      setTotalPages(listData.pagination?.totalPages || 1);
+      // Commandes actives (indépendantes de la pagination) → KPI + détection alarme
+      const act = activeData.data || [];
+      setActiveOrders(act);
+      const ids = act.map(o => o.id);
       if (seenRef.current === null) {
         seenRef.current = new Set(ids); // 1er chargement : on mémorise sans sonner
       } else {
-        const hasNew = list.some(o => o.status === "en_attente" && !seenRef.current.has(o.id));
+        const hasNew = act.some(o => o.status === "en_attente" && !seenRef.current.has(o.id));
         seenRef.current = new Set(ids);
         if (hasNew && soundRef.current) playOrderAlarm();
       }
@@ -202,7 +214,10 @@ export default function RestCommandes() {
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [user?.resto_id, user?.resto_slug, period, statusFilter]);
+  }, [user?.resto_id, user?.resto_slug, period, statusFilter, activeTab, page]);
+
+  // Repartir à la page 1 quand on change d'onglet ou de filtre.
+  useEffect(() => { setPage(1); }, [activeTab, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
   // Rafraîchissement automatique (pour recevoir les commandes + déclencher l'alarme)
@@ -216,6 +231,48 @@ export default function RestCommandes() {
   };
 
   const refresh = async () => { setRefreshing(true); await load(); };
+
+  // Export des commandes archivées (Excel ou PDF). Les archives couvrent les
+  // 15 derniers jours ; au-delà, seules les statistiques cumulées subsistent.
+  const exportOrders = async (kind) => {
+    setExporting(true);
+    try {
+      const res = await ordersService.list({ scope: "archive", limit: 1000, ...(statusFilter ? { status: statusFilter } : {}) });
+      const rows = res.data || [];
+      const flat = rows.map(o => ({
+        Date:     fmtDate(o.created_at),
+        Table:    o.table_label || "",
+        Statut:   STATUS_COLORS[o.status]?.label || o.status,
+        Total:    o.total || 0,
+        Articles: (o.items || []).map(it => `${it.qty}x ${it.name}`).join(", "),
+      }));
+      const stamp = new Date().toISOString().slice(0, 10);
+      const fname = `commandes-${(restoName || "resto").replace(/\s+/g, "-").toLowerCase()}-${stamp}`;
+      if (kind === "xlsx") {
+        const XLSX = await import("xlsx");
+        const ws = XLSX.utils.json_to_sheet(flat.length ? flat : [{ Date: "", Table: "", Statut: "", Total: "", Articles: "" }]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Commandes");
+        XLSX.writeFile(wb, `${fname}.xlsx`);
+      } else {
+        const { jsPDF } = await import("jspdf");
+        const autoTable = (await import("jspdf-autotable")).default;
+        const doc = new jsPDF();
+        doc.setFontSize(14); doc.text(`Commandes — ${restoName || ""}`, 14, 16);
+        doc.setFontSize(9);  doc.text(`Export du ${new Date().toLocaleDateString("fr-FR")} · ${flat.length} commande(s)`, 14, 22);
+        autoTable(doc, {
+          startY: 28,
+          head: [["Date", "Table", "Statut", "Total (F)", "Articles"]],
+          body: flat.map(r => [r.Date, r.Table, r.Statut, fmt(r.Total), r.Articles]),
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [196, 125, 26] },
+          columnStyles: { 4: { cellWidth: 70 } },
+        });
+        doc.save(`${fname}.pdf`);
+      }
+    } catch (e) { console.error(e); }
+    setExporting(false);
+  };
 
   const updateStatus = async (id, status) => {
     stopOrderAlarm(); // agir sur une commande coupe l'alarme
@@ -322,8 +379,8 @@ export default function RestCommandes() {
     </motion.div>
   );
 
-  const pending = orders.filter(o => o.status === "en_attente").length;
-  const inProg  = orders.filter(o => o.status === "en_cours").length;
+  const pending = activeOrders.filter(o => o.status === "en_attente").length;
+  const inProg  = activeOrders.filter(o => o.status === "en_cours").length;
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
@@ -357,8 +414,8 @@ export default function RestCommandes() {
         {[
           { label: "En attente",     val: pending,                             color: "#C47D1A", icon: Clock },
           { label: "En cours",       val: inProg,                              color: "#185FA5", icon: RefreshCw },
-          { label: "Servis",         val: orders.filter(o=>o.status==="servi").length, color: S, icon: CheckCircle },
-          { label: "Total commandes",val: orders.length,                       color: DARK,      icon: ShoppingBag },
+          { label: "Servis (période)", val: stats?.totals?.served ?? 0,          color: S,    icon: CheckCircle },
+          { label: "Total (période)",  val: stats?.totals?.total_orders ?? 0,    color: DARK, icon: ShoppingBag },
         ].map(({ label, val, color, icon: Icon }) => (
           <div key={label} style={{ background: "white", border: `0.5px solid ${BORDER}`,
             borderRadius: 12, padding: "12px 14px" }}>
@@ -372,30 +429,55 @@ export default function RestCommandes() {
       </motion.div>
 
       {/* Onglets */}
-      <motion.div variants={fadeUp} style={{ display: "flex", gap: 4, marginBottom: 14 }}>
-        {["commandes","stats"].map(t => (
+      <motion.div variants={fadeUp} style={{ display: "flex", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
+        {[["commandes","Commandes"],["archives","Archives"],["stats","Statistiques"]].map(([t, label]) => (
           <button key={t} onClick={() => setActiveTab(t)}
             style={{ padding: "7px 16px", borderRadius: 9, border: `0.5px solid ${activeTab===t ? P : BORDER}`,
               background: activeTab===t ? PL : "white",
               color: activeTab===t ? "#C47D1A" : MUTED,
               fontWeight: activeTab===t ? 600 : 400,
               fontSize: 13, cursor: "pointer", fontFamily: FONT }}>
-            {t === "commandes" ? "Commandes" : "Statistiques"}
+            {label}
           </button>
         ))}
-        {/* Filtre statut */}
+        {/* Filtre statut — actives */}
         {activeTab === "commandes" && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-            {["", "en_attente", "en_cours", "servi", "annule"].map(s => (
+            {["", "en_attente", "en_cours"].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
                 style={{ padding: "5px 10px", borderRadius: 8,
                   border: `0.5px solid ${statusFilter===s ? P : BORDER}`,
                   background: statusFilter===s ? PL : "white",
                   color: statusFilter===s ? "#C47D1A" : MUTED,
                   fontSize: 11, cursor: "pointer", fontFamily: FONT }}>
-                {s === "" ? "Tous" : STATUS_COLORS[s]?.label || s}
+                {s === "" ? "Toutes" : STATUS_COLORS[s]?.label || s}
               </button>
             ))}
+          </div>
+        )}
+        {/* Filtre statut + export — archives */}
+        {activeTab === "archives" && (
+          <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+            {["", "servi", "annule"].map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                style={{ padding: "5px 10px", borderRadius: 8,
+                  border: `0.5px solid ${statusFilter===s ? P : BORDER}`,
+                  background: statusFilter===s ? PL : "white",
+                  color: statusFilter===s ? "#C47D1A" : MUTED,
+                  fontSize: 11, cursor: "pointer", fontFamily: FONT }}>
+                {s === "" ? "Toutes" : STATUS_COLORS[s]?.label || s}
+              </button>
+            ))}
+            <button onClick={() => exportOrders("xlsx")} disabled={exporting}
+              style={{ padding: "5px 10px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: "white",
+                color: "#065F46", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+              Excel
+            </button>
+            <button onClick={() => exportOrders("pdf")} disabled={exporting}
+              style={{ padding: "5px 10px", borderRadius: 8, border: `0.5px solid ${BORDER}`, background: "white",
+                color: "#B91C1C", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+              PDF
+            </button>
           </div>
         )}
         {activeTab === "stats" && (
@@ -414,14 +496,18 @@ export default function RestCommandes() {
         )}
       </motion.div>
 
-      {/* ── Onglet commandes ── */}
-      {activeTab === "commandes" && (
+      {/* ── Onglet commandes / archives (même rendu de liste) ── */}
+      {(activeTab === "commandes" || activeTab === "archives") && (
         <motion.div variants={fadeUp}>
           <Card>
-            <SectionHeader title={`${orders.length} commande${orders.length !== 1 ? "s" : ""}`} icon={ShoppingBag} />
+            <SectionHeader
+              title={activeTab === "archives"
+                ? "Archives (servies/annulées, conservées 15 jours)"
+                : `${orders.length} commande${orders.length !== 1 ? "s" : ""} en cours`}
+              icon={ShoppingBag} />
             {orders.length === 0 ? (
               <div style={{ textAlign: "center", padding: "36px 0", color: MUTED, fontSize: 13 }}>
-                Aucune commande pour cette période
+                {activeTab === "archives" ? "Aucune commande archivée" : "Aucune commande en cours"}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -446,32 +532,51 @@ export default function RestCommandes() {
                       </div>
                     </div>
 
-                    {/* Items — avec détails (cuisson, accompagnement, note) */}
+                    {/* Items — regroupés par personne si la commande est étiquetée */}
                     <div style={{ marginBottom: 8 }}>
-                      {(order.items || []).map((it, i) => {
-                        const opts = it.options || {};
-                        const accs = Array.isArray(opts.accompagnements) ? opts.accompagnements
-                          : (opts.accompagnement ? [opts.accompagnement] : []);
-                        const details = it.options_label || [opts.cuisson, ...accs].filter(Boolean).join(" · ");
-                        return (
-                          <div key={i} style={{ fontSize: 12, color: DARK, padding: "3px 0",
-                            borderBottom: i < (order.items.length - 1) ? "0.5px solid #f2f0eb" : "none" }}>
-                            <div>
-                              <strong>{it.qty}×</strong> {it.name}
+                      {(() => {
+                        const all = order.items || [];
+                        const line = (it, i, last) => {
+                          const opts = it.options || {};
+                          const accs = Array.isArray(opts.accompagnements) ? opts.accompagnements
+                            : (opts.accompagnement ? [opts.accompagnement] : []);
+                          const details = it.options_label || [opts.cuisson, ...accs].filter(Boolean).join(" · ");
+                          return (
+                            <div key={i} style={{ fontSize: 12, color: DARK, padding: "3px 0",
+                              borderBottom: !last ? "0.5px solid #f2f0eb" : "none" }}>
+                              <div><strong>{it.qty}×</strong> {it.name}</div>
+                              {details && <div style={{ fontSize: 11, color: P, marginTop: 1 }}>{details}</div>}
+                              {it.note && <div style={{ fontSize: 11, color: MUTED, fontStyle: "italic", marginTop: 1 }}>Note : {it.note}</div>}
                             </div>
-                            {details && (
-                              <div style={{ fontSize: 11, color: P, marginTop: 1 }}>
-                                {details}
+                          );
+                        };
+                        const persons = [...new Set(all.map(it => it.convive_num).filter(Boolean))].sort((a, b) => a - b);
+                        // Pas d'étiquette personne → liste simple (comportement habituel)
+                        if (persons.length === 0) return all.map((it, i) => line(it, i, i === all.length - 1));
+                        // Étiquetée → un bloc par personne, puis les plats sans personne
+                        const noPers = all.filter(it => !it.convive_num);
+                        return (
+                          <>
+                            {persons.map(p => {
+                              const mine = all.filter(it => it.convive_num === p);
+                              return (
+                                <div key={p} style={{ marginBottom: 6 }}>
+                                  <div style={{ fontSize: 10.5, fontWeight: 700, color: P, textTransform: "uppercase",
+                                    letterSpacing: "0.5px", marginBottom: 2 }}>Personne {p}</div>
+                                  {mine.map((it, i) => line(it, `${p}-${i}`, i === mine.length - 1))}
+                                </div>
+                              );
+                            })}
+                            {noPers.length > 0 && (
+                              <div>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+                                  letterSpacing: "0.5px", marginBottom: 2 }}>Table</div>
+                                {noPers.map((it, i) => line(it, `n-${i}`, i === noPers.length - 1))}
                               </div>
                             )}
-                            {it.note && (
-                              <div style={{ fontSize: 11, color: MUTED, fontStyle: "italic", marginTop: 1 }}>
-                                Note : {it.note}
-                              </div>
-                            )}
-                          </div>
+                          </>
                         );
-                      })}
+                      })()}
                     </div>
 
                     {/* Actions statut */}
@@ -509,6 +614,23 @@ export default function RestCommandes() {
                     </div>
                   </motion.div>
                 ))}
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 14 }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: `0.5px solid ${BORDER}`,
+                    background: "white", color: page <= 1 ? BORDER : DARK, fontSize: 12,
+                    cursor: page <= 1 ? "default" : "pointer", fontFamily: FONT }}>
+                  Précédent
+                </button>
+                <span style={{ fontSize: 12, color: MUTED }}>Page {page} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: `0.5px solid ${BORDER}`,
+                    background: "white", color: page >= totalPages ? BORDER : DARK, fontSize: 12,
+                    cursor: page >= totalPages ? "default" : "pointer", fontFamily: FONT }}>
+                  Suivant
+                </button>
               </div>
             )}
           </Card>

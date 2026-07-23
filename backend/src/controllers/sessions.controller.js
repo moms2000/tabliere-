@@ -193,45 +193,62 @@ export async function attachOrderToSession({ restoId, tableLabel, items, source 
     }
     if (!s) return null;
 
-    // Convive : par numéro (choisi au terminal : Personne 1, 2…), sinon par
-    // identité téléphone/nom (commande QR). Pour les additions séparées.
-    let conviveId = null;
-    const num = parseInt(conviveNum, 10);
-    if (Number.isInteger(num) && num > 0 && num <= 50) {
+    // Get-or-create d'un convive par NUMÉRO (Personne 1, 2…) au sein de la note.
+    // Mémorisé pour ne pas recréer/requêter plusieurs fois dans un même envoi.
+    const convByNum = new Map();
+    const getConviveByNum = async (n, name = null) => {
+      const num = parseInt(n, 10);
+      if (!Number.isInteger(num) || num <= 0 || num > 50) return null;
+      if (convByNum.has(num)) return convByNum.get(num);
+      let id;
       const { rows: [c] } = await query(
         "SELECT id FROM session_convives WHERE session_id = $1 AND num = $2", [s.id, num]);
-      if (c) conviveId = c.id;
+      if (c) id = c.id;
       else {
         const { rows: [nc] } = await query(
           "INSERT INTO session_convives (session_id, num, name) VALUES ($1,$2,$3) RETURNING id",
-          [s.id, num, conviveName || null]);
-        conviveId = nc.id;
+          [s.id, num, name || null]);
+        id = nc.id;
       }
+      convByNum.set(num, id);
+      return id;
+    };
+
+    // Convive par DÉFAUT de la commande : par numéro (terminal), sinon par identité
+    // téléphone/nom (commande QR). Sert de repli pour les lignes non étiquetées.
+    let defaultConviveId = null;
+    if (conviveNum != null && conviveNum !== "") {
+      defaultConviveId = await getConviveByNum(conviveNum, conviveName);
     } else if (deviceToken || conviveName) {
       const { rows: [c] } = await query(
         `SELECT id FROM session_convives WHERE session_id = $1
            AND ( ($2::text IS NOT NULL AND device_token = $2) OR ($3::text IS NOT NULL AND name = $3) ) LIMIT 1`,
         [s.id, deviceToken, conviveName]);
-      if (c) conviveId = c.id;
+      if (c) defaultConviveId = c.id;
       else {
         const { rows: [{ nextnum }] } = await query(
           "SELECT COALESCE(MAX(num),0)+1 AS nextnum FROM session_convives WHERE session_id = $1", [s.id]);
         const { rows: [nc] } = await query(
           "INSERT INTO session_convives (session_id, num, name, device_token) VALUES ($1,$2,$3,$4) RETURNING id",
           [s.id, nextnum, conviveName, deviceToken]);
-        conviveId = nc.id;
+        defaultConviveId = nc.id;
       }
     }
 
+    // Un envoi = une tournée. Chaque ligne peut porter son propre convive_num
+    // (commande groupée « Personne 1/2/3 » en un seul envoi) ; sinon repli défaut.
     const { rows: [{ nextround }] } = await query(
       "SELECT COALESCE(MAX(round),0)+1 AS nextround FROM session_items WHERE session_id = $1", [s.id]);
     for (const it of items) {
+      const lineConviveId = (it.convive_num != null && it.convive_num !== "")
+        ? (await getConviveByNum(it.convive_num)) ?? defaultConviveId
+        : defaultConviveId;
       const optLabel = it.options_label || labelFromOptions(it.options);
       await query(
         `INSERT INTO session_items
            (session_id, convive_id, menu_item_id, name, unit_price, qty, options, options_label, round, source, note)
          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)`,
-        [s.id, conviveId, it.id || it.menu_item_id || null,
+        [s.id, lineConviveId, it.id || it.menu_item_id || null,
          it.name, it.price || 0, it.qty, it.options ? JSON.stringify(it.options) : null,
          optLabel, nextround, source, it.note || null]);
     }

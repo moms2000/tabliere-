@@ -379,7 +379,14 @@ function ResaTab({ event, tables = [] }) {
     if (!mf.guest_phone.trim() && !mf.guest_email.trim()) { toast("Téléphone ou e-mail requis.", "error"); return; }
     setBusy("manual");
     try {
-      await eventReservationsService.createManual({ event_id: eventId, ...mf, party_size: Number(mf.party_size) || 1, table_id: mf.table_id || undefined });
+      const res = await eventReservationsService.createManual({ event_id: eventId, ...mf, party_size: Number(mf.party_size) || 1, table_id: mf.table_id || undefined });
+      const newResa = res?.reservation;
+      // Affichage immédiat + bascule sur l'onglet où la réservation apparaît
+      // (une résa manuelle est « en attente d'acompte »), puis resync depuis le serveur.
+      if (newResa) {
+        setResas(prev => [newResa, ...prev]);
+        setFilter(newResa.status === "confirme" ? "confirme" : "attente");
+      }
       setManual(false); setMf({ guest_name: "", guest_phone: "", guest_email: "", table_id: "", party_size: 1, special_request: "" }); load();
       toast("Réservation manuelle créée — client notifié pour l'acompte.", "success");
     } catch (e) { toast(e.response?.data?.message || "Erreur.", "error"); }

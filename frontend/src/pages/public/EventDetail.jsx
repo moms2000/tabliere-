@@ -25,6 +25,12 @@ export default function EventDetail() {
   const [promo, setPromo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);          // reservation ref after success
+  const [formErr, setFormErr] = useState("");
+  // Champs invité (réservation sans compte) — tous obligatoires
+  const [gName, setGName]   = useState("");
+  const [gId, setGId]       = useState("");
+  const [gPhone, setGPhone] = useState("");
+  const [gEmail, setGEmail] = useState("");
 
   const load = () =>
     eventsService.getBySlug(slug)
@@ -40,7 +46,26 @@ export default function EventDetail() {
   const simple = tables.filter(t => t.kind !== "vip");
 
   const reserve = async () => {
-    if (!user) { navigate("/connexion", { state: { from: `/evenement/${slug}` } }); return; }
+    setFormErr("");
+    // Sans compte : réservation invité avec champs obligatoires (nom, identifiant, WhatsApp, e-mail)
+    if (!user) {
+      if (gName.trim().length < 2) return setFormErr("Indiquez vos nom et prénoms.");
+      if (gId.trim().length < 3) return setFormErr("Indiquez votre numéro d'identifiant.");
+      if (!/^[0-9+][0-9\s().-]{6,24}$/.test(gPhone.trim())) return setFormErr("Numéro WhatsApp invalide.");
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(gEmail.trim())) return setFormErr("Adresse e-mail invalide.");
+      setSubmitting(true);
+      try {
+        const { reservation } = await eventReservationsService.createGuest({
+          slug, table_id: picked?.id, party_size: party,
+          guest_name: gName, guest_id_number: gId, guest_phone: gPhone, guest_email: gEmail,
+          special_request: note || undefined, promoter_code: promo || undefined,
+        });
+        setDone(reservation.ref); setPicked(null); load();
+      } catch (e) { setFormErr(e.response?.data?.message || "Erreur lors de la réservation"); }
+      finally { setSubmitting(false); }
+      return;
+    }
+    // Client connecté : réservation rattachée à son compte
     setSubmitting(true);
     try {
       const { reservation } = await eventReservationsService.create({
@@ -48,7 +73,7 @@ export default function EventDetail() {
         promoter_code: promo || undefined,
       });
       setDone(reservation.ref); setPicked(null); load();
-    } catch (e) { alert(e.response?.data?.message || "Erreur lors de la réservation"); }
+    } catch (e) { setFormErr(e.response?.data?.message || "Erreur lors de la réservation"); }
     finally { setSubmitting(false); }
   };
 
@@ -104,6 +129,12 @@ export default function EventDetail() {
               ⚠️ Votre table n'est <strong>confirmée qu'après réception de l'acompte</strong> par l'organisateur.
               Premier acompte reçu, premier servi. Le <strong>QR code</strong> vous sera envoyé une fois l'acompte confirmé.
             </div>
+            {!user && (
+              <div style={{ fontSize: 12.5, color: "#3a5a4a", marginTop: 10 }}>
+                Astuce : <span onClick={() => navigate("/inscription", { state: { from: `/evenement/${slug}` } })}
+                  style={{ color: P, fontWeight: 700, cursor: "pointer" }}>créez un compte</span> pour garder cette réservation, retrouver votre QR code à tout moment et gagner des points.
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -138,6 +169,27 @@ export default function EventDetail() {
             </div>
             {picked.description && <div style={{ fontSize: 12.5, color: "#4a5a52", marginBottom: 12 }}>{picked.description}</div>}
 
+            {/* Réservation sans compte : coordonnées obligatoires pour recevoir le QR */}
+            {!user && (
+              <>
+                <div style={{ fontSize: 12, color: "#7a5a1a", background: "#FEF6EC", border: "0.5px solid #F0C98A",
+                  borderRadius: 10, padding: "10px 12px", marginBottom: 12, lineHeight: 1.5 }}>
+                  Réservez sans compte. <strong>Créez un compte</strong> pour garder vos réservations, retrouver vos QR codes et gagner des points.{" "}
+                  <span onClick={() => navigate("/inscription", { state: { from: `/evenement/${slug}` } })}
+                    style={{ color: P, fontWeight: 700, cursor: "pointer" }}>Créer un compte</span>
+                </div>
+                <label style={lbl}>Nom et prénoms *</label>
+                <input value={gName} onChange={e => setGName(e.target.value)} placeholder="Ex : Konan Aya" style={inp} />
+                <label style={{ ...lbl, marginTop: 12 }}>Numéro d'identifiant (CNI, passeport…) *</label>
+                <input value={gId} onChange={e => setGId(e.target.value)} placeholder="Ex : CI0012345678" style={inp} />
+                <label style={{ ...lbl, marginTop: 12 }}>Numéro WhatsApp *</label>
+                <input value={gPhone} onChange={e => setGPhone(e.target.value)} placeholder="Ex : 07 08 09 10 11" style={inp} inputMode="tel" />
+                <label style={{ ...lbl, marginTop: 12 }}>Adresse e-mail *</label>
+                <input value={gEmail} onChange={e => setGEmail(e.target.value)} placeholder="Ex : aya@email.com" style={inp} inputMode="email" />
+                <div style={{ height: 12 }} />
+              </>
+            )}
+
             <label style={lbl}>Nombre de personnes</label>
             <input type="number" min={1} max={picked.capacity || 20} value={party} onChange={e => setParty(+e.target.value)} style={inp} />
 
@@ -149,15 +201,29 @@ export default function EventDetail() {
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Occasion, arrivée prévue…"
               style={{ ...inp, resize: "vertical" }} />
 
-            <div style={{ fontSize: 11.5, color: MUTED, margin: "12px 0", background: BG, borderRadius: 8, padding: "9px 12px" }}>
-              Paiement en <strong>cash sur place</strong>. Votre demande sera confirmée par l'organisateur.
+            <div style={{ fontSize: 11.5, color: MUTED, margin: "12px 0", background: BG, borderRadius: 8, padding: "9px 12px", lineHeight: 1.5 }}>
+              Votre table est confirmée <strong>après réception de votre acompte</strong> par l'organisateur. Vous recevrez alors par WhatsApp et e-mail le <strong>lien vers votre QR code</strong>.
             </div>
+
+            {formErr && (
+              <div style={{ fontSize: 12.5, color: "#B1352F", background: "#FBEBEB", border: "0.5px solid #F3C7C4",
+                borderRadius: 8, padding: "9px 12px", marginBottom: 10 }}>{formErr}</div>
+            )}
 
             <button onClick={reserve} disabled={submitting}
               style={{ width: "100%", border: "none", borderRadius: 11, padding: "14px 0", background: P,
                 color: "#1A1000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-              {submitting ? "Envoi…" : user ? "Confirmer la réservation" : "Se connecter pour réserver"}
+              {submitting ? "Envoi…" : "Réserver ma table"}
             </button>
+
+            {!user && (
+              <div style={{ textAlign: "center", marginTop: 10 }}>
+                <span onClick={() => navigate("/connexion", { state: { from: `/evenement/${slug}` } })}
+                  style={{ fontSize: 12.5, color: MUTED, cursor: "pointer" }}>
+                  J'ai déjà un compte, <span style={{ color: P, fontWeight: 600 }}>me connecter</span>
+                </span>
+              </div>
+            )}
           </motion.div>
         </div>
       )}

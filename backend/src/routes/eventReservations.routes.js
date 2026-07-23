@@ -6,6 +6,7 @@ import * as ctrl from "../controllers/eventReservations.controller.js";
 const router = Router();
 
 router.get  ("/ticket/:ref",  ctrl.getTicket);                        // PUBLIC : e-billet (QR si confirmé)
+router.post ("/guest",        reservationLimiter, ctrl.createGuestReservation); // PUBLIC : réserver sans compte
 router.post ("/",             reservationLimiter, authenticate, ctrl.createEventReservation);
 router.post ("/manual",       authenticate, ctrl.createManualReservation); // organisateur
 router.get  ("/mine",         authenticate, ctrl.listMine);           // avant "/"

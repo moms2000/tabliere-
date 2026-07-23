@@ -23,6 +23,7 @@ router.post("/event-server/orders",       orderLimiter, ownerOrStaff, ops.create
 // Check-in à l'entrée
 router.get ("/event-checkin",             ownerOrStaff, ops.listCheckin);   // ?event_id=
 router.post("/event-checkin/by-ref",      ownerOrStaff, ops.checkinByRef);
+router.post("/event-checkin/:resaId/balance", ownerOrStaff, ops.recordBalance);
 router.post("/event-checkin/:resaId",     ownerOrStaff, ops.doCheckin);
 
 export default router;

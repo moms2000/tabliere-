@@ -859,10 +859,24 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
   const [pinResult, setPinResult] = useState(null); // { pin, name, table } après check-in
   const [planTable, setPlanTable] = useState(null); // id de table à situer sur le plan
   const [busy, setBusy] = useState(false);
+  const [balPay, setBalPay] = useState(null); // réservation dont on encaisse le solde
+  const [balAmount, setBalAmount] = useState("");
+  const [balMethod, setBalMethod] = useState("Espèces");
+  const balanceLeft = (r) => Math.max(0, (Number(r.table_price) || 0) - (Number(r.deposit_amount) || 0) - (Number(r.balance_amount) || 0));
+  const openBalance = (r) => { setBalAmount(String(balanceLeft(r))); setBalMethod(r.balance_method || "Espèces"); setBalPay(r); };
   const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(e => { if (!onAuthError?.(e)) console.error(e); });
   // Rafraîchi en continu (10 s) → toutes les bornes d'entrée voient les arrivées
   // des autres en temps réel (compteurs, statut « arrivé », salons déjà pointés).
   useEffect(() => { load(); const id = setInterval(load, 10000); return () => clearInterval(id); }, [eventId]);
+  const settleBalance = async () => {
+    if (!balPay) return;
+    setBusy(true);
+    try {
+      await eventOpsService.recordBalance(balPay.id, Math.max(0, Number(balAmount) || 0), balMethod, staffToken, eventId);
+      setBalPay(null); await load();
+    } catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
+    setBusy(false);
+  };
 
   // QR scanné → on isole la réf (EVT-1234) et on ouvre la confirmation d'arrivée
   const onScan = (text) => {
@@ -1021,6 +1035,23 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${BORDER}`, borderRadius: 7,
                         padding: "2px 8px", background: "white", cursor: "pointer", fontFamily: FONT, fontSize: 11.5, color: P, fontWeight: 600 }}>
                       <MapPin size={12} /> Voir sur plan</button>}</div>}
+                  {r.table_id && r.table_price != null && (() => {
+                    const rem = balanceLeft(r);
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <Wallet size={13} color={rem > 0 ? P : GREEN} />
+                        <span>Reste à payer <strong style={{ color: rem > 0 ? "#8a5a10" : GREEN }}>{rem > 0 ? fmt(rem) : "soldé"}</strong>
+                          {r.balance_amount ? ` · encaissé ${fmt(r.balance_amount)}${r.balance_method ? " (" + r.balance_method + ")" : ""}` : ""}</span>
+                        {rem > 0 && (
+                          <button onClick={() => openBalance(r)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${P}`, borderRadius: 7,
+                              padding: "2px 9px", background: "#FEF6EC", cursor: "pointer", fontFamily: FONT, fontSize: 11.5, color: "#8a5a10", fontWeight: 700 }}>
+                            Encaisser
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {r.client_phone && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Phone size={13} color={MUTED} /> {r.client_phone}</div>}
                   {r.promoter_code && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Megaphone size={13} color={MUTED} /> promoteur : {r.promoter_code}</div>}
                   {r.special_request && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} color={MUTED} /> « {r.special_request} »</div>}
@@ -1049,6 +1080,28 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
             <span style={{ fontFamily: "monospace" }}>{confirm.resa.ref}</span>
             {confirm.resa.table_label ? ` · ${confirm.resa.table_label}` : ""} · réservé {confirm.resa.party_size} pers.
           </div>
+          {confirm.resa.table_id && confirm.resa.table_price != null && (() => {
+            const rem = balanceLeft(confirm.resa);
+            return (
+              <div style={{ background: rem > 0 ? "#FEF6EC" : "#F0F6F2", border: `1px solid ${(rem > 0 ? P : GREEN)}55`,
+                borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>Reste à payer</span>
+                  <span style={{ fontSize: 21, fontWeight: 800, color: rem > 0 ? "#8a5a10" : GREEN }}>{rem > 0 ? fmt(rem) : "Soldé"}</span>
+                </div>
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>
+                  Salon {fmt(confirm.resa.table_price)} · acompte {fmt(confirm.resa.deposit_amount || 0)}{confirm.resa.balance_amount ? ` · encaissé ${fmt(confirm.resa.balance_amount)}` : ""}
+                </div>
+                {rem > 0 && (
+                  <button type="button" onClick={() => { setConfirm(null); openBalance(confirm.resa); }}
+                    style={{ marginTop: 8, width: "100%", padding: "8px 0", borderRadius: 8, border: `1px solid ${P}`,
+                      background: "white", color: "#8a5a10", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                    Encaisser le solde
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {confirm.topup && (
             <div style={{ fontSize: 12, color: "#8a5a10", background: "#FEF6EC", border: `1px solid ${P}55`, borderRadius: 8,
               padding: "8px 11px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
@@ -1106,6 +1159,33 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
             style={{ width: "100%", justifyContent: "center" }}>
             {busy ? "…" : (confirm.topup ? "Mettre à jour" : "Confirmer l'arrivée")}
           </Btn>
+        </Modal>
+      )}
+
+      {/* Encaissement du solde à l'entrée */}
+      {balPay && (
+        <Modal open title="Encaisser le solde" width={340} onClose={() => setBalPay(null)}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK }}>{balPay.client_name || "Client"}</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+            {balPay.table_label || ""} · salon {fmt(balPay.table_price || 0)} · acompte {fmt(balPay.deposit_amount || 0)}
+          </div>
+          <div style={{ background: "#FEF6EC", borderRadius: 9, padding: "9px 12px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 12, color: MUTED }}>Reste à payer</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#8a5a10" }}>{fmt(balanceLeft(balPay))}</span>
+          </div>
+          <FormField label="Montant reçu">
+            <Input value={balAmount} onChange={e => setBalAmount(e.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="0" />
+          </FormField>
+          <FormField label="Mode de paiement">
+            <select value={balMethod} onChange={e => setBalMethod(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: FONT, background: "#F8F5EF" }}>
+              {["Espèces", "Mobile Money", "Carte", "Virement", "Autre"].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </FormField>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <Btn onClick={() => setBalPay(null)}>Annuler</Btn>
+            <Btn variant="primary" onClick={settleBalance} disabled={busy}>{busy ? "…" : "Enregistrer le paiement"}</Btn>
+          </div>
         </Modal>
       )}
 

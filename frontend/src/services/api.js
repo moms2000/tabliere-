@@ -79,6 +79,11 @@ async function attemptRefresh(refreshToken) {
 
 // ── Intercepteur requête : injecter le token ─────────────────────────────────
 api.interceptors.request.use((config) => {
+  // Défense anti-cache : empêche la WebView (app Capacitor) de resservir une
+  // réponse authentifiée mise en cache (ex : /auth/me d'une session précédente
+  // → bascule de compte). Complète le `no-store` posé côté serveur.
+  config.headers["Cache-Control"] = "no-cache";
+  config.headers["Pragma"] = "no-cache";
   // Ne PAS écraser un header Authorization déjà posé explicitement (ex: token staff)
   if (config.headers?.Authorization) return config;
   const token = getStoredToken("access_token");

@@ -99,7 +99,7 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(false);
   const [editTable, setEditTable] = useState(null);
-  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0 });
+  const [f, setF] = useState({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0, bottles_included: false });
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef(null);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -127,13 +127,13 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
     try { await eventsService.updateTable(event.id, id, { status }); setSelected(p => p ? { ...p, status } : p); await onChanged(); }
     catch (e) { console.error(e); }
   };
-  const openNew = () => { setEditTable(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0 }); setModal(true); };
-  const openEdit = (t) => { setEditTable(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", min_order: t.min_order || 0, deposit_amount: t.deposit_amount || 0 }); setModal(true); setSelected(null); };
+  const openNew = () => { setEditTable(null); setF({ label: "", kind: "simple", capacity: 4, price: 0, description: "", min_order: 0, deposit_amount: 0, bottles_included: false }); setModal(true); };
+  const openEdit = (t) => { setEditTable(t); setF({ label: t.label, kind: t.kind, capacity: t.capacity, price: t.price, description: t.description || "", min_order: t.min_order || 0, deposit_amount: t.deposit_amount || 0, bottles_included: !!t.bottles_included }); setModal(true); setSelected(null); };
   const save = async () => {
     if (!f.label) return;
     setSaving(true);
     try {
-      const payload = { ...f, zone: "general", capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0, deposit_amount: Number(f.deposit_amount) || 0 };
+      const payload = { ...f, zone: "general", capacity: Number(f.capacity) || 1, price: Number(f.price) || 0, min_order: Number(f.min_order) || 0, deposit_amount: Number(f.deposit_amount) || 0, bottles_included: !!f.bottles_included };
       if (editTable) await eventsService.updateTable(event.id, editTable.id, payload);
       else {
         const n = tables.length;
@@ -298,6 +298,14 @@ export default function EventFloorPlan({ event, tables, onChanged }) {
             <FormField label="Acompte fixe pour cette table (FCFA, 0 = utiliser le %)">
               <Input type="number" value={f.deposit_amount} onChange={e => set("deposit_amount", e.target.value)} placeholder="Ex : 1000000" />
             </FormField>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer", padding: "10px 12px",
+              border: `0.5px solid ${BORDER}`, borderRadius: 9, background: f.bottles_included ? "rgba(37,99,235,0.06)" : BG }}>
+              <input type="checkbox" checked={!!f.bottles_included} onChange={e => set("bottles_included", e.target.checked)}
+                style={{ marginTop: 2, width: 16, height: 16, accentColor: "#2563EB", flexShrink: 0 }} />
+              <span style={{ fontSize: 12.5, color: DARK, lineHeight: 1.4 }}>
+                <b>Forfait bouteilles</b> — le prix du salon fait office de crédit bouteilles. Le client choisit ses bouteilles à hauteur de ce montant, seul ce qui dépasse est facturé.
+              </span>
+            </label>
           </>
         )}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>

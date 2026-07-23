@@ -211,11 +211,12 @@ export const createTable = asyncHandler(async (req, res) => {
   const kind = TABLE_KINDS.includes(b.kind) ? b.kind : "simple";
   const nn = (v, d = 0) => Math.max(0, parseInt(v, 10) || d); // entier >= 0
   const { rows: [table] } = await query(
-    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order, deposit_amount)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO event_tables (event_id, label, kind, capacity, price, description, zone, pos_x, pos_y, min_order, deposit_amount, bottles_included)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [
       event.id, String(b.label).slice(0, 40), kind, Math.max(1, nn(b.capacity, 2)), nn(b.price),
       b.description || null, b.zone || "general", b.pos_x ?? 20, b.pos_y ?? 20, nn(b.min_order), nn(b.deposit_amount),
+      b.bottles_included === true || b.bottles_included === "true",
     ]
   );
   return created(res, { table }, "Table ajoutée");
@@ -236,13 +237,13 @@ export const updateTable = asyncHandler(async (req, res) => {
     if (!rows.length) throw new AppError("Serveur introuvable pour cet événement", 400);
   }
 
-  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order", "server_id", "deposit_amount"];
+  const ALLOWED = ["label", "kind", "capacity", "price", "description", "zone", "pos_x", "pos_y", "status", "is_active", "min_order", "server_id", "deposit_amount", "bottles_included"];
   const updates = [], values = [];
   for (const f of ALLOWED) {
     if (req.body[f] === undefined) continue;
     let val = req.body[f];
     if (f === "kind" && !TABLE_KINDS.includes(val)) throw new AppError("Type de table invalide", 400);
-    if (f === "is_active") val = (val === true || val === "true" || val === 1);
+    if (f === "is_active" || f === "bottles_included") val = (val === true || val === "true" || val === 1);
     if (f === "price" || f === "min_order" || f === "deposit_amount") val = Math.max(0, parseInt(val, 10) || 0);
     if (f === "capacity") val = Math.max(1, parseInt(val, 10) || 1);
     if (f === "server_id" && (val === "" || val === "none")) val = null;

@@ -37,6 +37,7 @@ export default function EventOrder() {
   const [okMsg, setOkMsg] = useState("");
   const [showCart, setShowCart] = useState(false);
   const [myOrders, setMyOrders] = useState([]);
+  const [forfait, setForfait] = useState(null);
   // Accès responsable : code à 4 chiffres remis à l'entrée (Phase 2)
   const [pin, setPin] = useState("");
   const [verified, setVerified] = useState(null); // { token, table_label } une fois le code validé
@@ -63,7 +64,7 @@ export default function EventOrder() {
   // Polling léger toutes les 15 s → le client voit le statut évoluer, et retrouve
   // ses commandes même après un re-scan (le jeton reste valide 10 h).
   const loadOrders = async (token) => {
-    try { const d = await eventOpsService.listMyOrders(token); setMyOrders(d?.orders || []); } catch { /* silencieux */ }
+    try { const d = await eventOpsService.listMyOrders(token); setMyOrders(d?.orders || []); setForfait(d?.forfait?.forfait ? d.forfait : null); } catch { /* silencieux */ }
   };
   useEffect(() => {
     if (!verified?.token) return;
@@ -225,6 +226,17 @@ export default function EventOrder() {
           <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>La carte n'est pas encore disponible.</div>
         ) : (
           <>
+            {forfait && (
+              <div style={{ background: "#EEF4FF", border: "0.5px solid #C7D7FE", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: "#3651B5", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }}>Forfait bouteilles</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#1E3A8A", marginTop: 3 }}>
+                  Crédit restant : {fmt(forfait.remaining)}
+                </div>
+                <div style={{ fontSize: 12, color: "#3651B5", marginTop: 2 }}>
+                  Choisissez vos bouteilles dans ce crédit. Tout ce qui dépasse sera facturé en plus.
+                </div>
+              </div>
+            )}
             {/* Navigation par catégorie (évite une liste trop longue) */}
             {Object.keys(byCat).length > 1 && (
               <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
@@ -276,6 +288,13 @@ export default function EventOrder() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: MUTED }}>{count} article{count > 1 ? "s" : ""}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: DARK }}>{fmt(total)}</div>
+              {forfait && (
+                <div style={{ fontSize: 11.5, color: total > forfait.remaining ? "#B45309" : "#2563EB", fontWeight: 600, marginTop: 1 }}>
+                  {total > forfait.remaining
+                    ? `À payer en plus : ${fmt(total - forfait.remaining)}`
+                    : `Couvert par le crédit (reste ${fmt(forfait.remaining - total)})`}
+                </div>
+              )}
             </div>
             <button onClick={() => setShowCart(true)}
               style={{ ...primaryBtn, display: "flex", alignItems: "center", gap: 8 }}>
@@ -338,6 +357,13 @@ export default function EventOrder() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, color: MUTED }}>{count} article{count > 1 ? "s" : ""}</div>
                     <div style={{ fontSize: 19, fontWeight: 800, color: DARK }}>{fmt(total)}</div>
+                    {forfait && (
+                      <div style={{ fontSize: 11.5, color: total > forfait.remaining ? "#B45309" : "#2563EB", fontWeight: 600, marginTop: 1 }}>
+                        {total > forfait.remaining
+                          ? `Dont ${fmt(total - forfait.remaining)} à payer en plus`
+                          : `Couvert par le forfait`}
+                      </div>
+                    )}
                   </div>
                   <button onClick={submit} disabled={submitting || !count}
                     style={{ ...primaryBtn, opacity: (!count || submitting) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8 }}>

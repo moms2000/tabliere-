@@ -368,6 +368,13 @@ function ServerBoard({ eventId, token, onExpire }) {
                   {t.min_order ? <span style={{ color: MUTED }}>· min. {fmt(t.min_order)}</span> : null}
                 </div>
 
+                {t.forfait && (
+                  <div style={{ background: "#EEF4FF", border: "0.5px solid #C7D7FE", borderRadius: 9, padding: "7px 10px", marginBottom: 10 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "#1E3A8A" }}>Forfait bouteilles · crédit restant {fmt(t.forfait.remaining)}</span>
+                    <span style={{ fontSize: 11, color: "#3651B5" }}> / {fmt(t.forfait.credit)}</span>
+                  </div>
+                )}
+
                 {orders.length > 0 && (
                   <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
                     {orders.map(o => {
@@ -489,6 +496,12 @@ function OrderComposer({ table, bottles, eventId, token, onClose, onDone }) {
         </div>
 
         <div style={{ padding: "12px 18px calc(env(safe-area-inset-bottom,0px) + 14px)", borderTop: `0.5px solid ${BORDER}` }}>
+          {table.forfait && (
+            <div style={{ fontSize: 12, marginBottom: 8, color: total > table.forfait.remaining ? "#B45309" : "#2563EB", fontWeight: 600 }}>
+              Forfait · crédit restant {fmt(table.forfait.remaining)}
+              {total > table.forfait.remaining ? ` · à facturer ${fmt(total - table.forfait.remaining)}` : (total ? " · entièrement couvert" : "")}
+            </div>
+          )}
           {err && <div style={{ color: "#DC2626", fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
           <button onClick={submit} disabled={busy || !lines.length}
             style={{ width: "100%", border: "none", borderRadius: 12, padding: "13px 0", background: lines.length ? P : "#e8e8e8",

@@ -157,7 +157,8 @@ export const verifyOrderPin = asyncHandler(async (req, res) => {
 
 // ── GET /event-orders?event_id= — tableau des commandes (organisateur/staff) ──
 export const listOrders = asyncHandler(async (req, res) => {
-  assertStaffRole(req, ["bar", "caisse"]);
+  // Lecture des commandes : bar/caisse (gestion) + serveur (pour tirer les reçus).
+  assertStaffRole(req, ["bar", "caisse", "serveur"]);
   const { rows } = await query(
     `SELECT o.*, t.kind AS table_kind, srv.name AS server_name FROM event_orders o
      LEFT JOIN event_tables t ON t.id = o.table_id

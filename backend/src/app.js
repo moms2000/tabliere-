@@ -39,6 +39,21 @@ const app = express();
 // Nécessaire pour que express-rate-limit identifie les IPs via X-Forwarded-For
 app.set("trust proxy", 1);
 
+// ── SÉCURITÉ CRITIQUE : jamais de cache sur les réponses API ────────────────
+// L'API renvoie exclusivement du JSON authentifié (souvent propre à l'utilisateur :
+// /auth/me, /events/mine, dashboards…). Sans en-tête de cache, une WebView
+// (app Capacitor) ou un proxy peut STOCKER puis RESSERVIR la réponse d'un
+// utilisateur à un autre → bascule de compte / fuite de données. On force donc
+// `no-store` partout et on désactive l'ETag (pas de revalidation 304 trompeuse).
+app.disable("etag");
+app.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  res.set("Vary", "Authorization");
+  next();
+});
+
 // ── Compression gzip (réduit les réponses de 60-80%) ────────────────────────
 app.use(compression({ level: 6, threshold: 1024 }));
 

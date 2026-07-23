@@ -255,7 +255,9 @@ export const getStats = asyncHandler(async (req, res) => {
   const DAYS = { day: 1, week: 7, month: 30, year: 365 };
   const nDays = DAYS[period] || 30;
 
-  purgeAndRollup(restoId); // purge paresseuse (non bloquante)
+  // On ATTEND la purge ici (throttlée → quasi toujours un no-op) : garantit que
+  // live et cumul sont lus après purge, donc jamais de double comptage transitoire.
+  await purgeAndRollup(restoId);
 
   // Totaux LIVE (lignes encore présentes). CA net = hors annulées.
   const { rows: [live] } = await query(

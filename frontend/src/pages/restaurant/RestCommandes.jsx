@@ -237,8 +237,16 @@ export default function RestCommandes() {
   const exportOrders = async (kind) => {
     setExporting(true);
     try {
-      const res = await ordersService.list({ scope: "archive", limit: 1000, ...(statusFilter ? { status: statusFilter } : {}) });
-      const rows = res.data || [];
+      // Le serveur plafonne limit à 100 → on parcourt les pages pour tout exporter
+      // (garde-fou à 50 pages = 5000 commandes, soit ~15 j d'archives).
+      let rows = [];
+      let p = 1, pages = 1;
+      do {
+        const res = await ordersService.list({ scope: "archive", page: p, limit: 100, ...(statusFilter ? { status: statusFilter } : {}) });
+        rows = rows.concat(res.data || []);
+        pages = res.pagination?.totalPages || 1;
+        p++;
+      } while (p <= pages && p <= 50);
       const flat = rows.map(o => ({
         Date:     fmtDate(o.created_at),
         Table:    o.table_label || "",
@@ -256,18 +264,22 @@ export default function RestCommandes() {
         XLSX.writeFile(wb, `${fname}.xlsx`);
       } else {
         const { jsPDF } = await import("jspdf");
-        const autoTable = (await import("jspdf-autotable")).default;
+        const mod = await import("jspdf-autotable");
+        const autoTable = mod.default || mod.autoTable;
         const doc = new jsPDF();
         doc.setFontSize(14); doc.text(`Commandes — ${restoName || ""}`, 14, 16);
         doc.setFontSize(9);  doc.text(`Export du ${new Date().toLocaleDateString("fr-FR")} · ${flat.length} commande(s)`, 14, 22);
-        autoTable(doc, {
+        const opts = {
           startY: 28,
           head: [["Date", "Table", "Statut", "Total (F)", "Articles"]],
           body: flat.map(r => [r.Date, r.Table, r.Statut, fmt(r.Total), r.Articles]),
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: { fillColor: [196, 125, 26] },
           columnStyles: { 4: { cellWidth: 70 } },
-        });
+        };
+        // API fonctionnelle (v5) ou méthode (anciennes versions), selon ce qui existe.
+        if (typeof autoTable === "function") autoTable(doc, opts);
+        else if (typeof doc.autoTable === "function") doc.autoTable(opts);
         doc.save(`${fname}.pdf`);
       }
     } catch (e) { console.error(e); }

@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag, TrendingUp, BarChart3, CheckCircle,
-  Clock, X, RefreshCw, Award, AlertTriangle, Plus, Minus, Pencil,
+  Clock, X, RefreshCw, Award, AlertTriangle, Plus, Minus, Pencil, Bell, BellOff,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Btn } from "../../components/ui";
 import { ordersService }     from "../../services/orders.service.js";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { menuService }        from "../../services/menu.service.js";
 import { useAuth }           from "../../context/AuthContext.jsx";
+import { playOrderAlarm, stopOrderAlarm, unlockAudio } from "../../utils/sound.js";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -152,6 +153,11 @@ export default function RestCommandes() {
   const [activeTab,    setActiveTab]    = useState("commandes");
   const [statusFilter, setStatusFilter] = useState("");
   const [refreshing,   setRefreshing]   = useState(false);
+  // Alarme sonore à la réception d'une nouvelle commande
+  const [sound, setSound] = useState(() => { try { return localStorage.getItem("tci_order_sound") !== "off"; } catch { return true; } });
+  const soundRef = useRef(sound);
+  useEffect(() => { soundRef.current = sound; }, [sound]);
+  const seenRef = useRef(null); // ids déjà vus (null au 1er chargement → pas d'alarme au démarrage)
   // Modale prise de commande manuelle
   const [showManual,   setShowManual]   = useState(false);
   const [manualForm,   setManualForm]   = useState({ client_name: "", client_phone: "", table_label: "", note: "" });
@@ -176,7 +182,17 @@ export default function RestCommandes() {
       setRestoSlug(r.slug || user.resto_slug || "");
       setQrActive(r.qr_active || false);
       setTables(r.tables || []);
-      setOrders(ordersData.data || []);
+      const list = ordersData.data || [];
+      setOrders(list);
+      // Détection des NOUVELLES commandes → alarme 30 s + vibration
+      const ids = list.map(o => o.id);
+      if (seenRef.current === null) {
+        seenRef.current = new Set(ids); // 1er chargement : on mémorise sans sonner
+      } else {
+        const hasNew = list.some(o => o.status === "en_attente" && !seenRef.current.has(o.id));
+        seenRef.current = new Set(ids);
+        if (hasNew && soundRef.current) playOrderAlarm();
+      }
       if (statsData) setStats(statsData);
       // Charger le menu pour la prise de commande
       if (r.slug || user.resto_slug) {
@@ -189,10 +205,20 @@ export default function RestCommandes() {
   }, [user?.resto_id, user?.resto_slug, period, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+  // Rafraîchissement automatique (pour recevoir les commandes + déclencher l'alarme)
+  useEffect(() => { const t = setInterval(() => { load(); }, 15000); return () => clearInterval(t); }, [load]);
+
+  const toggleSound = () => {
+    const v = !sound; setSound(v);
+    try { localStorage.setItem("tci_order_sound", v ? "on" : "off"); } catch {}
+    unlockAudio();
+    if (!v) stopOrderAlarm();
+  };
 
   const refresh = async () => { setRefreshing(true); await load(); };
 
   const updateStatus = async (id, status) => {
+    stopOrderAlarm(); // agir sur une commande coupe l'alarme
     try {
       await ordersService.updateStatus(id, status);
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
@@ -304,14 +330,14 @@ export default function RestCommandes() {
       <motion.div variants={fadeUp}>
         <div style={{ display: "flex", alignItems: "center",
           justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <PageTitle title="Commandes" subtitle="QR + prise de commande manuelle" />
+          <PageTitle title="Commandes" subtitle="Suivi des commandes (cuisine, bar, service)" />
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setShowManual(true)}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
-                borderRadius: 9, border: "none", background: P, color: "#1A1000",
-                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-              <Plus size={13} />Nouvelle commande
-            </button>
+          <button onClick={toggleSound} title={sound ? "Alarme sonore activée" : "Alarme sonore coupée"}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px",
+              borderRadius: 9, border: `0.5px solid ${sound ? P : BORDER}`, background: sound ? "#FEF6EC" : "white",
+              fontSize: 12, color: sound ? "#C47D1A" : MUTED, cursor: "pointer", fontFamily: FONT, fontWeight: 600 }}>
+            {sound ? <Bell size={13} /> : <BellOff size={13} />} Son
+          </button>
           <button onClick={refresh} disabled={refreshing}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
               borderRadius: 9, border: `0.5px solid ${BORDER}`, background: "white",

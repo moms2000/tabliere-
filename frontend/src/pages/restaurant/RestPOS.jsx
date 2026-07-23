@@ -440,7 +440,7 @@ export default function RestPOS() {
                 fontSize: 13, color: persNum ? "#1a1000" : "white", fontWeight: persNum ? 700 : 400,
                 cursor: "pointer", appearance: "none", fontFamily: FONT }}>
               <option value="">Pers. —</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+              {Array.from({ length: 30 }, (_, i) => i + 1).map(n => (
                 <option key={n} value={n}>Personne {n}</option>
               ))}
             </select>

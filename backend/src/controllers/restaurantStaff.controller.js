@@ -18,10 +18,19 @@ export const STAFF_TABS = ["dashboard", "reservations", "clients", "plan", "menu
 let migrated = false;
 async function ensureTable() {
   if (migrated) return;
+  // Correctif : restaurants.id est un UUID. Une 1re version avait cree la table
+  // avec restaurant_id INTEGER (insertions en echec). On recree si le type est faux
+  // (la table est vide dans ce cas, aucune donnee perdue).
+  await query(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='restaurant_staff' AND column_name='restaurant_id' AND data_type <> 'uuid') THEN
+      DROP TABLE restaurant_staff CASCADE;
+    END IF;
+  END $$;`);
   await query(`
     CREATE TABLE IF NOT EXISTS restaurant_staff (
       id            BIGSERIAL PRIMARY KEY,
-      restaurant_id INTEGER NOT NULL,
+      restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
       name          VARCHAR(60) NOT NULL,
       login_id      VARCHAR(24) NOT NULL,
       pin           VARCHAR(4)  NOT NULL,

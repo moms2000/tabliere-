@@ -21,10 +21,21 @@ import { emitToUser } from "../utils/sse.js";
 let migrated = false;
 async function ensureTables() {
   if (migrated) return;
+  // Correctif : restaurants.id / menu_items.id sont des UUID. Une 1re version avait
+  // cree ces tables avec restaurant_id/menu_item_id INTEGER (insertions en echec,
+  // donc tables vides). On recree si le type est faux — aucune donnee perdue.
+  await query(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='table_sessions' AND column_name='restaurant_id' AND data_type <> 'uuid') THEN
+      DROP TABLE IF EXISTS session_items CASCADE;
+      DROP TABLE IF EXISTS session_convives CASCADE;
+      DROP TABLE IF EXISTS table_sessions CASCADE;
+    END IF;
+  END $$;`);
   await query(`
     CREATE TABLE IF NOT EXISTS table_sessions (
       id            BIGSERIAL PRIMARY KEY,
-      restaurant_id INTEGER NOT NULL,
+      restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
       table_label   VARCHAR(60),
       status        VARCHAR(12) NOT NULL DEFAULT 'open',
       opened_by     VARCHAR(12) DEFAULT 'server',
@@ -53,7 +64,7 @@ async function ensureTables() {
       id            BIGSERIAL PRIMARY KEY,
       session_id    BIGINT NOT NULL REFERENCES table_sessions(id) ON DELETE CASCADE,
       convive_id    BIGINT REFERENCES session_convives(id) ON DELETE SET NULL,
-      menu_item_id  INTEGER,
+      menu_item_id  UUID,
       name          VARCHAR(160) NOT NULL,
       unit_price    NUMERIC(12,2) NOT NULL DEFAULT 0,
       qty           INTEGER NOT NULL DEFAULT 1,
@@ -208,7 +219,7 @@ export async function attachOrderToSession({ restoId, tableLabel, items, source 
         `INSERT INTO session_items
            (session_id, convive_id, menu_item_id, name, unit_price, qty, options, options_label, round, source, note)
          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)`,
-        [s.id, conviveId, Number.isInteger(it.id) ? it.id : (it.menu_item_id || null),
+        [s.id, conviveId, it.id || it.menu_item_id || null,
          it.name, it.price || 0, it.qty, it.options ? JSON.stringify(it.options) : null,
          optLabel, nextround, source, it.note || null]);
     }

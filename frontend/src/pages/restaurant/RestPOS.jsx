@@ -732,6 +732,7 @@ export default function RestPOS() {
               tableLabel={tableLabel} clientName={clientName} orderNote={orderNote}
               setOrderNote={setOrderNote} error={error} submitting={submitting}
               onSend={sendOrder} onClear={clearCart} onRemoveLine={removeLine} onIncLine={incLine}
+              persNum={persNum} setPersNum={setPersNum}
               showNote={showNote} setShowNote={setShowNote} P={P} PL={PL}
               DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
             />
@@ -765,6 +766,7 @@ export default function RestPOS() {
                 setOrderNote={setOrderNote} error={error} submitting={submitting}
                 onSend={() => { sendOrder(); setShowCart(false); }} onClear={clearCart}
                 onRemoveLine={removeLine} onIncLine={incLine} showNote={showNote} setShowNote={setShowNote}
+                persNum={persNum} setPersNum={setPersNum}
                 P={P} PL={PL} DARK={DARK} BG={BG} BORDER={BORDER} MUTED={MUTED} FONT={FONT} S={S} fmt={fmt}
               />
             </motion.div>
@@ -904,8 +906,9 @@ export default function RestPOS() {
 
 /* ── Panneau panier (réutilisé mobile + desktop) ──────────────────────────── */
 function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, orderNote, setOrderNote,
-  error, submitting, onSend, onClear, onRemoveLine, onIncLine, showNote, setShowNote,
+  error, submitting, onSend, onClear, onRemoveLine, onIncLine, persNum, setPersNum, showNote, setShowNote,
   P, PL, DARK, BG, BORDER, MUTED, FONT, S, fmt }) {
+  const pn = parseInt(persNum, 10) || 0;
   return (
     <>
       {/* Résumé commande en cours */}
@@ -929,6 +932,39 @@ function CartPanel({ cartItems, cartTotal, cartCount, tableLabel, clientName, or
           )}
         </div>
       </div>
+
+      {/* Prise de commande PAR PERSONNE (une seule commande à l'arrivée) */}
+      {tableLabel && setPersNum && (
+        <div style={{ padding: "10px 14px", borderBottom: `0.5px solid ${BORDER}`, background: PL }}>
+          {pn < 1 ? (
+            <button onClick={() => setPersNum("1")}
+              style={{ width: "100%", border: `1px solid ${P}`, background: "white", color: "#C47D1A",
+                borderRadius: 9, padding: "9px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+              Commander par personne
+            </button>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: MUTED }}>En cours :</span>
+                <button onClick={() => setPersNum(String(Math.max(1, pn - 1)))} disabled={pn <= 1}
+                  style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${BORDER}`, background: "white",
+                    cursor: pn <= 1 ? "default" : "pointer", opacity: pn <= 1 ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Minus size={12} color={MUTED} />
+                </button>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "#1a1000", background: P, borderRadius: 8, padding: "3px 12px" }}>Personne {pn}</span>
+                <button onClick={() => setPersNum(String(Math.min(30, pn + 1)))}
+                  style={{ marginLeft: "auto", border: "none", background: DARK, color: "white", borderRadius: 9,
+                    padding: "8px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Plus size={13} /> Personne suivante
+                </button>
+              </div>
+              <div style={{ fontSize: 10.5, color: "#8a6a2a", marginTop: 6, lineHeight: 1.4 }}>
+                Ajoutez les plats de cette personne, puis passez à la suivante. Tout part en <strong>une seule commande</strong>.
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Liste articles */}
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 14px" }}>

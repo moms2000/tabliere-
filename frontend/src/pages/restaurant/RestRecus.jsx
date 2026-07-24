@@ -302,13 +302,6 @@ export default function RestRecus() {
                       <button onClick={() => setSplitN(n => Math.min(20, n + 1))} style={stepBtn}>+</button>
                     </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6, marginBottom: 12 }}>
-                    {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
-                      <input key={p} value={names[p] || ""} onChange={e => setNames(n => ({ ...n, [p]: e.target.value }))}
-                        placeholder={`Personne ${p} (prénom)`}
-                        style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", fontSize: 12.5, outline: "none", fontFamily: FONT, background: BG, width: "100%", boxSizing: "border-box" }} />
-                    ))}
-                  </div>
                   <div style={{ textAlign: "center", fontSize: 13, color: MUTED, marginBottom: 14 }}>
                     Chacun paie <strong style={{ color: P, fontSize: 15 }}>{fmtMoney(Math.floor(printNote.total / splitN))}</strong>
                   </div>
@@ -329,13 +322,6 @@ export default function RestRecus() {
                       <span style={{ fontSize: 17, fontWeight: 800, color: DARK, minWidth: 22, textAlign: "center" }}>{splitN}</span>
                       <button onClick={() => setSplitN(n => Math.min(12, n + 1))} style={stepBtn}>+</button>
                     </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6, marginBottom: 10 }}>
-                    {Array.from({ length: splitN }, (_, k) => k + 1).map(p => (
-                      <input key={p} value={names[p] || ""} onChange={e => setNames(n => ({ ...n, [p]: e.target.value }))}
-                        placeholder={`Personne ${p} (prénom)`}
-                        style={{ border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", fontSize: 12.5, outline: "none", fontFamily: FONT, background: BG, width: "100%", boxSizing: "border-box" }} />
-                    ))}
                   </div>
                   <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>Touche un numéro pour attribuer le plat. Plusieurs numéros = plat partagé à parts égales.</div>
                   <div style={{ maxHeight: 210, overflowY: "auto", marginBottom: 12 }}>

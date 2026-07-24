@@ -5,6 +5,17 @@ import { initPushNotifications } from "../services/push.js";
 
 const AuthContext = createContext(null);
 
+// Décode la charge utile d'un JWT (base64url) sans vérifier la signature — sert
+// uniquement à LIRE le type de jeton côté client (jamais à faire confiance pour
+// une autorisation, qui reste côté serveur).
+function decodeJwt(token) {
+  try {
+    const part = token.split(".")[1];
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(decodeURIComponent(escape(atob(b64))));
+  } catch { return null; }
+}
+
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);
   const [loading, setLoading] = useState(true); // vrai au premier chargement
@@ -14,13 +25,18 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
     if (!token) { setLoading(false); return; }
 
-    // Session staff : on la reconstruit depuis le marqueur local. Le token staff
-    // agit comme l'owner côté API, donc /auth/me renverrait l'owner (tous les
-    // onglets) — on ne l'appelle pas pour un staff.
+    // Session staff : on la reconstruit depuis le marqueur local, MAIS seulement si
+    // le jeton courant est RÉELLEMENT un jeton staff restaurant (typ = resto_staff).
+    // Sinon, un marqueur tci_staff périmé (d'une ancienne session sur cet appareil)
+    // ferait passer un organisateur/client pour un restaurateur → on le purge.
+    const isStaffToken = decodeJwt(token)?.typ === "resto_staff";
     try {
       const staff = JSON.parse(localStorage.getItem("tci_staff") || "null");
-      if (staff) { setUser({ role: "restaurateur", is_staff: true, ...staff }); setLoading(false); return; }
-    } catch {}
+      if (staff && isStaffToken) {
+        setUser({ role: "restaurateur", is_staff: true, ...staff }); setLoading(false); return;
+      }
+      if (staff && !isStaffToken) localStorage.removeItem("tci_staff"); // marqueur périmé
+    } catch { localStorage.removeItem("tci_staff"); }
 
     authService.me()
       .then(setUser)

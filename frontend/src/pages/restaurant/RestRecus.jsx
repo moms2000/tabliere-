@@ -94,6 +94,20 @@ export default function RestRecus() {
   const liveItems = (d) => (d.items || []).filter(i => i.status !== "cancelled");
 
   // Parts égales : chacun paie le même montant (le dernier absorbe l'arrondi)
+  // Lignes du reçu « parts égales » : chaque plat est divisé par n, et la somme
+  // des lignes est ajustée pour tomber EXACTEMENT sur la part à payer (le client
+  // qui additionne les lignes retrouve le bon total, pas le prix plein).
+  const equalLines = (items, n, amount) => {
+    const live = (items || []).filter(i => i.status !== "cancelled");
+    const parts = live.map(i => ({
+      left: `${i.qty}x ${i.name}${i.options_label ? ` (${i.options_label})` : ""}  (÷${n})`,
+      val: Math.round(((Number(i.unit_price) || 0) * i.qty) / n),
+    }));
+    const sum = parts.reduce((s, p) => s + p.val, 0);
+    if (parts.length) parts[parts.length - 1].val += (amount - sum); // ajustement d'arrondi
+    return parts.map(p => ({ left: p.left, right: fmtMoney(p.val) }));
+  };
+
   const printEqual = async (d, n) => {
     const share = Math.floor(d.total / n);
     setPrinting(true);
@@ -103,7 +117,7 @@ export default function RestRecus() {
         await printTicket({
           title: restoName, subtitle: "TablièreCI",
           tableLabel: `${d.session.table_label ? "Table " + d.session.table_label + " · " : ""}${personName(i)} (${i}/${n})`,
-          dateText: dateNow(), lines: itemsToLines(liveItems(d)),
+          dateText: dateNow(), lines: equalLines(liveItems(d), n, amount),
           totalLabel: `A PAYER (PART ${i}/${n})`, totalText: fmtMoney(amount), footer: "Merci pour votre visite",
         });
         await new Promise(r => setTimeout(r, 700));

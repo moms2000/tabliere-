@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import QRCode from "react-qr-code";
-import { Calendar, MapPin, ArrowLeft, Crown, Armchair, Users, Check, PartyPopper } from "lucide-react";
+import { Calendar, MapPin, ArrowLeft, Crown, Armchair, Users, Check, PartyPopper, X } from "lucide-react";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -28,7 +28,7 @@ export default function EventDetail() {
   const [formErr, setFormErr] = useState("");
   // Champs invité (réservation sans compte) — tous obligatoires
   const [gName, setGName]   = useState("");
-  const [gId, setGId]       = useState("");
+  const [indic, setIndic]   = useState("+225"); // indicatif pays du WhatsApp
   const [gPhone, setGPhone] = useState("");
   const [gEmail, setGEmail] = useState("");
 
@@ -49,15 +49,18 @@ export default function EventDetail() {
     setFormErr("");
     // Sans compte : réservation invité avec champs obligatoires (nom, identifiant, WhatsApp, e-mail)
     if (!user) {
+      const ind = indic.trim();
+      const num = gPhone.trim();
+      const fullPhone = `${ind} ${num}`.trim();
       if (gName.trim().length < 2) return setFormErr("Indiquez vos nom et prénoms.");
-      if (gId.trim().length < 3) return setFormErr("Indiquez votre numéro d'identifiant.");
-      if (!/^[0-9+][0-9\s().-]{6,24}$/.test(gPhone.trim())) return setFormErr("Numéro WhatsApp invalide.");
+      if (!/^\+\d{1,4}$/.test(ind)) return setFormErr("Indicatif invalide (ex : +225).");
+      if (!/^\d[\d\s().-]{5,17}$/.test(num)) return setFormErr("Numéro WhatsApp invalide.");
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(gEmail.trim())) return setFormErr("Adresse e-mail invalide.");
       setSubmitting(true);
       try {
         const { reservation } = await eventReservationsService.createGuest({
           slug, table_id: picked?.id, party_size: party,
-          guest_name: gName, guest_id_number: gId, guest_phone: gPhone, guest_email: gEmail,
+          guest_name: gName, guest_phone: fullPhone, guest_email: gEmail,
           special_request: note || undefined, promoter_code: promo || undefined,
         });
         setDone(reservation.ref); setPicked(null); load();
@@ -161,8 +164,18 @@ export default function EventDetail() {
           <motion.div initial={{ y: 40 }} animate={{ y: 0 }} onPointerDown={e => e.stopPropagation()}
             style={{ background: "white", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 480, padding: "20px 20px calc(env(safe-area-inset-bottom,0px) + 20px)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <button onClick={() => !submitting && setPicked(null)} aria-label="Retour"
+                style={{ border: "none", background: BG, borderRadius: "50%", width: 32, height: 32, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <ArrowLeft size={17} color={DARK} />
+              </button>
               {picked.kind === "vip" ? <Crown size={18} color={P} /> : <Armchair size={18} color={DARK} />}
               <span style={{ fontSize: 17, fontWeight: 700, color: DARK }}>{picked.label}</span>
+              <button onClick={() => !submitting && setPicked(null)} aria-label="Fermer"
+                style={{ marginLeft: "auto", border: "none", background: BG, borderRadius: "50%", width: 32, height: 32, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <X size={17} color={MUTED} />
+              </button>
             </div>
             <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>
               {picked.capacity} pers. · {fmt(picked.price)}{picked.kind === "vip" ? " · pack VIP" : ""}
@@ -180,10 +193,12 @@ export default function EventDetail() {
                 </div>
                 <label style={lbl}>Nom et prénoms *</label>
                 <input value={gName} onChange={e => setGName(e.target.value)} placeholder="Ex : Konan Aya" style={inp} />
-                <label style={{ ...lbl, marginTop: 12 }}>Numéro d'identifiant (CNI, passeport…) *</label>
-                <input value={gId} onChange={e => setGId(e.target.value)} placeholder="Ex : CI0012345678" style={inp} />
-                <label style={{ ...lbl, marginTop: 12 }}>Numéro WhatsApp *</label>
-                <input value={gPhone} onChange={e => setGPhone(e.target.value)} placeholder="Ex : 07 08 09 10 11" style={inp} inputMode="tel" />
+                <label style={{ ...lbl, marginTop: 12 }}>Numéro WhatsApp (avec l'indicatif) *</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input value={indic} onChange={e => setIndic(e.target.value.replace(/[^\d+]/g, ""))}
+                    placeholder="+225" inputMode="tel" style={{ ...inp, width: 84, textAlign: "center", fontWeight: 600, flexShrink: 0 }} />
+                  <input value={gPhone} onChange={e => setGPhone(e.target.value)} placeholder="07 08 09 10 11" style={{ ...inp, flex: 1 }} inputMode="tel" />
+                </div>
                 <label style={{ ...lbl, marginTop: 12 }}>Adresse e-mail *</label>
                 <input value={gEmail} onChange={e => setGEmail(e.target.value)} placeholder="Ex : aya@email.com" style={inp} inputMode="email" />
                 <div style={{ height: 12 }} />

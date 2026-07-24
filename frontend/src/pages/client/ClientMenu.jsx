@@ -2,7 +2,7 @@
  * ClientMenu — Interface QR identique BBR (Boulay Beach Resort)
  * Screens: splash → menu → item → cart → info → confirm
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Minus, ShoppingCart, Search, ArrowLeft, Check, AlertTriangle, History, RefreshCw, ChevronRight, Utensils } from "lucide-react";

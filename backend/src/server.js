@@ -76,6 +76,8 @@ async function runBusinessMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token_expires TIMESTAMPTZ`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token   VARCHAR(64)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ`,
+    // Invalidation des jetons d'accès émis avant un reset de mot de passe / une révocation forcée
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_from TIMESTAMPTZ`,
     // RATTRAPAGE une-fois : au déploiement de la vérification e-mail obligatoire au
     // login, on considère TOUS les comptes déjà créés comme vérifiés (sinon ils
     // seraient bloqués rétroactivement). Cutoff figé = instant du déploiement → les

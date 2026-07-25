@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { query, withTransaction, poolStats }  from "../config/db.js";
 import { env } from "../config/env.js";
 import { seedLoad, cleanSeed, seedStats } from "../utils/seeder.js";
@@ -6,6 +7,7 @@ import { bustSettingsCache } from "../utils/platformSettings.js";
 import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { revokeAllForUser } from "../utils/refreshTokens.js";
 import { logger }  from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------
@@ -391,12 +393,15 @@ export const setRestaurantPlan = asyncHandler(async (req, res) => {
   // Pas d'ON CONFLICT car aucune contrainte unique sur restaurant_id → DELETE+INSERT
   const priceMap = { gratuit: 0, standard: 25000, premium: 60000 };
   try {
-    await query("DELETE FROM subscriptions WHERE restaurant_id = $1", [resto.id]);
-    await query(
-      `INSERT INTO subscriptions (restaurant_id, plan, price, starts_at, is_active)
-       VALUES ($1, $2, $3, NOW(), TRUE)`,
-      [resto.id, plan, priceMap[plan] ?? 0]
-    );
+    // Atomique : jamais de restaurant laissé SANS ligne d'abonnement si l'INSERT échoue.
+    await withTransaction(async (client) => {
+      await client.query("DELETE FROM subscriptions WHERE restaurant_id = $1", [resto.id]);
+      await client.query(
+        `INSERT INTO subscriptions (restaurant_id, plan, price, starts_at, is_active)
+         VALUES ($1, $2, $3, NOW(), TRUE)`,
+        [resto.id, plan, priceMap[plan] ?? 0]
+      );
+    });
   } catch (e) {
     logger.warn("Subscription non enregistrée (plan mis à jour quand même)", { error: e.message });
   }
@@ -513,6 +518,8 @@ export const updateUser = asyncHandler(async (req, res) => {
     const bcrypt = await import("bcryptjs");
     const hash = await bcrypt.default.hash(new_password, 12);
     values.push(hash); updates.push(`password_hash = $${values.length}`);
+    // Invalide immédiatement toutes les sessions du compte (jetons d'accès émis avant).
+    updates.push(`sessions_valid_from = NOW()`);
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);
 
@@ -525,6 +532,7 @@ export const updateUser = asyncHandler(async (req, res) => {
   if (!user) return notFound(res, "Utilisateur introuvable");
 
   await cache.del(`user:${req.params.id}`);
+  if (new_password) await revokeAllForUser(req.params.id).catch(() => {}); // coupe aussi les refresh tokens
   logger.info("Utilisateur mis à jour par admin", { userId: user.id });
   return ok(res, { user }, "Utilisateur mis à jour");
 });
@@ -973,9 +981,9 @@ export const generateCodes = asyncHandler(async (req, res) => {
   const generateCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let c = "REST-";
-    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 4; i++) c += chars[crypto.randomInt(chars.length)];
     c += "-";
-    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 4; i++) c += chars[crypto.randomInt(chars.length)];
     return c;
   };
 
@@ -1069,9 +1077,9 @@ export const generateOrganisateurCodes = asyncHandler(async (req, res) => {
   const generateCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let c = "ORG-";
-    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 4; i++) c += chars[crypto.randomInt(chars.length)];
     c += "-";
-    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 4; i++) c += chars[crypto.randomInt(chars.length)];
     return c;
   };
 

@@ -65,6 +65,7 @@ export const sendMessage = async (req, res, next) => {
     const role   = req.user.role;
 
     if (!content?.trim()) return badRequest(res, "Message vide");
+    if (String(content).length > 2000) return badRequest(res, "Message trop long (2000 caractères max)");
 
     const { rows: check } = await query(
       `SELECT r.id, r.client_id, rest.owner_id

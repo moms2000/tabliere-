@@ -4,13 +4,21 @@
  */
 
 const connections = new Map(); // userId → Set<res>
+const MAX_PER_USER = 8; // plafond de connexions SSE par utilisateur (anti-DoS / fuite de descripteurs)
 
 /**
- * Enregistre une connexion SSE
+ * Enregistre une connexion SSE. Au-delà du plafond, on ferme la PLUS ANCIENNE
+ * connexion de l'utilisateur (empêche un client d'ouvrir des milliers de flux).
  */
 export function addConnection(userId, res) {
   if (!connections.has(userId)) connections.set(userId, new Set());
-  connections.get(userId).add(res);
+  const set = connections.get(userId);
+  while (set.size >= MAX_PER_USER) {
+    const oldest = set.values().next().value;
+    set.delete(oldest);
+    try { oldest.end(); } catch (_) {}
+  }
+  set.add(res);
 }
 
 /**

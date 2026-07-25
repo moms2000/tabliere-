@@ -118,7 +118,8 @@ export const getFullMenu = asyncHandler(async (req, res) => {
 
 // ── POST /menu/categories ─────────────────────────────────────────────────────
 export const createCategory = asyncHandler(async (req, res) => {
-  const { name, position = 0 } = req.body;
+  const name = String(req.body.name || "").trim().slice(0, 80);
+  const position = Math.max(0, Math.min(9999, parseInt(req.body.position, 10) || 0));
   if (!name) throw new AppError("Nom de catégorie requis", 400);
 
   const restoId = req.user.restaurant_id;

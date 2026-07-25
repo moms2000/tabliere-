@@ -39,11 +39,14 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
     if (cached) return ok(res, cached);
   }
 
+  // Le menu QR (client à table) doit rester accessible même si le restaurant a
+  // choisi de NE PAS figurer dans l'annuaire public (is_published=FALSE). Ce flag
+  // ne concerne QUE la découverte publique, pas l'accès direct via le QR de la
+  // table. On exige seulement un restaurant non suspendu.
   const { rows: [resto] } = await query(
     `SELECT id, name, slug, description, cuisine_type, address, quartier,
             opening_hours, phone, theme_color, qr_active
-     FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')
-       ${previewOk ? "" : "AND COALESCE(is_published, TRUE) = TRUE"}`,
+     FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')`,
     [req.params.slug]
   );
   if (!resto) return notFound(res, "Restaurant introuvable");

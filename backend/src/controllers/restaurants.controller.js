@@ -118,10 +118,12 @@ export const getOne = asyncHandler(async (req, res) => {
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
-     WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')
-       ${previewOk ? "" : "AND COALESCE(r.is_published, TRUE) = TRUE"}`,
+     WHERE r.slug = $1 AND r.status IN ('actif', 'en_attente')`,
     [req.params.slug]
   );
+  // Accès par LIEN DIRECT / QR : autorisé même si le restaurant n'est pas publié
+  // dans l'annuaire (is_published ne filtre que la LISTE publique, pas l'accès
+  // direct par slug). Cohérent avec le menu QR (getPublicMenu).
   if (!resto) return notFound(res, "Restaurant introuvable");
 
   // Tables

@@ -255,19 +255,26 @@ export default function ClientMenu() {
   const loadMenu = useCallback(() => {
     if (!slug) { setLoading(false); setLoadErr(true); return; }
     setLoading(true); setLoadErr(false);
-    Promise.all([
-      restaurantsService.getBySlug(slug),
-      menuService.getPublicMenu(slug),
-    ]).then(([rd, md]) => {
-      const r = rd.restaurant || rd;
-      setResto(r);
-      const cats = (md.categories || []).filter(c => (c.items||[]).some(i => i.is_active !== false));
-      setCategories(cats);
-    }).catch((e) => {
-      // 404 = resto inexistant (reste "introuvable") ; sinon = panne réseau/cold-start (retry possible)
-      if (e?.response?.status === 404) setResto(null);
-      else setLoadErr(true);
-    }).finally(() => setLoading(false));
+    // Source PRIMAIRE = le menu public (il renvoie déjà le restaurant + les plats).
+    // getBySlug n'est qu'un enrichissement (photos, horaires) et ne doit JAMAIS
+    // bloquer l'affichage du menu s'il échoue (ex : resto hors annuaire public).
+    menuService.getPublicMenu(slug)
+      .then(async (md) => {
+        let r = md?.restaurant || null;
+        try {
+          const rd = await restaurantsService.getBySlug(slug);
+          r = (rd?.restaurant || rd) || r;
+        } catch (_) { /* enrichissement optionnel */ }
+        if (!r) { setResto(null); return; }
+        setResto(r);
+        setCategories((md?.categories || []).filter(c => (c.items || []).length > 0));
+      })
+      .catch((e) => {
+        // 404 = resto vraiment inexistant → "introuvable" ; sinon réseau/cold-start → retry
+        if (e?.response?.status === 404) setResto(null);
+        else setLoadErr(true);
+      })
+      .finally(() => setLoading(false));
     setLocalOrders(loadOrders());
   }, [slug]);
   useEffect(() => { loadMenu(); }, [loadMenu]);

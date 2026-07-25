@@ -201,7 +201,10 @@ export default function RestCommandes() {
       if (seenRef.current === null) {
         seenRef.current = new Set(ids); // 1er chargement : on mémorise sans sonner
       } else {
-        const hasNew = act.some(o => o.status === "en_attente" && !seenRef.current.has(o.id));
+        // TOUTE nouvelle commande active déclenche l'alarme, quelle que soit son
+        // origine : QR client (en_attente) OU serveur/caisse via le POS (en_cours).
+        // Un changement de statut ne compte pas (l'id était déjà vu).
+        const hasNew = act.some(o => !seenRef.current.has(o.id));
         seenRef.current = new Set(ids);
         if (hasNew && soundRef.current) playOrderAlarm();
       }

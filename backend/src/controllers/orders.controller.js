@@ -8,6 +8,22 @@ import { ok, created, notFound, paginated } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { attachOrderToSession } from "./sessions.controller.js";
+import { sendPushToUser } from "../services/push.service.js";
+
+// Notifie le restaurateur (et donc toutes les tablettes/téléphones du resto, y
+// compris le staff) d'une nouvelle commande — push audible même app fermée.
+async function notifyNewOrder(restoId, { tableLabel, qty, total }) {
+  try {
+    const { rows: [own] } = await query("SELECT owner_id FROM restaurants WHERE id = $1", [restoId]);
+    if (!own?.owner_id) return;
+    const money = Number(total || 0).toLocaleString("fr-FR");
+    sendPushToUser(own.owner_id, {
+      title: "Nouvelle commande",
+      body: `${tableLabel ? "Table " + tableLabel + " · " : ""}${qty} article(s) · ${money} F`,
+      data: { route: "/restaurant/commandes" },
+    }).catch(() => {});
+  } catch (_) { /* jamais bloquer la commande */ }
+}
 
 // ── Création automatique de la table si elle n'existe pas ──────────────────
 const INIT_SQL = `
@@ -186,6 +202,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   });
 
   logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });
+  notifyNewOrder(restaurant_id, { tableLabel: table_label, qty: safeItems.reduce((s, it) => s + it.qty, 0), total });
   return created(res, { order }, "Commande envoyée avec succès");
 });
 
@@ -352,6 +369,7 @@ export const createManualOrder = asyncHandler(async (req, res) => {
   await attachOrderToSession({ restoId, tableLabel: table_label, items: safeItems, source: "server", conviveNum: req.body.convive_num || null });
 
   logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
+  notifyNewOrder(restoId, { tableLabel: table_label, qty: safeItems.reduce((s, it) => s + it.qty, 0), total });
   return created(res, { order }, "Commande créée");
 });
 

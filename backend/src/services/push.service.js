@@ -58,8 +58,10 @@ export async function sendPushToUser(userId, { title, body, data = {} }) {
       tokens,
       notification: { title, body },
       data: strData,
-      apns: { payload: { aps: { sound: "default" } } },
-      android: { priority: "high" },
+      // Son + priorité haute sur iOS ET Android → l'alerte est audible même
+      // quand l'application est en arrière-plan ou fermée.
+      apns: { payload: { aps: { sound: "default" } }, headers: { "apns-priority": "10" } },
+      android: { priority: "high", notification: { sound: "default", defaultSound: true } },
     });
 
     // Purger les tokens devenus invalides

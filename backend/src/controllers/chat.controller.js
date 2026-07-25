@@ -4,6 +4,7 @@
  */
 import { query } from "../config/db.js";
 import { ok, created, badRequest, forbidden, notFound } from "../utils/response.js";
+import { sendPushToUser } from "../services/push.service.js";
 
 /* ──────────────────────────────────────────────────────────────────────────
    GET /api/v1/chat/:reservation_id
@@ -98,6 +99,14 @@ export const sendMessage = async (req, res, next) => {
         JSON.stringify({ reservation_id, sender_name: req.user.full_name }),
       ]
     ).catch(() => {});
+
+    // Push (app fermée) au destinataire. Route selon son rôle.
+    const toOwner = recipientId === resa.owner_id;
+    sendPushToUser(recipientId, {
+      title: "Nouveau message",
+      body:  `${req.user.full_name} vous a écrit`,
+      data:  { route: toOwner ? "/restaurant/reservations" : "/profil?tab=reservations" },
+    }).catch(() => {});
 
     return created(res, msg, "Message envoyé");
   } catch (err) { next(err); }

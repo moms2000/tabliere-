@@ -10,6 +10,16 @@ import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { notificationQueue }      from "../queues/index.js";
 import { logger }                 from "../utils/logger.js";
 import { emitToUser }             from "../utils/sse.js";
+import { sendPushToUser }         from "../services/push.service.js";
+
+// Date compacte pour les notifications ("12/07 à 20h30").
+function fmtDateShort(d) {
+  try {
+    const x = new Date(d);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(x.getDate())}/${p(x.getMonth() + 1)} à ${p(x.getHours())}h${p(x.getMinutes())}`;
+  } catch { return ""; }
+}
 
 // Valeurs valides de l'ENUM resa_status — toute autre valeur écrite en base
 // déclenche une erreur 500 ("invalid input value for enum resa_status")
@@ -228,6 +238,12 @@ export const create = asyncHandler(async (req, res) => {
         reserved_at: resa.reserved_at,
         client_name: req.user.full_name || req.user.email,
       });
+      // Push (app fermée) → le restaurateur est alerté même hors de l'app
+      sendPushToUser(owner.owner_id, {
+        title: "Nouvelle réservation",
+        body:  `${req.user.full_name || "Un client"} · ${resa.party_size} pers. · ${fmtDateShort(resa.reserved_at)}`,
+        data:  { route: "/restaurant/reservations" },
+      }).catch(() => {});
     }
     // Notifier les admins aussi
     emitToUser("admin", "new_reservation", { ref: resa.ref, resto: resto.name });
@@ -842,6 +858,11 @@ export const createGuest = asyncHandler(async (req, res) => {
         ref: resa.ref, party_size: resa.party_size,
         reserved_at: resa.reserved_at, client_name: walk_in_name,
       });
+      sendPushToUser(owner.owner_id, {
+        title: "Nouvelle réservation",
+        body:  `${walk_in_name || "Un client"} · ${resa.party_size} pers. · ${fmtDateShort(resa.reserved_at)}`,
+        data:  { route: "/restaurant/reservations" },
+      }).catch(() => {});
     }
   } catch (_) {}
 

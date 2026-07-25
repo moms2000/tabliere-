@@ -165,7 +165,7 @@ async function processNotification(name, data) {
 
     case "confirmation_client": {
       const { rows: [resa] } = await query(
-        `SELECT r.reserved_at, r.party_size, r.ref,
+        `SELECT r.reserved_at, r.party_size, r.ref, r.client_id,
                 u.full_name, u.phone, u.email,
                 re.name AS resto_name
          FROM reservations r
@@ -174,6 +174,12 @@ async function processNotification(name, data) {
          WHERE r.id = $1`,
         [data.reservationId]
       );
+      // Push (app fermée) au client : sa table est confirmée
+      if (resa?.client_id) await sendPushToUser(resa.client_id, {
+        title: "Table confirmée",
+        body:  `${resa.resto_name} a confirmé votre réservation (${resa.ref}).`,
+        data:  { route: "/profil?tab=reservations" },
+      }).catch(() => {});
 
       // Email confirmation par le restaurant
       if (resa?.email) {
@@ -365,6 +371,12 @@ async function processNotification(name, data) {
       if (waOn && r.phone) await whatsappService.sendText(r.phone,
         `✅ ${r.name}, votre acompte est reçu ! Votre réservation ${r.ref} pour *${r.event_name}* (${fmtDate(r.starts_at)}, ${table}) est *confirmée*.\n\nVotre billet + QR code : ${ticketUrl}\nPrésentez-le à l'entrée. 🎉`
       ).catch(() => {});
+      // Push (app fermée) au client connecté : son QR est prêt
+      if (r.client_id) await sendPushToUser(r.client_id, {
+        title: "Réservation confirmée",
+        body:  `${r.event_name} — votre QR code est prêt. Présentez-le à l'entrée.`,
+        data:  { route: `/billet/${r.ref}` },
+      }).catch(() => {});
       break;
     }
 
@@ -400,7 +412,7 @@ async function processNotification(name, data) {
 // Détails d'une réservation événement pour les notifications (contact = compte OU invité)
 async function getEventResa(id) {
   const { rows: [r] } = await query(
-    `SELECT r.ref, r.party_size, r.status, r.deposit_amount,
+    `SELECT r.ref, r.party_size, r.status, r.deposit_amount, r.client_id,
             COALESCE(r.guest_name, u.full_name)  AS name,
             COALESCE(r.guest_email, u.email)      AS email,
             COALESCE(r.guest_phone, u.phone)      AS phone,

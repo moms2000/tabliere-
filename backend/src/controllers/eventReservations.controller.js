@@ -15,6 +15,17 @@ import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { notificationQueue } from "../queues/index.js";
 import { ticketToken, verifyTicketToken } from "../utils/ticketToken.js";
+import { sendPushToUser } from "../services/push.service.js";
+
+// Push (app fermée) à l'organisateur : une réservation attend sa confirmation d'acompte.
+function pushOrganizerNewResa(event, resa) {
+  if (!event?.owner_id) return;
+  sendPushToUser(event.owner_id, {
+    title: "Nouvelle réservation",
+    body:  `${resa?.guest_name || "Un client"} · ${event.name || "votre événement"} — acompte à confirmer`,
+    data:  { route: `/event/${event.id}` },
+  }).catch(() => {});
+}
 
 async function resaById(id) {
   const { rows } = await query(
@@ -95,6 +106,7 @@ export const createEventReservation = asyncHandler(async (req, res) => {
   });
 
   notificationQueue.add("event_resa_pending", { reservationId: resa.id });
+  pushOrganizerNewResa(event, resa);
   return created(res, { reservation: resa }, "Demande envoyée — en attente de votre acompte");
 });
 
@@ -145,6 +157,7 @@ export const createGuestReservation = asyncHandler(async (req, res) => {
   });
 
   notificationQueue.add("event_resa_pending", { reservationId: resa.id });
+  pushOrganizerNewResa(event, { guest_name: name });
   return created(res, { reservation: { ref: resa.ref } },
     "Demande enregistrée. Dès que l'organisateur confirme votre acompte, vous recevrez par WhatsApp et e-mail le lien vers votre QR code.");
 });

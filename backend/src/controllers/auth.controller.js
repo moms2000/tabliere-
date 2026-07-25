@@ -12,6 +12,11 @@ import { logger } from "../utils/logger.js";
 import { getSetting } from "../utils/platformSettings.js";
 import { env } from "../config/env.js";
 
+// Hash factice (valide) pour le login : on exécute TOUJOURS un bcrypt.compare,
+// même si l'email n'existe pas, afin d'avoir un temps de réponse constant
+// (anti-timing / anti-énumération d'emails).
+const DUMMY_HASH = bcrypt.hashSync("tabliere_dummy_password", 12);
+
 // ── Helper email SendGrid (direct, ne bloque jamais l'inscription) ────────────
 async function sendVerificationEmail(email, fullName, token) {
   if (!env.SENDGRID_API_KEY) {
@@ -284,13 +289,12 @@ export const login = asyncHandler(async (req, res) => {
      FROM users WHERE email = $1`, [email]
   );
   const user = rows[0];
-  if (!user) return unauth(res, "Email ou mot de passe incorrect");
 
-  // On vérifie le mot de passe AVANT de révéler quoi que ce soit sur le compte.
-  // Sinon un message « Compte suspendu » servi avant la vérif du mot de passe
-  // permet d'énumérer les emails existants.
-  const valid = await bcrypt.compare(password, user.password_hash || "");
-  if (!valid) return unauth(res, "Email ou mot de passe incorrect");
+  // On exécute TOUJOURS un bcrypt.compare (hash factice si l'email n'existe pas)
+  // → temps de réponse constant, pas de fuite temporelle sur l'existence du compte.
+  // La vérif du mot de passe passe AVANT tout message sur le statut du compte.
+  const valid = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
+  if (!user || !valid) return unauth(res, "Email ou mot de passe incorrect");
   if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
   // Vérification d'e-mail OBLIGATOIRE avant toute connexion.
   if (user.email_verified === false) {
@@ -511,13 +515,14 @@ export const resetPassword = asyncHandler(async (req, res) => {
   const password_hash = await bcrypt.hash(password, 12);
   await query(
     `UPDATE users
-     SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = NOW()
+     SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL,
+         sessions_valid_from = NOW(), updated_at = NOW()
      WHERE id = $2`,
     [password_hash, user.id]
   );
   await cache.del(`user:${user.id}`).catch(() => {});
-  // Sécurité : un changement de mot de passe invalide toutes les sessions existantes
-  // (refresh tokens) → un jeton volé avant le reset ne fonctionne plus.
+  // Sécurité : un reset invalide TOUTES les sessions existantes — refresh tokens
+  // révoqués ET jetons d'accès émis avant le reset rejetés (sessions_valid_from).
   await revokeAllForUser(user.id);
 
   logger.info("Mot de passe réinitialisé", { userId: user.id });

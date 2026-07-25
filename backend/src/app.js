@@ -51,6 +51,10 @@ app.use((_req, res, next) => {
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
   res.set("Vary", "Authorization");
+  // L'API ne sert que du JSON : aucune ressource à charger, jamais dans une iframe.
+  // Durcit contre le rendu accidentel de contenu et le clickjacking d'une reponse d'erreur.
+  res.set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  res.set("X-Frame-Options", "DENY");
   next();
 });
 

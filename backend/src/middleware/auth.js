@@ -57,7 +57,7 @@ export const authenticate = async (req, res, next) => {
 
     if (!user) {
       const { rows } = await query(
-        "SELECT id, email, role, status, restaurant_id FROM users WHERE id = $1",
+        "SELECT id, email, role, status, restaurant_id, sessions_valid_from FROM users WHERE id = $1",
         [decoded.id]
       );
       if (!rows[0]) return unauth(res, "Utilisateur introuvable");
@@ -66,6 +66,13 @@ export const authenticate = async (req, res, next) => {
     }
 
     if (["suspendu", "bloque"].includes(user.status)) return forbidden(res, "Compte suspendu");
+
+    // Invalidation des jetons d'accès émis AVANT un reset de mot de passe (ou une
+    // révocation forcée). Un jeton volé avant le reset cesse immédiatement de marcher.
+    if (user.sessions_valid_from && decoded.iat &&
+        decoded.iat * 1000 < new Date(user.sessions_valid_from).getTime() - 1000) {
+      return unauth(res, "Session expirée. Reconnectez-vous.");
+    }
 
     req.user  = user;
     req.token = token;

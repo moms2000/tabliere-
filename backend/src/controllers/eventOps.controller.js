@@ -224,6 +224,15 @@ export const listMyOrders = asyncHandler(async (req, res) => {
   const d = token ? verifyOrderToken(token) : null;
   if (!d) throw new AppError("Session responsable expirée. Ressaisissez le code.", 401);
   if (!d.table_id) return ok(res, { orders: [], table_label: d.table_label || null });
+  // Revérification "live" (comme à la commande) : le salon doit toujours être
+  // occupé par une réservation confirmée et pointée. Un jeton de 10 h ne doit plus
+  // rien révéler si la réservation a été annulée ou la table libérée entre-temps.
+  const { rows: live } = await query(
+    `SELECT 1 FROM event_reservations
+     WHERE event_id = $1 AND table_id = $2 AND status = 'confirme' AND checked_in_at IS NOT NULL LIMIT 1`,
+    [d.event_id, d.table_id]
+  );
+  if (!live.length) throw new AppError("Session responsable expirée (salon parti ou réservation annulée).", 401);
   const { rows } = await query(
     `SELECT id, ref, items, total, status, note, created_at, updated_at
      FROM event_orders

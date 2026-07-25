@@ -16,6 +16,6 @@ const initiateSchema = Joi.object({
 router.post("/initiate",            reservationLimiter, authenticate, validate(initiateSchema), ctrl.initiate);
 router.post("/callback/:method",    webhookLimiter, ctrl.callback);  // webhook — signature vérifiée + rate-limité
 router.get ("/status/:id",          authenticate, ctrl.getStatus);
-router.post("/:id/refund",          authenticate, authorize("admin","restaurateur"), ctrl.refund);
+router.post("/:id/refund",          reservationLimiter, authenticate, authorize("admin","restaurateur"), ctrl.refund);
 
 export default router;

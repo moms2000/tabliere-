@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate, authorize("restaurateur", "admin"), requireTab("commandes", "pos", "recus"));
 
 router.get   ("/",                  ctrl.listSessions);
+router.get   ("/report",            ctrl.cashReport);   // avant /:id — rapport de caisse
 router.post  ("/",                  ctrl.openSession);
 router.get   ("/:id",               ctrl.getSession);
 router.post  ("/:id/items",         ctrl.addItems);

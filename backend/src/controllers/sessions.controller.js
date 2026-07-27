@@ -483,6 +483,27 @@ export const payForSession = asyncHandler(async (req, res) => {
   return created(res, { payments: recorded, ...(await sessionDetail(s.id)) }, "Encaissement enregistré");
 });
 
+// ── GET /sessions/report — rapport de caisse (encaissements par mode) ────────
+// period = day (défaut) | week | month. Sert à la clôture de caisse.
+export const cashReport = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const restoId = await resolveRestoId(req);
+  const INTERVAL = { day: "1 day", week: "7 days", month: "30 days" };
+  const period = INTERVAL[req.query.period] ? req.query.period : "day";
+  const { rows } = await query(
+    `SELECT method, COALESCE(SUM(amount),0)::int AS amount, COUNT(*)::int AS count
+     FROM session_payments
+     WHERE restaurant_id = $1 AND created_at >= NOW() - INTERVAL '${INTERVAL[period]}'
+     GROUP BY method
+     ORDER BY amount DESC`,
+    [restoId]
+  );
+  const byMethod = {};
+  let total = 0, count = 0;
+  for (const r of rows) { byMethod[r.method] = { amount: r.amount, count: r.count }; total += r.amount; count += r.count; }
+  return ok(res, { period, total, count, by_method: byMethod });
+});
+
 // ── POST /sessions/:id/close — clôturer la note ─────────────────────────────
 export const closeSession = asyncHandler(async (req, res) => {
   await ensureTables();

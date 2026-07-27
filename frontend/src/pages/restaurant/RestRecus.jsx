@@ -113,10 +113,12 @@ export default function RestRecus() {
     setPrinting(true);
     try {
       await printTicket({
-        title: restoName, subtitle: "TablièreCI",
+        title: restoName,
         tableLabel: d.session.table_label ? `Table ${d.session.table_label}` : "",
         dateText: dateNow(), lines: itemsToLines(d.items),
-        totalLabel: "TOTAL", totalText: fmtMoney(d.total), footer: "Merci pour votre visite",
+        totalLabel: "TOTAL", totalText: fmtMoney(d.total),
+        // Encaissements déjà enregistrés → affichés sur le reçu (mode + montant)
+        payments: (d.payments || []).map(p => ({ method: p.method, amount: p.amount })),
       });
     } catch (_) { alert("Impression impossible sur cet appareil."); }
     setPrinting(false);

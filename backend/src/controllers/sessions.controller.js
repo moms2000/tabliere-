@@ -11,6 +11,7 @@
  *  session_items    : chaque article (plat, options, convive, tournée, statut)
  */
 
+import crypto from "crypto";
 import { query, withTransaction } from "../config/db.js";
 import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -77,6 +78,22 @@ async function ensureTables() {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )`);
   await query(`CREATE INDEX IF NOT EXISTS idx_session_items_session ON session_items(session_id)`);
+  // Encaissements d'une note : par table (convive_id NULL) OU par personne (convive_id).
+  // Plusieurs lignes possibles (addition partagée, chacun son mode). `ref` unique pour
+  // l'idempotence et l'envoi futur à la caisse du restaurant.
+  await query(`
+    CREATE TABLE IF NOT EXISTS session_payments (
+      id            BIGSERIAL PRIMARY KEY,
+      session_id    BIGINT NOT NULL REFERENCES table_sessions(id) ON DELETE CASCADE,
+      restaurant_id UUID NOT NULL,
+      convive_id    BIGINT REFERENCES session_convives(id) ON DELETE SET NULL,
+      amount        INTEGER NOT NULL,
+      method        VARCHAR(20) NOT NULL,
+      ref           VARCHAR(48) NOT NULL UNIQUE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_session_payments_session ON session_payments(session_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_session_payments_resto ON session_payments(restaurant_id, created_at)`);
   migrated = true;
 }
 
@@ -145,7 +162,18 @@ async function sessionDetail(sessionId) {
     const k = i.convive_id || "shared";
     perConvive[k] = (perConvive[k] || 0) + i.unit_price * i.qty;
   }
-  return { session, convives, items, total, per_convive: perConvive };
+  // Encaissements enregistrés sur la note
+  const { rows: payments } = await query(
+    "SELECT id, convive_id, amount, method, ref, created_at FROM session_payments WHERE session_id = $1 ORDER BY id",
+    [sessionId]);
+  const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const paidPerConvive = {};
+  for (const p of payments) { const k = p.convive_id || "shared"; paidPerConvive[k] = (paidPerConvive[k] || 0) + Number(p.amount || 0); }
+  return {
+    session, convives, items, total, per_convive: perConvive,
+    payments, paid: Math.round(paid), remaining: Math.max(0, Math.round(total - paid)),
+    paid_per_convive: paidPerConvive,
+  };
 }
 
 async function ownerId(restoId) {
@@ -405,6 +433,54 @@ export const updateConvive = asyncHandler(async (req, res) => {
     "UPDATE session_convives SET name = $1 WHERE id = $2 AND session_id = $3", [name, req.params.cid, s.id]);
   if (!rowCount) return notFound(res, "Convive introuvable");
   return ok(res, await sessionDetail(s.id), "Convive modifié");
+});
+
+// ── POST /sessions/:id/pay — enregistrer un ou plusieurs encaissements ───────
+// Corps : { payments: [{ method, amount, convive_id? }], close? }  OU un seul
+// { method, amount, convive_id? }. convive_id présent = paiement d'UNE personne
+// (addition partagée) ; absent = paiement global de la table.
+export const PAYMENT_METHODS = ["especes", "wave", "orange", "mtn", "moov", "carte"];
+export const payForSession = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const restoId = await resolveRestoId(req);
+  const s = await loadOwnedSession(req.params.id, restoId);
+  if (!s) return notFound(res, "Note introuvable");
+
+  const b = req.body || {};
+  const list = Array.isArray(b.payments) ? b.payments : [b];
+  if (!list.length) throw new AppError("Aucun encaissement fourni", 400);
+  if (list.length > 50) throw new AppError("Trop d'encaissements", 400);
+
+  const recorded = await withTransaction(async (client) => {
+    const out = [];
+    for (const p of list) {
+      const method = String(p.method || "").toLowerCase().trim();
+      if (!PAYMENT_METHODS.includes(method)) throw new AppError(`Mode de paiement invalide : ${p.method}`, 400);
+      const amount = Math.round(Number(p.amount) || 0);
+      if (amount <= 0 || amount > 100000000) throw new AppError("Montant invalide", 400);
+      // Un convive_id doit appartenir à CETTE note (sinon on ignore → paiement global).
+      let conviveId = null;
+      if (p.convive_id != null) {
+        const { rows: [c] } = await client.query(
+          "SELECT id FROM session_convives WHERE id = $1 AND session_id = $2", [p.convive_id, s.id]);
+        conviveId = c?.id || null;
+      }
+      const ref = "PAY-" + crypto.randomUUID();
+      await client.query(
+        `INSERT INTO session_payments (session_id, restaurant_id, convive_id, amount, method, ref)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [s.id, restoId, conviveId, amount, method, ref]);
+      out.push({ ref, amount, method, convive_id: conviveId });
+    }
+    return out;
+  });
+
+  // Clôture optionnelle (quand la table est réglée)
+  if (b.close) {
+    await query("UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1", [s.id]);
+  }
+  logger.info("Encaissement enregistré", { sessionId: s.id, count: recorded.length, closed: !!b.close });
+  return created(res, { payments: recorded, ...(await sessionDetail(s.id)) }, "Encaissement enregistré");
 });
 
 // ── POST /sessions/:id/close — clôturer la note ─────────────────────────────

@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Receipt, RefreshCw, Printer, CheckCircle2, Search } from "lucide-react";
+import { Receipt, RefreshCw, Printer, CheckCircle2, Search, Wallet } from "lucide-react";
 import { sessionsService } from "../../services/sessions.service.js";
 import { printTicket, itemsToLines, fmtMoney } from "../../utils/printer.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P = "#E8A045"; const PL = "#FEF6EC"; const DARK = "#1E2E28"; const BG = "#F8F5EF";
-const BORDER = "#E4DFD8"; const MUTED = "#9BA89F";
+const BORDER = "#E4DFD8"; const MUTED = "#9BA89F"; const GREEN = "#3D6B55";
 const FONT = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
 
 export default function RestRecus() {
@@ -24,6 +24,56 @@ export default function RestRecus() {
   const [tableSearch, setTableSearch] = useState("");   // recherche par numéro de table
   const [recPage, setRecPage]     = useState(1);
   const REC_PAGE_SIZE = 12;
+  // Encaissement
+  const METHODS = [["especes","Espèces"],["wave","Wave"],["orange","Orange Money"],["mtn","MTN"],["moov","Moov"],["carte","Carte"]];
+  const [payNote,   setPayNote]   = useState(null);      // détail de la note en cours d'encaissement
+  const [payMode,   setPayMode]   = useState("table");   // table | person
+  const [payMethod, setPayMethod] = useState("especes");
+  const [payAmount, setPayAmount] = useState("");
+  const [personSel, setPersonSel] = useState({});        // convive_id -> method
+  const [paying,    setPaying]    = useState(false);
+  const [payErr,    setPayErr]    = useState("");
+
+  const openPay = (detail) => {
+    setPayErr(""); setPayMode("table"); setPayMethod("especes");
+    setPayAmount(String(detail.remaining != null ? detail.remaining : detail.total));
+    setPersonSel({});
+    setPayNote(detail);
+  };
+  const applyUpdated = (updated) => {
+    setPayNote(updated);
+    setSessions(prev => prev.map(s => s.session.id === updated.session.id ? updated : s));
+  };
+  const payTable = async () => {
+    const amt = Math.round(Number(payAmount) || 0);
+    if (amt <= 0) return setPayErr("Montant invalide.");
+    setPaying(true); setPayErr("");
+    try {
+      const updated = await sessionsService.pay(payNote.session.id, { payments: [{ method: payMethod, amount: amt }] });
+      applyUpdated(updated); setPayAmount(String(updated.remaining || 0));
+    } catch (e) { setPayErr(e.response?.data?.message || "Erreur lors de l'encaissement."); }
+    setPaying(false);
+  };
+  const payPerson = async (convive) => {
+    const method = personSel[convive.id] || "especes";
+    const share = Math.round((payNote.per_convive?.[convive.id] || 0) - (payNote.paid_per_convive?.[convive.id] || 0));
+    if (share <= 0) return;
+    setPaying(true); setPayErr("");
+    try {
+      const updated = await sessionsService.pay(payNote.session.id, { payments: [{ method, amount: share, convive_id: convive.id }] });
+      applyUpdated(updated);
+    } catch (e) { setPayErr(e.response?.data?.message || "Erreur lors de l'encaissement."); }
+    setPaying(false);
+  };
+  const payAndClose = async () => {
+    setPaying(true);
+    try {
+      await sessionsService.close(payNote.session.id);
+      setSessions(prev => prev.filter(s => s.session.id !== payNote.session.id));
+      setPayNote(null);
+    } catch (_) {}
+    setPaying(false);
+  };
 
   const openSplit = (detail) => {
     setAssign({});
@@ -214,7 +264,9 @@ export default function RestRecus() {
       ) : (
         <>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
-          {pageSessions.map(({ session, items, total, convives }) => {
+          {pageSessions.map((detail) => {
+            const { session, items, total, convives, paid = 0, remaining } = detail;
+            const rest = remaining != null ? remaining : total;
             const live = (items || []).filter(i => i.status !== "cancelled");
             const rounds = new Set(live.map(i => i.round)).size;
             return (
@@ -225,9 +277,14 @@ export default function RestRecus() {
                   </span>
                   <span style={{ fontSize: 17, fontWeight: 800, color: P }}>{fmtMoney(total)}</span>
                 </div>
-                <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
+                <div style={{ fontSize: 11.5, color: MUTED, marginBottom: paid > 0 ? 4 : 10 }}>
                   {live.reduce((s, i) => s + i.qty, 0)} article(s) · {rounds} tournée(s){convives?.length ? ` · ${convives.length} convive(s)` : ""}
                 </div>
+                {paid > 0 && (
+                  <div style={{ fontSize: 12, marginBottom: 10, fontWeight: 700, color: rest <= 0 ? GREEN : "#B45309" }}>
+                    {rest <= 0 ? "Réglé intégralement" : `Encaissé ${fmtMoney(paid)} · reste ${fmtMoney(rest)}`}
+                  </div>
+                )}
                 <div style={{ fontSize: 12.5, color: DARK, lineHeight: 1.6, marginBottom: 12, maxHeight: 150, overflowY: "auto" }}>
                   {live.map(i => (
                     <div key={i.id} style={{ display: "flex", justifyContent: "space-between" }}>
@@ -236,8 +293,13 @@ export default function RestRecus() {
                     </div>
                   ))}
                 </div>
+                <button onClick={() => openPay(detail)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", marginBottom: 8,
+                    borderRadius: 9, border: "none", background: P, color: "#1a1000", fontSize: 13.5, fontWeight: 800, cursor: "pointer", fontFamily: FONT }}>
+                  <Wallet size={15} /> Encaisser
+                </button>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => openSplit({ session, items, total, convives })}
+                  <button onClick={() => openSplit(detail)}
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0",
                       borderRadius: 9, border: "none", background: "#1e2e28", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
                     <Printer size={14} /> Partager / Imprimer
@@ -387,6 +449,122 @@ export default function RestRecus() {
                   background: "white", color: MUTED, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT, marginTop: 10 }}>
                 Fermer
               </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>, document.body)}
+
+      {/* ── Modale d'encaissement ── */}
+      {createPortal(
+      <AnimatePresence>
+        {payNote && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => !paying && setPayNote(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 60 }} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+                width: "min(400px, 95vw)", maxHeight: "88vh", overflowY: "auto", background: "white",
+                borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: DARK }}>
+                Encaisser{payNote.session.table_label ? ` — Table ${payNote.session.table_label}` : ""}
+              </div>
+              <div style={{ fontSize: 12.5, color: MUTED, margin: "3px 0 14px" }}>
+                Total {fmtMoney(payNote.total)} · {payNote.remaining > 0
+                  ? <span style={{ color: "#B45309", fontWeight: 700 }}>reste {fmtMoney(payNote.remaining)}</span>
+                  : <span style={{ color: GREEN, fontWeight: 700 }}>réglé intégralement</span>}
+              </div>
+
+              <div style={{ display: "flex", gap: 6, background: "#F0EDE6", borderRadius: 10, padding: 4, marginBottom: 16 }}>
+                {[["table","Toute la table"],["person","Par personne"]].map(([m, lab]) => (
+                  <button key={m} onClick={() => setPayMode(m)}
+                    style={{ flex: 1, border: "none", borderRadius: 8, padding: "8px 0", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                      background: payMode === m ? "white" : "transparent", color: payMode === m ? DARK : MUTED,
+                      boxShadow: payMode === m ? "0 1px 3px rgba(0,0,0,.1)" : "none" }}>{lab}</button>
+                ))}
+              </div>
+
+              {payMode === "table" ? (
+                <>
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: "#6A7A72" }}>Montant reçu</label>
+                  <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                    style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "11px 13px", fontSize: 15, fontWeight: 700,
+                      background: BG, outline: "none", fontFamily: FONT, boxSizing: "border-box", color: DARK, margin: "5px 0 12px" }} />
+                  <label style={{ fontSize: 11.5, fontWeight: 600, color: "#6A7A72" }}>Mode de paiement</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 7, margin: "7px 0 16px" }}>
+                    {METHODS.map(([k, lab]) => (
+                      <button key={k} onClick={() => setPayMethod(k)}
+                        style={{ border: `1px solid ${payMethod === k ? P : BORDER}`, background: payMethod === k ? PL : "white",
+                          color: payMethod === k ? "#8a5a10" : MUTED, borderRadius: 20, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={payTable} disabled={paying}
+                    style={{ width: "100%", border: "none", borderRadius: 11, padding: "13px 0", background: P, color: "#1a1000", fontSize: 14.5, fontWeight: 800, cursor: "pointer", fontFamily: FONT }}>
+                    {paying ? "…" : `Encaisser ${fmtMoney(Math.round(Number(payAmount) || 0))}`}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+                    Chacun règle sa part, avec son propre mode. Les articles non attribués à une personne se règlent via « Toute la table ».
+                  </div>
+                  {(payNote.convives || []).map(c => {
+                    const owed = Math.round(payNote.per_convive?.[c.id] || 0);
+                    const paidC = Math.round(payNote.paid_per_convive?.[c.id] || 0);
+                    const restC = Math.max(0, owed - paidC);
+                    if (owed <= 0) return null;
+                    return (
+                      <div key={c.id} style={{ border: `0.5px solid ${BORDER}`, borderRadius: 11, padding: "10px 12px", marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: restC > 0 ? 8 : 0 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: DARK }}>{c.name?.trim() || `Personne ${c.num}`}</span>
+                          <span style={{ fontSize: 12.5, color: restC <= 0 ? GREEN : "#B45309", fontWeight: 700 }}>
+                            {restC <= 0 ? "réglé" : `reste ${fmtMoney(restC)}`}
+                          </span>
+                        </div>
+                        {restC > 0 && (
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <select value={personSel[c.id] || "especes"} onChange={e => setPersonSel(p => ({ ...p, [c.id]: e.target.value }))}
+                              style={{ flex: 1, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, background: "white", fontFamily: FONT, color: DARK }}>
+                              {METHODS.map(([k, lab]) => <option key={k} value={k}>{lab}</option>)}
+                            </select>
+                            <button onClick={() => payPerson(c)} disabled={paying}
+                              style={{ border: "none", borderRadius: 8, padding: "8px 14px", background: P, color: "#1a1000", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                              Encaisser
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {payErr && <div style={{ fontSize: 12.5, color: "#B1352F", marginTop: 10 }}>{payErr}</div>}
+
+              {(payNote.payments || []).length > 0 && (
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `0.5px solid ${BORDER}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>Encaissé</div>
+                  {payNote.payments.map(p => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: DARK, padding: "2px 0" }}>
+                      <span>{METHODS.find(m => m[0] === p.method)?.[1] || p.method}</span>
+                      <span style={{ fontWeight: 700 }}>{fmtMoney(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button onClick={() => setPayNote(null)} disabled={paying}
+                  style={{ flex: 1, border: `0.5px solid ${BORDER}`, background: "white", borderRadius: 11, padding: "12px 0", fontSize: 13.5, color: MUTED, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                  Fermer
+                </button>
+                <button onClick={payAndClose} disabled={paying}
+                  style={{ flex: 1, border: "none", borderRadius: 11, padding: "12px 0", background: "#1e2e28", color: "white", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  Terminer et clôturer
+                </button>
+              </div>
             </motion.div>
           </>
         )}

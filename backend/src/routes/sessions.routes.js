@@ -14,6 +14,7 @@ router.post  ("/:id/items",         ctrl.addItems);
 router.patch ("/:id/items/:itemId", ctrl.updateItem);
 router.post  ("/:id/convives",      ctrl.addConvive);
 router.patch ("/:id/convives/:cid", ctrl.updateConvive);
+router.post  ("/:id/pay",           ctrl.payForSession);   // encaissement (table ou par personne)
 router.post  ("/:id/close",         ctrl.closeSession);
 
 export default router;

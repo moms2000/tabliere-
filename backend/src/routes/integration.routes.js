@@ -6,7 +6,10 @@ import * as ctrl from "../controllers/integration.controller.js";
 
 const router = Router();
 
-// Gestion de l'intégration — PROPRIÉTAIRE uniquement (pas le staff).
+// Supervision globale de toutes les intégrations — ADMIN uniquement.
+router.get  ("/admin/all", authenticate, authorize("admin"), ctrl.listAll);
+
+// Gestion de l'intégration — PROPRIÉTAIRE (ou admin ciblant ?restaurant_id).
 const owner = [authenticate, authorize("restaurateur", "admin"), denyStaff];
 router.get  ("/",     ...owner, ctrl.getConfig);
 router.post ("/key",  ...owner, ctrl.generateKey);

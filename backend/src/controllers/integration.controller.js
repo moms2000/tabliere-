@@ -140,6 +140,23 @@ export const updateConfig = asyncHandler(async (req, res) => {
   return ok(res, {}, "Configuration mise à jour");
 });
 
+// ── GET /integration/admin/all — supervision de TOUTES les intégrations (admin) ──
+// Ne renvoie JAMAIS de clé (même hashée) : seulement l'état pour piloter/dépanner.
+export const listAll = asyncHandler(async (_req, res) => {
+  await ensureTable();
+  const { rows } = await query(`
+    SELECT r.id AS restaurant_id, r.name,
+           (i.api_key_hash IS NOT NULL) AS has_key,
+           i.api_key_prefix, i.webhook_url,
+           COALESCE(i.is_active, FALSE) AS is_active,
+           (i.restaurant_id IS NOT NULL) AS configured,
+           i.last_used_at, i.last_delivery_at, i.last_delivery_status
+    FROM restaurants r
+    LEFT JOIN restaurant_integrations i ON i.restaurant_id = r.id
+    ORDER BY (i.restaurant_id IS NOT NULL) DESC, r.name ASC`);
+  return ok(res, { integrations: rows });
+});
+
 // ── GET /integration/orders — récupération par la caisse (clé API) ──────────
 export const pullOrders = asyncHandler(async (req, res) => {
   const restoId = req.integrationResto;

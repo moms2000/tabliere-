@@ -36,7 +36,7 @@ const STATUS_LABEL = (s) => {
   return { txt: `Dernier envoi en échec (${s})`, color: "#C0392B" };
 };
 
-export default function IntegrationCaisse() {
+export default function IntegrationCaisse({ restaurantId = null, admin = false }) {
   const [cfg, setCfg]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(false);
@@ -47,20 +47,20 @@ export default function IntegrationCaisse() {
 
   const load = async () => {
     try {
-      const c = await integrationService.get();
+      const c = await integrationService.get(restaurantId);
       setCfg(c);
       setUrl(c.webhook_url || "");
     } catch { setErr("Impossible de charger la configuration."); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { setLoading(true); setNewKey(""); load(); /* eslint-disable-next-line */ }, [restaurantId]);
 
   const genKey = async () => {
     if (cfg?.has_key && !window.confirm(
-      "Générer une nouvelle clé RÉVOQUE immédiatement l'ancienne. Votre caisse cessera de fonctionner tant que vous n'aurez pas mis la nouvelle clé. Continuer ?")) return;
+      "Générer une nouvelle clé RÉVOQUE immédiatement l'ancienne. La caisse cessera de fonctionner tant que la nouvelle clé n'est pas en place. Continuer ?")) return;
     setBusy(true); setErr(""); setMsg("");
     try {
-      const r = await integrationService.generateKey();
+      const r = await integrationService.generateKey(restaurantId);
       setNewKey(r.api_key);
       setMsg("Clé générée. Copiez-la maintenant, elle ne sera plus affichée.");
       await load();
@@ -73,7 +73,7 @@ export default function IntegrationCaisse() {
     if (u && !/^https:\/\/.+/i.test(u)) { setErr("L'URL du webhook doit commencer par https://"); return; }
     setBusy(true); setErr(""); setMsg("");
     try {
-      await integrationService.update({ webhook_url: u || null });
+      await integrationService.update({ webhook_url: u || null }, restaurantId);
       setMsg("Adresse du webhook enregistrée.");
       await load();
     } catch { setErr("Échec de l'enregistrement."); }
@@ -83,7 +83,7 @@ export default function IntegrationCaisse() {
   const toggleActive = async () => {
     setBusy(true); setErr(""); setMsg("");
     try {
-      await integrationService.update({ is_active: !cfg.is_active });
+      await integrationService.update({ is_active: !cfg.is_active }, restaurantId);
       await load();
     } catch { setErr("Échec de la mise à jour."); }
     finally { setBusy(false); }
@@ -98,12 +98,11 @@ export default function IntegrationCaisse() {
   return (
     <motion.div variants={fadeUp}>
       <Card>
-        <SectionHeader title="Intégration à votre caisse" icon={Plug} />
+        <SectionHeader title={admin ? "Intégration à la caisse" : "Intégration à votre caisse"} icon={Plug} />
         <div style={{ fontSize: 12, color: "#888", marginBottom: 16, lineHeight: 1.55 }}>
-          Envoyez automatiquement chaque commande et chaque encaissement vers votre logiciel de
-          caisse. Chaque événement porte un identifiant unique pour éviter tout double comptage.
-          La facture officielle reste éditée par votre caisse : TablièreCI ne fait que transmettre
-          l'information.
+          {admin
+            ? "Vous configurez l'intégration de CE restaurant à sa place (onboarding/dépannage). La clé complète ne s'affiche qu'une seule fois, à la génération : notez-la et transmettez-la de façon sécurisée."
+            : "Envoyez automatiquement chaque commande et chaque encaissement vers votre logiciel de caisse. Chaque événement porte un identifiant unique pour éviter tout double comptage. La facture officielle reste éditée par votre caisse : TablièreCI ne fait que transmettre l'information."}
         </div>
 
         {err && <div style={{ background: "#FDECEA", color: "#C0392B", borderRadius: 9, padding: "9px 12px", fontSize: 12.5, marginBottom: 12 }}>{err}</div>}

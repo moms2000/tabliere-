@@ -191,7 +191,7 @@ export const register = asyncHandler(async (req, res) => {
   // atomiquement (fail-closed : jamais de compte « vérifié » par défaut si un
   // UPDATE échoue).
   const emailToken   = crypto.randomBytes(32).toString("hex");
-  const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
+  const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 jours
 
   const result = await withTransaction(async (client) => {
     const { rows: [user] } = await client.query(
@@ -455,16 +455,23 @@ export const resendVerification = asyncHandler(async (req, res) => {
   if (!email) return ok(res, {}, "Si cet email existe, un lien a été envoyé.");
 
   const { rows: [user] } = await query(
-    "SELECT id, full_name, email_verified FROM users WHERE email = $1", [email]
+    "SELECT id, full_name, email_verified, email_token, email_token_expires FROM users WHERE email = $1", [email]
   ).catch(() => ({ rows: [] }));
 
   if (user && !user.email_verified) {
-    const token   = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await query(
-      `UPDATE users SET email_token = $1, email_token_expires = $2 WHERE id = $3`,
-      [token, expires.toISOString(), user.id]
-    ).catch(() => {});
+    // On RÉUTILISE le token existant s'il est encore valide → l'email initial ET les
+    // renvois pointent tous vers LE MÊME lien. Un client qui clique un ancien email ne
+    // tombe donc plus sur « lien expiré ». On n'en régénère un que s'il manque/expiré.
+    let token = user.email_token;
+    const stillValid = token && user.email_token_expires && new Date(user.email_token_expires) > new Date();
+    if (!stillValid) {
+      token = crypto.randomBytes(32).toString("hex");
+      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await query(
+        `UPDATE users SET email_token = $1, email_token_expires = $2 WHERE id = $3`,
+        [token, expires.toISOString(), user.id]
+      ).catch(() => {});
+    }
     sendVerificationEmail(email, user.full_name, token).catch(() => {});
   }
 

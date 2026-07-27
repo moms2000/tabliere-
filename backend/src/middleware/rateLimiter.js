@@ -17,7 +17,7 @@ function makeStore(prefix) {
   }
 }
 
-const limiter = (windowMs, max, message, prefix = "rl:") =>
+const limiter = (windowMs, max, message, prefix = "rl:", extra = {}) =>
   rateLimit({
     windowMs,
     max,
@@ -25,6 +25,7 @@ const limiter = (windowMs, max, message, prefix = "rl:") =>
     legacyHeaders:   false,
     store: makeStore(prefix),
     message: { success: false, message },
+    ...extra,
   });
 
 // Auth : 10 tentatives / 15 min
@@ -33,8 +34,20 @@ export const authLimiter = limiter(15 * 60 * 1000, 10, "Trop de tentatives, rée
 // Réservations : 20 / 10 min
 export const reservationLimiter = limiter(10 * 60 * 1000, 20, "Limite de réservations atteinte, réessayez dans 10 minutes", "rl:resa:");
 
-// Commandes QR (route publique, sans auth) : 30 / 5 min par IP — anti-spam cuisine
-export const orderLimiter = limiter(5 * 60 * 1000, 30, "Trop de commandes envoyées, patientez quelques minutes", "rl:order:");
+// Commandes QR (route publique, sans auth) : limite PAR RESTAURANT, pas par IP.
+// Les terminaux et les clients d'un même restaurant sortent souvent derrière une
+// seule IP (Wi-Fi du resto, NAT opérateur) : les compter ensemble bridait à tort
+// un service chargé. On clé donc sur restaurant_id. Repli sur l'IP si absent — un
+// faux restaurant_id échoue de toute façon (FK NOT NULL vers restaurants), et le
+// plafond global /api (200/min par IP) reste le filet anti-flood brut.
+const orderKey = (req) => {
+  const rid = req.body?.restaurant_id;
+  return (typeof rid === "string" && rid.length >= 8) ? `resto:${rid}` : req.ip;
+};
+export const orderLimiter = limiter(
+  5 * 60 * 1000, 120, "Trop de commandes envoyées, patientez quelques minutes", "rl:order:",
+  { keyGenerator: orderKey, validate: { ip: false } }
+);
 
 // Vérification du code responsable (4 chiffres) : strict, anti-brute-force
 export const pinLimiter = limiter(10 * 60 * 1000, 8, "Trop d'essais de code, réessayez dans 10 minutes", "rl:pin:");

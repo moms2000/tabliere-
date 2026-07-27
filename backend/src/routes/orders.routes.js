@@ -7,6 +7,7 @@ const router = Router();
 
 // Public — client via QR (limité pour éviter le spam de commandes)
 router.post("/", orderLimiter, ctrl.createOrder);
+router.get ("/mine", ctrl.listMyOrders); // suivi client par device_token (public)
 
 // Restaurateur / Admin — accessible au staff ayant Commandes, Service rapide ou Reçus
 const ORDER_TABS = ["commandes", "pos", "recus"];

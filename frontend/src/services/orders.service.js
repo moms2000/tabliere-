@@ -7,6 +7,12 @@ export const ordersService = {
     return res.data.data;
   },
 
+  // Suivi client (public) : commandes de cet appareil, avec statut en direct
+  async mine(restaurant_id, device_token) {
+    const res = await api.get("/orders/mine", { params: { restaurant_id, device_token } });
+    return res.data.data;
+  },
+
   // Restaurateur
   async list(params = {}) {
     const res = await api.get("/orders", { params });

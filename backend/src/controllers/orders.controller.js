@@ -65,6 +65,7 @@ const MIGRATE_SQL = `
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_name  VARCHAR(255);
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_phone VARCHAR(50);
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_email VARCHAR(255);
+  ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS device_token VARCHAR(64);
 `;
 
 let tableReady = false;
@@ -187,11 +188,11 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const cut = (v, n) => (v == null ? null : String(v).slice(0, n));
   const { rows: [order] } = await query(
-    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, client_email, items, total, note)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING *`,
+    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, client_email, items, total, note, device_token)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9) RETURNING *`,
     [restaurant_id, cut(table_label, 50), cut(client_name, 255), cut(client_phone, 50),
      (client_email && String(client_email).trim().toLowerCase().slice(0, 255)) || null,
-     JSON.stringify(safeItems), total, cut(note, 2000)]
+     JSON.stringify(safeItems), total, cut(note, 2000), cut(req.body.device_token, 64)]
   );
 
   // Alimente la NOTE de la table (identique sur toutes les plateformes). Chaque
@@ -204,6 +205,25 @@ export const createOrder = asyncHandler(async (req, res) => {
   logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });
   notifyNewOrder(restaurant_id, { tableLabel: table_label, qty: safeItems.reduce((s, it) => s + it.qty, 0), total });
   return created(res, { order }, "Commande envoyée avec succès");
+});
+
+// ── GET /orders/mine — suivi client (public) : commandes de CET appareil ─────
+// Scellé au device_token (identifiant d'appareil opaque, stocké en local par le
+// client) → un appareil ne voit que SES commandes, avec leur STATUT en direct.
+// Sert au suivi (Reçue/Acceptée/Prête) et à l'historique après un re-scan du QR.
+export const listMyOrders = asyncHandler(async (req, res) => {
+  await ensureTable();
+  const restaurant_id = req.query.restaurant_id;
+  const device_token = req.query.device_token;
+  if (!restaurant_id || !device_token) throw new AppError("restaurant_id et device_token requis", 400);
+  const { rows } = await query(
+    `SELECT id, ref, table_label, items, total, status, note, created_at, updated_at
+     FROM qr_orders
+     WHERE restaurant_id = $1 AND device_token = $2
+     ORDER BY created_at DESC LIMIT 20`,
+    [restaurant_id, String(device_token).slice(0, 64)]
+  );
+  return ok(res, { orders: rows });
 });
 
 // ── GET /orders — liste des commandes du restaurant ────────────────────────

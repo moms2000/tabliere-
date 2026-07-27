@@ -35,7 +35,7 @@ async function sendVerificationEmail(email, fullName, token) {
     await axios.post("https://api.sendgrid.com/v3/mail/send", {
       personalizations: [{ to: [{ email }] }],
       from: { email: fromEmail, name: "TablièreCI" },
-      reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+      reply_to: { email: "info@tabliereci.net", name: "TablièreCI" },
       subject: "Activez votre compte TablièreCI",
       content: [
         { type: "text/plain", value: `Bonjour ${firstName}, activez votre compte TablièreCI : ${verifyUrl} (valable 24h)` },
@@ -91,7 +91,7 @@ async function sendResetEmail(email, fullName, token) {
     await axios.post("https://api.sendgrid.com/v3/mail/send", {
       personalizations: [{ to: [{ email }] }],
       from: { email: fromEmail, name: "TablièreCI" },
-      reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+      reply_to: { email: "info@tabliereci.net", name: "TablièreCI" },
       subject: "Réinitialisez votre mot de passe TablièreCI",
       content: [
         { type: "text/plain", value: `Bonjour ${firstName}, réinitialisez votre mot de passe TablièreCI : ${resetUrl} (valable 1h). Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.` },

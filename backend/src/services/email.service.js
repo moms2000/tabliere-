@@ -26,7 +26,7 @@ async function send({ to, subject, html, text }) {
       {
         personalizations: [{ to: [{ email: to }] }],
         from: { email: fromEmail, name: "TablièreCI" },
-        reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+        reply_to: { email: "info@tabliereci.net", name: "TablièreCI" },
         subject,
         content: [
           { type: "text/plain", value: text || subject },
@@ -95,7 +95,7 @@ function baseLayout(content) {
       TablièreCI — La réservation facile en Côte d'Ivoire<br>
       <a href="https://tabliereci.net" style="color:#e8a045;text-decoration:none;">tabliereci.net</a>
       &nbsp;·&nbsp;
-      <a href="mailto:contact@tabliereci.net" style="color:#c0bab4;text-decoration:none;">contact@tabliereci.net</a><br>
+      <a href="mailto:info@tabliereci.net" style="color:#c0bab4;text-decoration:none;">info@tabliereci.net</a><br>
       <a href="mailto:unsubscribe@tabliereci.net?subject=unsubscribe" style="color:#c0bab4;font-size:10px;text-decoration:underline;">
         Se désabonner des e-mails
       </a>

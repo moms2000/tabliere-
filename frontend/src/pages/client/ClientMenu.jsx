@@ -238,6 +238,19 @@ export default function ClientMenu() {
   const [errorMsg,    setErrorMsg]    = useState("");
   const [lastOrder,   setLastOrder]   = useState(null);
   const [localOrders, setLocalOrders] = useState([]);
+  const [serverOrders, setServerOrders] = useState([]); // statut EN DIRECT depuis le serveur
+
+  // Récupère les commandes de CET appareil avec leur statut à jour (Reçue/Acceptée/Prête).
+  const refreshStatus = useCallback(async () => {
+    if (!resto?.id) return;
+    try {
+      const d = await ordersService.mine(resto.id, deviceToken());
+      setServerOrders(d?.orders || []);
+    } catch (_) { /* silencieux : on garde l'historique local */ }
+  }, [resto?.id]);
+  // Liste des commandes affichée : le serveur (statut à jour) s'il a répondu,
+  // sinon l'historique local de l'appareil (résilient hors-ligne / cold start).
+  const historyOrders = serverOrders.length ? serverOrders : localOrders;
 
   // Infos client
   const [clientName,  setClientName]  = useState("");
@@ -278,6 +291,15 @@ export default function ClientMenu() {
     setLocalOrders(loadOrders());
   }, [slug]);
   useEffect(() => { loadMenu(); }, [loadMenu]);
+
+  // Suivi en direct : sur la page de confirmation et l'historique, on rafraîchit
+  // le statut automatiquement (toutes les 10 s) et à chaque affichage.
+  useEffect(() => {
+    if (step !== "confirm" && step !== "history") return;
+    refreshStatus();
+    const t = setInterval(refreshStatus, 10000);
+    return () => clearInterval(t);
+  }, [step, refreshStatus]);
 
   /* ── Panier (mémoïsé) ── */
   const cartItems = useMemo(() => Object.values(cart), [cart]);
@@ -520,12 +542,13 @@ export default function ClientMenu() {
           <BrownBtn onClick={() => setStep("menu")}>Découvrir la carte</BrownBtn>
         </motion.div>
 
-        {localOrders.length > 0 && (
+        {historyOrders.length > 0 && (
           <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .65 }}
             onClick={() => setStep("history")}
-            style={{ marginTop: 14, background: "none", border: "none", cursor: "pointer",
-              fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 6, margin: "14px auto 0" }}>
-            <History size={13} /> Mes commandes ({localOrders.length})
+            style={{ marginTop: 14, background: SAND, border: `0.5px solid ${BORDER}`, cursor: "pointer",
+              fontSize: 12.5, fontWeight: 600, color: BROWN, display: "flex", alignItems: "center", gap: 6,
+              margin: "14px auto 0", padding: "9px 16px", borderRadius: 20 }}>
+            <History size={13} /> Suivre mes commandes ({historyOrders.length})
           </motion.button>
         )}
 
@@ -1060,6 +1083,12 @@ export default function ClientMenu() {
   /* ══════════════════════════════════════════════════════════════════════
      CONFIRMATION — Style BBR (photo héro + tracking statut)
   ══════════════════════════════════════════════════════════════════════ */
+  // Statut EN DIRECT de la commande en cours (depuis le serveur si dispo)
+  const liveCur = serverOrders.find(o => o.ref === lastOrder?.ref);
+  const curStatus = liveCur?.status || lastOrder?.status || "en_attente";
+  const stIdx = curStatus === "servi" ? 2 : curStatus === "en_cours" ? 1 : 0;
+  const curCancelled = curStatus === "annule";
+
   if (step === "confirm") return (
     <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
       margin: "0 auto", fontFamily: FN }}>
@@ -1123,12 +1152,17 @@ export default function ClientMenu() {
             Réf. {lastOrder?.ref || "—"}
           </div>
 
-          {/* Progression */}
+          {/* Progression (statut réel du restaurant, mis à jour automatiquement) */}
+          {curCancelled ? (
+            <div style={{ textAlign: "center", color: "#B1352F", fontWeight: 700, fontSize: 14, padding: "6px 0" }}>
+              Commande annulée par le restaurant
+            </div>
+          ) : (
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", gap: 0 }}>
             {[
-              { label: "Reçue",    done: true },
-              { label: "Acceptée", done: false },
-              { label: "Prête",    done: false },
+              { label: "Reçue",    done: stIdx >= 0 },
+              { label: "Acceptée", done: stIdx >= 1 },
+              { label: "Prête",    done: stIdx >= 2 },
             ].map((s, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", flex: i < 2 ? 1 : "none" }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
@@ -1146,6 +1180,7 @@ export default function ClientMenu() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Détail commande */}
@@ -1170,30 +1205,28 @@ export default function ClientMenu() {
         </div>
 
         {/* Actions */}
-        <button onClick={() => setLocalOrders(loadOrders())}
+        <button onClick={refreshStatus}
           style={{ width: "100%", padding: "12px 0", borderRadius: 8,
           border: `0.5px solid ${BORDER}`, background: WHITE, color: MUTED,
           fontSize: 12, cursor: "pointer", fontFamily: FN, marginBottom: 10,
           display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          <RefreshCw size={13} /> Actualiser
-        </button>
-
-        <button style={{ width: "100%", padding: "13px 0", borderRadius: 8,
-          border: `1px solid ${DARK}`, background: WHITE, color: DARK,
-          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FN, marginBottom: 12 }}
-          onClick={() => setStep("cart")}>
-          Modifier la commande
+          <RefreshCw size={13} /> Actualiser le statut
         </button>
 
         <button onClick={reset}
-          style={{ width: "100%", background: "none", border: "none",
-            color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: FN, padding: "8px 0" }}>
-          Nouvelle commande
+          style={{ width: "100%", padding: "13px 0", borderRadius: 8,
+          border: `1px solid ${DARK}`, background: WHITE, color: DARK,
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FN, marginBottom: 12 }}>
+          Commander autre chose
         </button>
 
-        <div style={{ marginTop: 24, textAlign: "center", fontSize: 10, color: "#D4C8BC",
+        <div style={{ fontSize: 11.5, color: MUTED, textAlign: "center", marginBottom: 12, lineHeight: 1.5 }}>
+          Pour modifier ou annuler, adressez-vous à un serveur.
+        </div>
+
+        <div style={{ marginTop: 8, textAlign: "center", fontSize: 10, color: "#D4C8BC",
           letterSpacing: "1px", textTransform: "uppercase" }}>
-          Gardez cette page ouverte — elle sera mise à jour
+          Le statut se met à jour automatiquement
         </div>
       </div>
     </div>
@@ -1209,23 +1242,29 @@ export default function ClientMenu() {
         <h2 style={{ fontSize: 20, fontWeight: 400, fontFamily: FS, color: DARK, margin: "0 0 16px" }}>
           Mes commandes
         </h2>
-        {localOrders.length === 0 ? (
+        {historyOrders.length === 0 ? (
           <div style={{ textAlign: "center", padding: "50px 0", color: MUTED }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><ShoppingCart size={30} color={MUTED} /></div>
             <div>Aucune commande dans cette session</div>
           </div>
-        ) : localOrders.map((o, i) => (
-          <div key={i} style={{ background: WHITE, borderRadius: 12, padding: 16,
+        ) : historyOrders.map((o, i) => {
+          const stLabel = o.status === "en_attente" ? "Reçue" : o.status === "en_cours" ? "Acceptée"
+            : o.status === "servi" ? "Prête" : o.status === "annule" ? "Annulée" : "En cours";
+          const stColor = o.status === "servi" ? "#2f6a4e" : o.status === "annule" ? "#B1352F" : BROWN;
+          const stBg = o.status === "servi" ? "#E8F1EA" : o.status === "annule" ? "#FBEBEB" : SAND;
+          return (
+          <div key={o.ref || i} style={{ background: WHITE, borderRadius: 12, padding: 16,
             marginBottom: 12, border: `0.5px solid ${BORDER}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: MUTED }}>
-                {new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
-                {o.table_label && ` · Table ${o.table_label}`}
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                background: SAND, color: BROWN }}>
-                {o.status === "en_attente" ? "Reçue" : o.status === "servi" ? "Prête" : "En cours"}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: ".5px" }}>Réf. {o.ref || "—"}</div>
+              <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                background: stBg, color: stColor }}>
+                {stLabel}
               </span>
+            </div>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
+              {o.created_at ? new Date(o.created_at).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : ""}
+              {o.table_label && ` · Table ${o.table_label}`}
             </div>
             {(o.items||[]).map((it, j) => (
               <div key={j} style={{ display: "flex", justifyContent: "space-between",
@@ -1241,7 +1280,8 @@ export default function ClientMenu() {
               <span style={{ color: BROWN, fontFamily: FS, fontStyle: "italic" }}>{fmt(o.total)}</span>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

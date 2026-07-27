@@ -41,7 +41,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     await axios.post("https://api.sendgrid.com/v3/mail/send", {
       personalizations: [{ to: [{ email: to }] }],
       from: { email: fromEmail, name: "TablièreCI" },
-      reply_to: { email: "contact@tabliereci.net", name: "TablièreCI" },
+      reply_to: { email: "info@tabliereci.net", name: "TablièreCI" },
       subject,
       content: [
         { type: "text/plain", value: text || subject },

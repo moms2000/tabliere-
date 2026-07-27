@@ -1184,7 +1184,7 @@ const SETTINGS_DEFAULTS = {
   session_duration_h: "4",
   // Informations de contact
   site_name:          "TablièreCI",
-  contact_email:      "contact@tabliereci.net",
+  contact_email:      "info@tabliereci.net",
   contact_phone:      "+225 07 00 00 00 00",
   contact_address:    "Abidjan, Côte d'Ivoire",
   contact_whatsapp:   "+225 07 00 00 00 00",

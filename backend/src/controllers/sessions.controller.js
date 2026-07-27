@@ -17,6 +17,7 @@ import { ok, created, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { emitToUser } from "../utils/sse.js";
+import { deliverWebhook } from "./integration.controller.js";
 
 // ── Migration paresseuse ────────────────────────────────────────────────────
 let migrated = false;
@@ -480,6 +481,13 @@ export const payForSession = asyncHandler(async (req, res) => {
     await query("UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1", [s.id]);
   }
   logger.info("Encaissement enregistré", { sessionId: s.id, count: recorded.length, closed: !!b.close });
+  // Webhook caisse tierce : un événement par encaissement (ref = idempotence)
+  for (const p of recorded) {
+    deliverWebhook(restoId, "payment.recorded", {
+      ref: p.ref, amount: p.amount, method: p.method, convive_id: p.convive_id,
+      session_id: s.id, table_label: s.table_label,
+    });
+  }
   return created(res, { payments: recorded, ...(await sessionDetail(s.id)) }, "Encaissement enregistré");
 });
 

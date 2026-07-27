@@ -8,6 +8,7 @@ import { ok, created, notFound, paginated } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { attachOrderToSession } from "./sessions.controller.js";
+import { deliverWebhook } from "./integration.controller.js";
 import { sendPushToUser } from "../services/push.service.js";
 
 // Notifie le restaurateur (et donc toutes les tablettes/téléphones du resto, y
@@ -66,6 +67,8 @@ const MIGRATE_SQL = `
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_phone VARCHAR(50);
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS client_email VARCHAR(255);
   ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS device_token VARCHAR(64);
+  CREATE SEQUENCE IF NOT EXISTS qr_order_ref_seq;
+  ALTER TABLE qr_orders ADD COLUMN IF NOT EXISTS ref VARCHAR(20);
 `;
 
 let tableReady = false;
@@ -188,8 +191,8 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const cut = (v, n) => (v == null ? null : String(v).slice(0, n));
   const { rows: [order] } = await query(
-    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, client_email, items, total, note, device_token)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9) RETURNING *`,
+    `INSERT INTO qr_orders (ref, restaurant_id, table_label, client_name, client_phone, client_email, items, total, note, device_token)
+     VALUES ('CMD-' || LPAD(nextval('qr_order_ref_seq')::text, 4, '0'), $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9) RETURNING *`,
     [restaurant_id, cut(table_label, 50), cut(client_name, 255), cut(client_phone, 50),
      (client_email && String(client_email).trim().toLowerCase().slice(0, 255)) || null,
      JSON.stringify(safeItems), total, cut(note, 2000), cut(req.body.device_token, 64)]
@@ -204,6 +207,11 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   logger.info("Commande QR créée", { orderId: order.id, restoId: restaurant_id, table: table_label, client: client_name });
   notifyNewOrder(restaurant_id, { tableLabel: table_label, qty: safeItems.reduce((s, it) => s + it.qty, 0), total });
+  // Webhook caisse tierce (identifiant unique = order.ref → pas de double comptage)
+  deliverWebhook(restaurant_id, "order.created", {
+    ref: order.ref, order_id: order.id, table_label, items: safeItems, total,
+    status: order.status, source: "qr", created_at: order.created_at,
+  });
   return created(res, { order }, "Commande envoyée avec succès");
 });
 
@@ -378,8 +386,8 @@ export const createManualOrder = asyncHandler(async (req, res) => {
   const { safeItems, total } = await repriceItems(restoId, items);
 
   const { rows: [order] } = await query(
-    `INSERT INTO qr_orders (restaurant_id, table_label, client_name, client_phone, items, total, note, status)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, 'en_cours') RETURNING *`,
+    `INSERT INTO qr_orders (ref, restaurant_id, table_label, client_name, client_phone, items, total, note, status)
+     VALUES ('CMD-' || LPAD(nextval('qr_order_ref_seq')::text, 4, '0'), $1, $2, $3, $4, $5::jsonb, $6, $7, 'en_cours') RETURNING *`,
     [restoId, table_label || null, client_name || null, client_phone || null,
      JSON.stringify(safeItems), total, note || null]
   );
@@ -390,6 +398,10 @@ export const createManualOrder = asyncHandler(async (req, res) => {
 
   logger.info("Commande manuelle créée", { orderId: order.id, restoId, table: table_label });
   notifyNewOrder(restoId, { tableLabel: table_label, qty: safeItems.reduce((s, it) => s + it.qty, 0), total });
+  deliverWebhook(restoId, "order.created", {
+    ref: order.ref, order_id: order.id, table_label, items: safeItems, total,
+    status: order.status, source: "server", created_at: order.created_at,
+  });
   return created(res, { order }, "Commande créée");
 });
 

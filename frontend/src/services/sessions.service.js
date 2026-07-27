@@ -27,6 +27,10 @@ export const sessionsService = {
   async updateConvive(id, cid, name) {
     return (await api.patch(`/sessions/${id}/convives/${cid}`, { name })).data.data;
   },
+  // Encaissement : { payments: [{ method, amount, convive_id? }], close? }
+  async pay(id, body) {
+    return (await api.post(`/sessions/${id}/pay`, body)).data.data;
+  },
   async close(id) {
     return (await api.post(`/sessions/${id}/close`)).data;
   },

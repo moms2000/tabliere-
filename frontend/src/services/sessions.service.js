@@ -31,6 +31,10 @@ export const sessionsService = {
   async pay(id, body) {
     return (await api.post(`/sessions/${id}/pay`, body)).data.data;
   },
+  // Rapport de caisse : total encaissé + par mode (period: day|week|month)
+  async report(period = "day") {
+    return (await api.get("/sessions/report", { params: { period } })).data.data;
+  },
   async close(id) {
     return (await api.post(`/sessions/${id}/close`)).data;
   },

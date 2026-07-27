@@ -33,6 +33,13 @@ export default function RestRecus() {
   const [personSel, setPersonSel] = useState({});        // convive_id -> method
   const [paying,    setPaying]    = useState(false);
   const [payErr,    setPayErr]    = useState("");
+  // Rapport de caisse
+  const [report,       setReport]       = useState(null);
+  const [reportPeriod, setReportPeriod] = useState("day");
+  const loadReport = useCallback(async (p) => {
+    try { const d = await sessionsService.report(p || reportPeriod); setReport(d); } catch (_) {}
+  }, [reportPeriod]);
+  useEffect(() => { loadReport(); }, [loadReport]);
 
   const openPay = (detail) => {
     setPayErr(""); setPayMode("table"); setPayMethod("especes");
@@ -43,6 +50,7 @@ export default function RestRecus() {
   const applyUpdated = (updated) => {
     setPayNote(updated);
     setSessions(prev => prev.map(s => s.session.id === updated.session.id ? updated : s));
+    loadReport(); // met à jour le rapport de caisse
   };
   const payTable = async () => {
     const amt = Math.round(Number(payAmount) || 0);
@@ -239,6 +247,39 @@ export default function RestRecus() {
       <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
         Chaque table ouverte a sa note. Imprimez un reçu total ou un reçu par personne, puis clôturez.
       </p>
+
+      {/* Rapport de caisse */}
+      <div style={{ background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Wallet size={17} color={P} />
+            <span style={{ fontSize: 15, fontWeight: 800, color: DARK }}>Rapport de caisse</span>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {[["day", "Jour"], ["week", "Semaine"], ["month", "Mois"]].map(([k, lab]) => (
+              <button key={k} onClick={() => { setReportPeriod(k); loadReport(k); }}
+                style={{ padding: "5px 12px", borderRadius: 8, border: `0.5px solid ${reportPeriod === k ? P : BORDER}`,
+                  background: reportPeriod === k ? PL : "white", color: reportPeriod === k ? "#C47D1A" : MUTED,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{lab}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 26, fontWeight: 800, color: P }}>{fmtMoney(report?.total || 0)}</span>
+          <span style={{ fontSize: 12, color: MUTED }}>encaissé{report?.count ? ` · ${report.count} paiement(s)` : ""}</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: 8 }}>
+          {METHODS.map(([k, lab]) => {
+            const m = report?.by_method?.[k];
+            return (
+              <div key={k} style={{ background: BG, borderRadius: 10, padding: "9px 11px" }}>
+                <div style={{ fontSize: 11, color: MUTED }}>{lab}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: m ? DARK : "#C4CBC6" }}>{fmtMoney(m?.amount || 0)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Recherche par numéro de table */}
       {sessions.length > 0 && (

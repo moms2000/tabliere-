@@ -5,6 +5,7 @@ import QRCode from "react-qr-code";
 import { Card, SectionHeader, PageTitle, Btn, FormField, Input, PhotoUpload } from "../../components/ui";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import IntegrationCaisse from "./IntegrationCaisse.jsx";
 
 const P      = "#E8A045";
 const PL     = "#FEF6EC";
@@ -708,6 +709,9 @@ export default function RestProfil() {
               )}
             </Card>
           </motion.div>
+
+          {/* Intégration à la caisse tierce (clé API + webhooks) */}
+          <IntegrationCaisse />
         </div>
       </div>
     </motion.div>

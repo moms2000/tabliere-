@@ -16,6 +16,7 @@ import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { notificationQueue } from "../queues/index.js";
 import { ticketToken, verifyTicketToken } from "../utils/ticketToken.js";
 import { sendPushToUser } from "../services/push.service.js";
+import { logger } from "../utils/logger.js";
 
 // Push (app fermée) à l'organisateur : une réservation attend sa confirmation d'acompte.
 function pushOrganizerNewResa(event, resa) {
@@ -198,6 +199,87 @@ export const createManualReservation = asyncHandler(async (req, res) => {
 
   notificationQueue.add("event_resa_pending", { reservationId: resa.id });
   return created(res, { reservation: resa }, "Réservation manuelle créée — client notifié pour l'acompte");
+});
+
+// ── POST /event-reservations/import — import en masse (Excel/CSV) ─────────────
+// L'organisateur a DÉJÀ sa liste : on crée les réservations SANS notifier les
+// clients (pas de spam). Les lignes marquées « acompte payé » sont directement
+// confirmées → QR disponible à /ticket/:ref ; les autres restent en attente.
+// L'organisateur enverra les QR quand il veut (bouton « Renvoyer le QR »).
+export const importReservations = asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  const eventId = b.event_id;
+  if (!eventId) throw new AppError("event_id requis", 400);
+  const { rows: [event] } = await query("SELECT * FROM events WHERE id = $1", [eventId]);
+  if (!event) return notFound(res, "Événement introuvable");
+  assertOwner(req, { owner_id: event.owner_id });
+
+  const list = Array.isArray(b.rows) ? b.rows : [];
+  if (!list.length) throw new AppError("Aucune ligne à importer", 400);
+  if (list.length > 500) throw new AppError("Maximum 500 réservations par import", 400);
+
+  // Tables de l'événement, indexées par libellé normalisé (pour rattacher table_label).
+  const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, "");
+  const { rows: tbls } = await query(
+    "SELECT id, label, capacity, price, deposit_amount, is_active FROM event_tables WHERE event_id = $1", [eventId]);
+  const tableByLabel = new Map(tbls.map((t) => [norm(t.label), t]));
+  // Tables déjà attribuées (résa confirmée) → on ne les réattribue pas.
+  const { rows: taken } = await query(
+    "SELECT DISTINCT table_id FROM event_reservations WHERE event_id = $1 AND status = 'confirme' AND table_id IS NOT NULL", [eventId]);
+  const occupied = new Set(taken.map((r) => r.table_id));
+
+  const out = { created: 0, confirmed: 0, pending: 0, skipped: [], warnings: [] };
+
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i] || {};
+    const line = i + 1;
+    const name = row.guest_name ? String(row.guest_name).trim().slice(0, 120) : "";
+    const phone = row.guest_phone ? String(row.guest_phone).trim().slice(0, 30) : null;
+    const email = (row.guest_email && String(row.guest_email).trim().toLowerCase().slice(0, 200)) || null;
+    if (!name) { out.skipped.push({ line, reason: "nom manquant" }); continue; }
+    if (!phone && !email) { out.skipped.push({ line, name, reason: "téléphone ou e-mail manquant" }); continue; }
+    const partySize = Math.min(100, Math.max(1, parseInt(row.party_size, 10) || 1));
+    const paid = row.paid === true || row.paid === "true" || row.paid === 1 || row.paid === "1";
+
+    let table = null;
+    if (row.table_label) {
+      const t = tableByLabel.get(norm(row.table_label));
+      if (t && t.is_active) table = t;
+      else out.warnings.push({ line, name, reason: `table « ${row.table_label} » introuvable, ignorée` });
+    }
+
+    try {
+      await withTransaction(async (client) => {
+        let tableId = null, deposit = 0, status = "en_attente";
+        if (table) deposit = depositFor(event, table);
+        if (paid) {
+          status = "confirme";
+          if (table && !occupied.has(table.id)) { tableId = table.id; occupied.add(table.id); }
+          else if (table) out.warnings.push({ line, name, reason: `table « ${row.table_label} » déjà prise, confirmée sans table` });
+        } else if (table) {
+          tableId = table.id; // souhait de table, non bloquant tant que non confirmé
+        }
+        await client.query(
+          `INSERT INTO event_reservations
+             (ref, event_id, client_id, table_id, party_size, guest_name, guest_phone, guest_email,
+              special_request, deposit_amount, status, is_manual, confirmed_at, deposit_confirmed_at)
+           VALUES ('EVT-' || LPAD(nextval('event_resa_ref_seq')::text, 4, '0'),
+                   $1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, TRUE,
+                   ${paid ? "NOW()" : "NULL"}, ${paid ? "NOW()" : "NULL"})`,
+          [event.id, tableId, partySize, name, phone, email, row.special_request || null, deposit, status]
+        );
+        if (paid && tableId) {
+          await client.query("UPDATE event_tables SET status = 'occupe', updated_at = NOW() WHERE id = $1", [tableId]);
+        }
+      });
+      out.created++; paid ? out.confirmed++ : out.pending++;
+    } catch (e) {
+      out.skipped.push({ line, name, reason: (e.message || "erreur").slice(0, 120) });
+    }
+  }
+
+  logger.info("Import réservations événement", { eventId, created: out.created, confirmed: out.confirmed, skipped: out.skipped.length });
+  return created(res, out, `${out.created} réservation(s) importée(s) — ${out.confirmed} confirmée(s), ${out.pending} en attente`);
 });
 
 // ── GET /event-reservations?event_id= — liste pour l'organisateur ────────────

@@ -9,6 +9,7 @@ router.get  ("/ticket/:ref",  ctrl.getTicket);                        // PUBLIC 
 router.post ("/guest",        reservationLimiter, ctrl.createGuestReservation); // PUBLIC : réserver sans compte
 router.post ("/",             reservationLimiter, authenticate, ctrl.createEventReservation);
 router.post ("/manual",       authenticate, ctrl.createManualReservation); // organisateur
+router.post ("/import",       authenticate, ctrl.importReservations);      // import Excel/CSV en masse
 router.get  ("/mine",         authenticate, ctrl.listMine);           // avant "/"
 router.get  ("/",             authenticate, ctrl.listForEvent);       // ?event_id=
 router.patch("/:id/confirm",  authenticate, ctrl.confirmEventReservation); // = confirmer l'acompte

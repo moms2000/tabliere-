@@ -5,11 +5,12 @@ import QRCode from "react-qr-code";
 import {
   ArrowLeft, ExternalLink, Save, Plus, Pencil, Trash2, Check, X,
   Crown, Armchair, Calendar, Users, Phone, Copy, CheckCheck, FileText, Sheet, Mail,
-  QrCode, MessageCircle, RefreshCw, Download, Wallet, Trash,
+  QrCode, MessageCircle, RefreshCw, Download, Wallet, Trash, Upload,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge, PhotoUpload } from "../../components/ui";
 import { useToast } from "../../components/ui/Toast.jsx";
 import { eventsService, eventReservationsService } from "../../services/events.service.js";
+import EventResaImportModal from "./EventResaImportModal.jsx";
 import { DashboardTab, BottlesTab, PromotersTab, StaffTab, CheckinTab, OrdersTab, CategoriesTab, EventRecusTab } from "./EventTabs2.jsx";
 import EventFloorPlan from "./EventFloorPlan.jsx";
 
@@ -343,6 +344,7 @@ function ResaTab({ event, tables = [] }) {
   const [filter, setFilter] = useState("attente"); // attente | confirme | all
   const [refuseT, setRefuseT] = useState(null);    // résa à refuser (modale)
   const [refuseReason, setRefuseReason] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const toast = useToast();
 
   const load = () => eventReservationsService.listForEvent(eventId).then(d => setResas(d?.reservations || [])).catch(console.error).finally(() => setLoading(false));
@@ -454,6 +456,7 @@ function ResaTab({ event, tables = [] }) {
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn variant="primary" icon={Plus} onClick={() => setManual(true)}>Réservation manuelle</Btn>
+            <Btn icon={Upload} onClick={() => setImportOpen(true)}>Importer</Btn>
             <Btn icon={FileText} onClick={() => doExport("pdf")} disabled={!!busy || !resas.length}>PDF</Btn>
             <Btn icon={Sheet} onClick={() => doExport("xls")} disabled={!!busy || !resas.length}>Excel</Btn>
           </div>
@@ -582,6 +585,15 @@ function ResaTab({ event, tables = [] }) {
           </div>
         )}
       </Modal>
+
+      {/* Import en masse depuis Excel/CSV */}
+      {importOpen && (
+        <EventResaImportModal
+          eventId={eventId}
+          onClose={() => setImportOpen(false)}
+          onDone={() => { load(); setFilter("all"); }}
+        />
+      )}
 
       {/* Modale : QR code d'une réservation confirmée */}
       <Modal open={!!qr} title="QR code du billet" width={340} onClose={() => setQr(null)}>

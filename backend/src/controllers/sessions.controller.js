@@ -478,7 +478,11 @@ export const payForSession = asyncHandler(async (req, res) => {
 
   // Clôture optionnelle (quand la table est réglée)
   if (b.close) {
-    await query("UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1", [s.id]);
+    const { rows: [c] } = await query(
+      "UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1 RETURNING closed_at", [s.id]);
+    deliverWebhook(restoId, "session.closed", {
+      session_id: s.id, table_label: s.table_label, closed_at: c?.closed_at,
+    });
   }
   logger.info("Encaissement enregistré", { sessionId: s.id, count: recorded.length, closed: !!b.close });
   // Webhook caisse tierce : un événement par encaissement (ref = idempotence)
@@ -518,7 +522,11 @@ export const closeSession = asyncHandler(async (req, res) => {
   const restoId = await resolveRestoId(req);
   const s = await loadOwnedSession(req.params.id, restoId);
   if (!s) return notFound(res, "Note introuvable");
-  await query("UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1", [s.id]);
+  const { rows: [c] } = await query(
+    "UPDATE table_sessions SET status = 'closed', closed_at = NOW() WHERE id = $1 RETURNING closed_at", [s.id]);
   logger.info("Note de table fermée", { sessionId: s.id });
+  deliverWebhook(restoId, "session.closed", {
+    session_id: s.id, table_label: s.table_label, closed_at: c?.closed_at,
+  });
   return ok(res, { closed: true }, "Note fermée");
 });

@@ -199,7 +199,9 @@ export default function IntegrationCaisse({ restaurantId = null, admin = false }
             <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Événements envoyés (POST vers votre webhook) :</p>
             <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
               <li><code style={mono}>order.created</code> — nouvelle commande (QR client ou serveur)</li>
+              <li><code style={mono}>order.updated</code> — statut modifié (servi, annulé…) ou articles modifiés</li>
               <li><code style={mono}>payment.recorded</code> — encaissement (espèces, mobile money, carte)</li>
+              <li><code style={mono}>session.closed</code> — table clôturée (addition fermée)</li>
             </ul>
             <p style={{ margin: "0 0 6px" }}>
               Corps : <code style={mono}>{"{ id, event, sent_at, data }"}</code>. Le champ

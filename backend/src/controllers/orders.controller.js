@@ -428,6 +428,10 @@ export const updateOrderItems = asyncHandler(async (req, res) => {
     [JSON.stringify(safeItems), total, note || null, req.params.id, restoId]
   );
 
+  deliverWebhook(order.restaurant_id, "order.updated", {
+    ref: order.ref, order_id: order.id, status: order.status,
+    table_label: order.table_label, items: safeItems, total: order.total, updated_at: order.updated_at,
+  });
   return ok(res, { order }, "Commande modifiée");
 });
 
@@ -455,5 +459,10 @@ export const updateOrder = asyncHandler(async (req, res) => {
   const { rows: [order] } = await query(sql, params);
   if (!order) return notFound(res, "Commande introuvable");
 
+  // Webhook caisse : le statut a changé (servi, annulé…) → la caisse se met à jour.
+  deliverWebhook(order.restaurant_id, "order.updated", {
+    ref: order.ref, order_id: order.id, status: order.status,
+    table_label: order.table_label, total: order.total, updated_at: order.updated_at,
+  });
   return ok(res, { order }, "Commande mise à jour");
 });

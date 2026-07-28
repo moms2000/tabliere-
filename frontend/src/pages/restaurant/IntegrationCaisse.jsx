@@ -36,6 +36,15 @@ const STATUS_LABEL = (s) => {
   return { txt: `Dernier envoi en échec (${s})`, color: "#C0392B" };
 };
 
+// Message d'erreur lisible : d'abord le message renvoyé par le backend (ex.
+// « Action réservée au titulaire du compte »), sinon un indice de réveil à froid
+// (timeout / pas de réponse = serveur Render en train de démarrer), sinon un repli.
+const errMsg = (e, fallback) =>
+  e?.response?.data?.message
+  || ((e?.code === "ECONNABORTED" || !e?.response)
+      ? "Le serveur met du temps à répondre (réveil en cours). Réessayez dans quelques secondes."
+      : fallback);
+
 export default function IntegrationCaisse({ restaurantId = null, admin = false }) {
   const [cfg, setCfg]         = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +59,7 @@ export default function IntegrationCaisse({ restaurantId = null, admin = false }
       const c = await integrationService.get(restaurantId);
       setCfg(c);
       setUrl(c.webhook_url || "");
-    } catch { setErr("Impossible de charger la configuration."); }
+    } catch (e) { setErr(errMsg(e, "Impossible de charger la configuration.")); }
     finally { setLoading(false); }
   };
   useEffect(() => { setLoading(true); setNewKey(""); load(); /* eslint-disable-next-line */ }, [restaurantId]);
@@ -64,7 +73,7 @@ export default function IntegrationCaisse({ restaurantId = null, admin = false }
       setNewKey(r.api_key);
       setMsg("Clé générée. Copiez-la maintenant, elle ne sera plus affichée.");
       await load();
-    } catch { setErr("Échec de la génération de la clé."); }
+    } catch (e) { setErr(errMsg(e, "Échec de la génération de la clé.")); }
     finally { setBusy(false); }
   };
 
@@ -76,7 +85,7 @@ export default function IntegrationCaisse({ restaurantId = null, admin = false }
       await integrationService.update({ webhook_url: u || null }, restaurantId);
       setMsg("Adresse du webhook enregistrée.");
       await load();
-    } catch { setErr("Échec de l'enregistrement."); }
+    } catch (e) { setErr(errMsg(e, "Échec de l'enregistrement.")); }
     finally { setBusy(false); }
   };
 
@@ -85,7 +94,7 @@ export default function IntegrationCaisse({ restaurantId = null, admin = false }
     try {
       await integrationService.update({ is_active: !cfg.is_active }, restaurantId);
       await load();
-    } catch { setErr("Échec de la mise à jour."); }
+    } catch (e) { setErr(errMsg(e, "Échec de la mise à jour.")); }
     finally { setBusy(false); }
   };
 

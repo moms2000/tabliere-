@@ -361,8 +361,12 @@ function ResaTab({ event, tables = [] }) {
   const confirmDeposit = async () => {
     setBusy("confirm");
     try {
-      await eventReservationsService.confirm(deposit.id, { deposit_method: depForm.method || undefined, deposit_ref: depForm.ref || undefined });
-      setDeposit(null); setDepForm({ method: "", ref: "" }); load();
+      await eventReservationsService.confirm(deposit.id, {
+        deposit_method: depForm.method || undefined,
+        deposit_ref: depForm.ref || undefined,
+        deposit_amount: (depForm.amount !== "" && depForm.amount != null) ? Number(depForm.amount) : undefined,
+      });
+      setDeposit(null); setDepForm({ method: "", ref: "", amount: "" }); load();
       toast("Acompte confirmé — QR envoyé au client.", "success");
     } catch (e) { toast(e.response?.data?.message || "Erreur lors de la confirmation.", "error"); }
     finally { setBusy(null); }
@@ -498,6 +502,11 @@ function ResaTab({ event, tables = [] }) {
                   {phone && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={12} /> {phone}</span>}
                   {r.client_email && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Mail size={12} /> {r.client_email}</span>}
                   {r.deposit_amount > 0 && <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#C47D1A", fontWeight: 600 }}><Wallet size={12} /> Acompte {fmt(r.deposit_amount)}</span>}
+                  {r.status === "confirme" && r.table_price > 0 && (() => {
+                    const remaining = Math.max(0, r.table_price - (r.deposit_amount || 0));
+                    return <span style={{ display: "flex", alignItems: "center", gap: 4, color: remaining > 0 ? "#B45309" : GREEN, fontWeight: 700 }}>
+                      {remaining > 0 ? `Reste à l'entrée ${fmt(remaining)}` : "Soldée"}</span>;
+                  })()}
                 </div>
                 {r.deposit_ref && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>Réf transaction : {r.deposit_ref}</div>}
                 {r.special_request && <div style={{ fontSize: 12, color: MUTED, marginTop: 4, fontStyle: "italic" }}>« {r.special_request} »</div>}
@@ -506,7 +515,7 @@ function ResaTab({ event, tables = [] }) {
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {r.status === "en_attente" && (
                   <>
-                    <button onClick={() => { setDeposit(r); setDepForm({ method: "", ref: "" }); }}
+                    <button onClick={() => { setDeposit(r); setDepForm({ method: "", ref: "", amount: r.deposit_amount || "" }); }}
                       style={btnSt(GREEN, "white")}><Check size={14} /> Acompte reçu</button>
                     {phone && <a href={waLink(r)} target="_blank" rel="noreferrer" style={{ ...btnSt("#25D366", "white"), textDecoration: "none" }}><MessageCircle size={14} /> WhatsApp</a>}
                     <button onClick={() => { setRefuseT(r); setRefuseReason(""); }} style={btnSt("white", "#DC2626", true)}><X size={14} /> Refuser</button>
@@ -575,6 +584,23 @@ function ResaTab({ event, tables = [] }) {
               </select>
             </FormField>
             <FormField label="Référence transaction (facultatif)"><Input value={depForm.ref} onChange={e => setDepForm(p => ({ ...p, ref: e.target.value }))} placeholder="ex : OM-123456789" /></FormField>
+            <FormField label="Montant de l'acompte reçu">
+              <Input type="number" min={0} value={depForm.amount}
+                onChange={e => setDepForm(p => ({ ...p, amount: e.target.value }))}
+                placeholder={deposit.deposit_amount ? String(deposit.deposit_amount) : "0"} />
+            </FormField>
+            {/* Reste à encaisser à l'entrée = prix de la table − acompte reçu */}
+            {deposit.table_price > 0 && (() => {
+              const paid = Number(depForm.amount) || 0;
+              const remaining = Math.max(0, deposit.table_price - paid);
+              return (
+                <div style={{ fontSize: 12.5, color: DARK, background: BG, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", lineHeight: 1.7 }}>
+                  Prix de la table : <strong>{fmt(deposit.table_price)}</strong><br />
+                  Acompte reçu : <strong>{fmt(paid)}</strong><br />
+                  Reste à encaisser à l'entrée : <strong style={{ color: remaining > 0 ? "#C47D1A" : GREEN }}>{fmt(remaining)}</strong>
+                </div>
+              );
+            })()}
             <div style={{ fontSize: 12, color: "#7a5a1a", background: "#FEF6EC", borderRadius: 8, padding: "9px 12px" }}>
               ✅ La table sera <strong>définitivement attribuée</strong> à ce client et son <strong>QR code envoyé</strong> (e-mail + WhatsApp). Les autres en attente sur cette table seront notifiés.
             </div>

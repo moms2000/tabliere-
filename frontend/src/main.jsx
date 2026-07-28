@@ -231,6 +231,33 @@ if ("serviceWorker" in navigator) {
 // Rafraîchissement automatique quand une nouvelle version est déployée
 import("./utils/versionCheck.js").then((m) => m.startVersionWatch()).catch(() => {});
 
+// ── Filet anti-chunk périmé : recharge dès qu'un import() de chunk échoue ──────
+// Après un déploiement, les anciens fichiers /assets/*.js hachés disparaissent de
+// Vercel. Si l'app est ouverte (WebView Capacitor ou navigateur) et que
+// l'utilisateur navigue vers une route lazy AVANT que le versionWatch n'ait
+// rechargé, l'import échoue → onglet blanc, obligeant à fermer/rouvrir l'app.
+// On recharge alors immédiatement (une fois / 20 s) pour récupérer la version
+// fraîche. Complète l'ErrorBoundary (qui ne voit que les erreurs de rendu).
+function reloadForStaleChunk() {
+  try {
+    const KEY = "tci_chunk_reload_at";
+    const last = +(sessionStorage.getItem(KEY) || 0);
+    if (Date.now() - last < 20000) return; // garde anti-boucle
+    sessionStorage.setItem(KEY, String(Date.now()));
+  } catch (_) { /* storage indisponible */ }
+  window.location.reload();
+}
+// Événement Vite émis quand un module préchargé (chunk lazy) échoue au chargement.
+window.addEventListener("vite:preloadError", (e) => { e.preventDefault?.(); reloadForStaleChunk(); });
+// Filets génériques : erreur de chargement de script ou promesse rejetée non gérée.
+window.addEventListener("error", (e) => {
+  if (CHUNK_ERR.test(`${e?.message || ""} ${e?.filename || ""}`)) reloadForStaleChunk();
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e?.reason;
+  if (CHUNK_ERR.test(`${r?.name || ""} ${r?.message || ""} ${r?.stack || ""}`)) reloadForStaleChunk();
+});
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>

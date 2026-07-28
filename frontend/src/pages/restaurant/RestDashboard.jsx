@@ -91,15 +91,19 @@ export default function RestDashboard() {
 
   /* Filtre par période */
   const now = new Date();
-  const filteredResas = resas.filter(r => {
-    if (!r.reserved_at) return false;
-    const d = new Date(r.reserved_at);
+  // Filtre de période partagé (réservations ET commandes QR) — suit le sélecteur
+  // Jour / Mois / Année / Date / Tout.
+  const matchPeriod = (val) => {
+    if (!val) return false;
+    const d = new Date(val);
     if (dateMode === "Jour")  return d.toDateString() === now.toDateString();
     if (dateMode === "Mois")  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     if (dateMode === "Année") return d.getFullYear() === now.getFullYear();
     if (dateMode === "Date" && customDate) return d.toISOString().slice(0,10) === customDate;
     return true; // "Tout"
-  });
+  };
+  const filteredResas  = resas.filter(r => matchPeriod(r.reserved_at));
+  const filteredOrders = orders.filter(o => matchPeriod(o.created_at));
 
   const todayResas  = resas.filter(r => r.reserved_at && new Date(r.reserved_at).toDateString() === now.toDateString());
   const confirmed   = filteredResas.filter(r => ["confirme","confirmé"].includes(r.status)).length;
@@ -111,9 +115,10 @@ export default function RestDashboard() {
   const reserveesTb = tables.filter(t => ["reserve","réservé","reserved"].includes(t.status)).length;
   const avgParty    = filteredResas.length ? (filteredResas.reduce((s, r) => s + (r.party_size || 0), 0) / filteredResas.length).toFixed(1) : 0;
   const tauxConfirm = filteredResas.length ? Math.round(confirmed / filteredResas.length * 100) : 0;
-  // Commandes QR du jour
-  const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === now.toDateString());
-  const ordersRevenue = todayOrders.filter(o => o.status !== "annule").reduce((s, o) => s + (o.total || 0), 0);
+  // Commandes QR de la période sélectionnée (comme les réservations)
+  const periodOrders  = filteredOrders.filter(o => o.status !== "annule");
+  const ordersRevenue = periodOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const orderSuffix   = { Jour: "aujourd'hui", Mois: "ce mois", "Année": "cette année", Date: "ce jour", Tout: "au total" }[dateMode] || "";
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" style={{ fontFamily: FONT }}>
@@ -181,10 +186,10 @@ export default function RestDashboard() {
       {orders.length > 0 && (
         <motion.div variants={fadeUp}
           style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 14 }}>
-          <StatCard label="Commandes QR auj." value={todayOrders.length}                                          icon={ShoppingBag} color={P} />
+          <StatCard label={`Commandes QR ${orderSuffix}`} value={filteredOrders.length}                            icon={ShoppingBag} color={P} />
           <StatCard label="CA commandes QR"   value={ordersRevenue.toLocaleString("fr-CI") + " F"}               icon={TrendingUp}  color={S} />
-          <StatCard label="Commandes en cours" value={orders.filter(o => o.status === "en_cours").length}         icon={Clock}       color="#C47D1A" />
-          <StatCard label="Commandes servies"  value={orders.filter(o => o.status === "servi").length}            icon={CheckCircle} color={S} />
+          <StatCard label="Commandes en cours" value={filteredOrders.filter(o => o.status === "en_cours").length} icon={Clock}       color="#C47D1A" />
+          <StatCard label="Commandes servies"  value={filteredOrders.filter(o => o.status === "servi").length}    icon={CheckCircle} color={S} />
         </motion.div>
       )}
 

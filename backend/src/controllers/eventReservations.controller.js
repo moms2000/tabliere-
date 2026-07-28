@@ -335,6 +335,11 @@ export const confirmEventReservation = asyncHandler(async (req, res) => {
   const b = req.body || {};
   const method = b.deposit_method ? String(b.deposit_method).slice(0, 30) : null;
   const depRef = b.deposit_ref ? String(b.deposit_ref).slice(0, 80) : null;
+  // Montant réellement reçu (facultatif) : sert à calculer le reste à encaisser à
+  // l'entrée. S'il n'est pas fourni, on garde l'acompte attendu déjà enregistré.
+  const amount = (b.deposit_amount != null && b.deposit_amount !== "")
+    ? Math.max(0, Math.min(100000000, Math.round(Number(b.deposit_amount) || 0)))
+    : null;
 
   const updated = await withTransaction(async (client) => {
     if (resa.table_id) {
@@ -349,9 +354,10 @@ export const confirmEventReservation = asyncHandler(async (req, res) => {
     const { rows: [u] } = await client.query(
       `UPDATE event_reservations
          SET status = 'confirme', confirmed_at = NOW(), deposit_confirmed_at = NOW(),
-             deposit_method = COALESCE($2, deposit_method), deposit_ref = COALESCE($3, deposit_ref), updated_at = NOW()
+             deposit_method = COALESCE($2, deposit_method), deposit_ref = COALESCE($3, deposit_ref),
+             deposit_amount = COALESCE($4, deposit_amount), updated_at = NOW()
        WHERE id = $1 RETURNING *`,
-      [resa.id, method, depRef]
+      [resa.id, method, depRef, amount]
     );
     if (resa.table_id) {
       await client.query("UPDATE event_tables SET status = 'occupe', updated_at = NOW() WHERE id = $1", [resa.table_id]);

@@ -11,8 +11,10 @@ export const integrationService = {
     return (await api.get("/integration", rp(restaurantId))).data.data;
   },
   // (Re)génère la clé API — renvoyée UNE SEULE FOIS ({ api_key, api_key_prefix, webhook_secret })
+  // NB : corps {} (pas null) — l'instance force Content-Type json, et `null` partirait
+  // comme le corps "null" que le body-parser strict d'Express refuse (400).
   async generateKey(restaurantId) {
-    return (await api.post("/integration/key", null, rp(restaurantId))).data.data;
+    return (await api.post("/integration/key", {}, rp(restaurantId))).data.data;
   },
   // { webhook_url?, is_active? }
   async update(body, restaurantId) {

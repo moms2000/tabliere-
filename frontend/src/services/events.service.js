@@ -73,6 +73,7 @@ export const eventReservationsService = {
   async create(data)            { return (await api.post("/event-reservations", data)).data.data; },
   async createGuest(data)       { return (await api.post("/event-reservations/guest", data)).data.data; },
   async createManual(data)      { return (await api.post("/event-reservations/manual", data)).data.data; },
+  async importList(data)        { return (await api.post("/event-reservations/import", data)).data.data; },
   async listForEvent(eventId)   { return (await api.get("/event-reservations", { params: { event_id: eventId } })).data.data; },
   async listMine()              { return (await api.get("/event-reservations/mine")).data.data; },
   async confirm(id, data = {})  { return (await api.patch(`/event-reservations/${id}/confirm`, data)).data; },

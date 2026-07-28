@@ -710,8 +710,9 @@ export default function RestProfil() {
             </Card>
           </motion.div>
 
-          {/* Intégration à la caisse tierce (clé API + webhooks) */}
-          <IntegrationCaisse />
+          {/* Intégration à la caisse tierce (clé API + webhooks) — titulaire uniquement,
+              pas le staff : les routes sont denyStaff côté serveur (sinon erreur 403). */}
+          {!user?.is_staff && <IntegrationCaisse />}
         </div>
       </div>
     </motion.div>

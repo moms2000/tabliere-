@@ -1,13 +1,11 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { authService } from "../../services/auth.service.js";
-import OtpInput from "../../components/auth/OtpInput.jsx";
-import { COUNTRIES } from "../../components/auth/countries.js";
+import api from "../../services/api.js";
 import {
   Mail, Lock, User, Phone, Eye, EyeOff,
-  AlertCircle, Calendar, ChevronDown, UtensilsCrossed, X, MessageCircle,
+  CheckCircle, AlertCircle, Calendar, ChevronDown, UtensilsCrossed, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
@@ -33,6 +31,47 @@ function Logo({ size = 28 }) {
   );
 }
 
+// ── Indicatifs pays ───────────────────────────────────────────────────────────
+const COUNTRIES = [
+  { code: "CI", name: "Côte d'Ivoire",   dial: "+225", flag: "🇨🇮", pattern: /^\d{10}$/,     ph: "07 00 00 00 00" },
+  { code: "SN", name: "Sénégal",         dial: "+221", flag: "🇸🇳", pattern: /^\d{9}$/,      ph: "77 000 00 00"  },
+  { code: "ML", name: "Mali",            dial: "+223", flag: "🇲🇱", pattern: /^\d{8}$/,      ph: "70 00 00 00"   },
+  { code: "BF", name: "Burkina Faso",    dial: "+226", flag: "🇧🇫", pattern: /^\d{8}$/,      ph: "70 00 00 00"   },
+  { code: "GH", name: "Ghana",           dial: "+233", flag: "🇬🇭", pattern: /^\d{9}$/,      ph: "20 000 0000"   },
+  { code: "NG", name: "Nigeria",         dial: "+234", flag: "🇳🇬", pattern: /^\d{10}$/,     ph: "802 000 0000"  },
+  { code: "GN", name: "Guinée",          dial: "+224", flag: "🇬🇳", pattern: /^\d{9}$/,      ph: "622 00 00 00"  },
+  { code: "CM", name: "Cameroun",        dial: "+237", flag: "🇨🇲", pattern: /^\d{9}$/,      ph: "670 00 00 00"  },
+  { code: "TG", name: "Togo",            dial: "+228", flag: "🇹🇬", pattern: /^\d{8}$/,      ph: "90 00 00 00"   },
+  { code: "BJ", name: "Bénin",           dial: "+229", flag: "🇧🇯", pattern: /^\d{8}$/,      ph: "90 00 00 00"   },
+  { code: "NE", name: "Niger",           dial: "+227", flag: "🇳🇪", pattern: /^\d{8}$/,      ph: "90 00 00 00"   },
+  { code: "LR", name: "Liberia",         dial: "+231", flag: "🇱🇷", pattern: /^\d{7,8}$/,    ph: "770 0000"      },
+  { code: "SL", name: "Sierra Leone",    dial: "+232", flag: "🇸🇱", pattern: /^\d{8}$/,      ph: "76 000 000"    },
+  { code: "GM", name: "Gambie",          dial: "+220", flag: "🇬🇲", pattern: /^\d{7}$/,      ph: "300 0000"      },
+  { code: "CD", name: "Congo (RDC)",     dial: "+243", flag: "🇨🇩", pattern: /^\d{9}$/,      ph: "81 000 0000"   },
+  { code: "CG", name: "Congo (Brazza)",  dial: "+242", flag: "🇨🇬", pattern: /^\d{9}$/,      ph: "06 000 0000"   },
+  { code: "GA", name: "Gabon",           dial: "+241", flag: "🇬🇦", pattern: /^\d{7,8}$/,    ph: "060 00 00"     },
+  { code: "KE", name: "Kenya",           dial: "+254", flag: "🇰🇪", pattern: /^\d{9}$/,      ph: "712 000 000"   },
+  { code: "TZ", name: "Tanzanie",        dial: "+255", flag: "🇹🇿", pattern: /^\d{9}$/,      ph: "712 000 000"   },
+  { code: "MA", name: "Maroc",           dial: "+212", flag: "🇲🇦", pattern: /^\d{9}$/,      ph: "612 34 56 78"  },
+  { code: "DZ", name: "Algérie",         dial: "+213", flag: "🇩🇿", pattern: /^\d{9}$/,      ph: "555 12 34 56"  },
+  { code: "TN", name: "Tunisie",         dial: "+216", flag: "🇹🇳", pattern: /^\d{8}$/,      ph: "20 000 000"    },
+  { code: "EG", name: "Égypte",          dial: "+20",  flag: "🇪🇬", pattern: /^\d{10}$/,     ph: "100 000 0000"  },
+  { code: "FR", name: "France",          dial: "+33",  flag: "🇫🇷", pattern: /^[67]\d{8}$/,  ph: "6 12 34 56 78" },
+  { code: "BE", name: "Belgique",        dial: "+32",  flag: "🇧🇪", pattern: /^[4]\d{8}$/,   ph: "470 00 00 00"  },
+  { code: "CH", name: "Suisse",          dial: "+41",  flag: "🇨🇭", pattern: /^[78]\d{8}$/,  ph: "76 000 00 00"  },
+  { code: "GB", name: "Royaume-Uni",     dial: "+44",  flag: "🇬🇧", pattern: /^[7]\d{9}$/,   ph: "7700 000000"   },
+  { code: "DE", name: "Allemagne",       dial: "+49",  flag: "🇩🇪", pattern: /^\d{10,11}$/,  ph: "1512 3456789"  },
+  { code: "ES", name: "Espagne",         dial: "+34",  flag: "🇪🇸", pattern: /^[67]\d{8}$/,  ph: "612 34 56 78"  },
+  { code: "IT", name: "Italie",          dial: "+39",  flag: "🇮🇹", pattern: /^[3]\d{9}$/,   ph: "312 345 6789"  },
+  { code: "PT", name: "Portugal",        dial: "+351", flag: "🇵🇹", pattern: /^9\d{8}$/,     ph: "912 345 678"   },
+  { code: "US", name: "États-Unis",      dial: "+1",   flag: "🇺🇸", pattern: /^\d{10}$/,     ph: "202 555 0100"  },
+  { code: "CA", name: "Canada",          dial: "+1",   flag: "🇨🇦", pattern: /^\d{10}$/,     ph: "613 555 0100"  },
+  { code: "SA", name: "Arabie Saoudite", dial: "+966", flag: "🇸🇦", pattern: /^5\d{8}$/,     ph: "50 000 0000"   },
+  { code: "AE", name: "Émirats arabes",  dial: "+971", flag: "🇦🇪", pattern: /^5\d{8}$/,     ph: "50 000 0000"   },
+  { code: "LB", name: "Liban",           dial: "+961", flag: "🇱🇧", pattern: /^[37]\d{7}$/,  ph: "3 000 000"     },
+  { code: "CN", name: "Chine",           dial: "+86",  flag: "🇨🇳", pattern: /^\d{11}$/,     ph: "131 0000 0000" },
+  { code: "IN", name: "Inde",            dial: "+91",  flag: "🇮🇳", pattern: /^\d{10}$/,     ph: "91234 56789"   },
+];
 
 function getStrength(pw) {
   if (!pw) return 0;
@@ -49,7 +88,7 @@ const STRENGTH_COLORS = ["", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#16A34
 export default function Inscription() {
   const navigate          = useNavigate();
   const [searchParams]    = useState(() => new URLSearchParams(window.location.search));
-  const { registerPhone, user, logout } = useAuth();
+  const { register, login, user, logout } = useAuth();
   const { t, lang }       = useLang();
   const isRTL             = lang === "ar";
 
@@ -71,22 +110,6 @@ export default function Inscription() {
   }, [legalModal]);
   const [showCountry, setShowCountry] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
-
-  // ── État OTP (vérification du numéro par WhatsApp) ──────────────────────────
-  const [otpCode,    setOtpCode]    = useState("");
-  const [otpTicket,  setOtpTicket]  = useState("");
-  const [devCode,    setDevCode]    = useState("");   // affiché seulement en simulation
-  const [otpError,   setOtpError]   = useState("");
-  const [resendIn,   setResendIn]   = useState(0);    // compte à rebours avant renvoi
-  const [redirecting, setRedirecting] = useState(false);
-  const resendTimer = useRef(null);
-
-  // Compte à rebours du bouton « Renvoyer le code »
-  useEffect(() => {
-    if (resendIn <= 0) return;
-    resendTimer.current = setTimeout(() => setResendIn(s => s - 1), 1000);
-    return () => clearTimeout(resendTimer.current);
-  }, [resendIn]);
 
   const [form, setForm] = useState({
     prenom: "", nom: "", email: "",
@@ -116,12 +139,8 @@ export default function Inscription() {
       const age = (Date.now() - new Date(form.date_naissance).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
       if (age < 14) return t("err_age");
     }
-    // Le numéro devient l'identifiant principal (code de vérification par WhatsApp)
-    if (!form.localPhone) return "Le numéro de téléphone est obligatoire.";
-    if (!country.pattern.test(form.localPhone.replace(/\s/g, ""))) return t("err_phone_format");
-    // E-mail facultatif : validé seulement s'il est renseigné
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      return "Adresse e-mail invalide.";
+    if (form.localPhone) {
+      if (!country.pattern.test(form.localPhone.replace(/\s/g, ""))) return t("err_phone_format");
     }
     if (!/[a-zA-Z]/.test(form.password) || !/[0-9]/.test(form.password) || form.password.length < 8) {
       return t("err_password_weak");
@@ -138,127 +157,57 @@ export default function Inscription() {
     return null;
   };
 
-  // ── Étape 2 → OTP : valider le formulaire puis envoyer le code WhatsApp ──────
-  const handleSendOtp = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     const validErr = validate();
     if (validErr) { setError(validErr); return; }
     setLoading(true);
+
+    // Figer les valeurs du formulaire AVANT tout appel async
+    // (évite toute race condition si React re-render entre les appels)
+    const isResto = type === "restaurateur";
+    const isOrga  = type === "organisateur";
+    const code    = isResto ? form.code_restaurateur.trim().toUpperCase() : undefined;
+    const payload = {
+      full_name:         fullName,
+      email:             form.email.trim(),
+      phone:             fullPhone || undefined,
+      password:          form.password,
+      role:              type,
+      restaurant_name:   isResto ? form.resto.trim() : undefined,
+      code_restaurateur: code,
+      code_organisateur: isOrga ? form.code_organisateur.trim().toUpperCase() : undefined,
+    };
+
     try {
-      const res = await authService.sendOtp(fullPhone, "register");
-      setDevCode(res?.dev_code || "");   // rempli uniquement en mode simulation
-      setOtpCode("");
-      setOtpError("");
-      setResendIn(45);
-      setStep("otp");
+      await register(payload);
+      // PAS d'auto-login : évite d'écraser/exposer une session existante
+      // (ex: un admin qui crée un compte ne doit pas mélanger sa session).
+      // L'utilisateur se connecte ensuite manuellement.
+      setStep(3);
     } catch (err) {
       const status = err.response?.status;
       if (!status) {
+        // Pas de réponse = problème réseau ou mauvaise URL API
         setError("Impossible de contacter le serveur. Vérifiez votre connexion internet et réessayez.");
       } else if (status === 409) {
-        setError(err.response?.data?.message || "Ce numéro a déjà un compte. Connectez-vous.");
-      } else if (status === 429) {
-        setError(err.response?.data?.message || "Trop de demandes de code. Patientez quelques minutes.");
+        // Le message précis vient du backend (email OU téléphone)
+        setError(err.response?.data?.message || "Un compte existe déjà avec ces informations. Vérifiez votre e-mail et numéro de téléphone.");
+      } else if (status === 400) {
+        setError(err.response?.data?.message || "Données invalides. Vérifiez les champs.");
       } else {
-        setError(err.response?.data?.message || "Impossible d'envoyer le code. Réessayez.");
+        setError(err.response?.data?.message || "Une erreur est survenue. Réessayez dans quelques instants.");
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  // ── Renvoyer un code ────────────────────────────────────────────────────────
-  const handleResend = async () => {
-    if (resendIn > 0 || loading) return;
-    setOtpError(""); setLoading(true);
-    try {
-      const res = await authService.sendOtp(fullPhone, "register");
-      setDevCode(res?.dev_code || "");
-      // Le code précédent est invalidé côté serveur : on repart de zéro pour que
-      // le NOUVEAU code soit bien re-vérifié (sinon un ancien ticket serait réutilisé).
-      setOtpTicket(""); setOtpCode("");
-      setResendIn(45);
-    } catch (err) {
-      setOtpError(err.response?.data?.message || "Impossible de renvoyer le code.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Étape OTP : vérifier le code puis créer le compte (auto-connexion) ───────
-  const handleVerifyAndRegister = async (codeArg) => {
-    const code = String(codeArg ?? otpCode);
-    if (code.length !== 6 || loading) return;
-    setOtpError(""); setLoading(true);
-
-    const isResto = type === "restaurateur";
-    const isOrga  = type === "organisateur";
-
-    // 1) Vérifier le CODE OTP → ticket signé. Un échec ici = le code est mauvais/
-    //    expiré → on reste sur l'écran OTP.
-    let ticket = otpTicket;
-    if (!ticket) {
-      try {
-        ticket = await authService.verifyOtp(fullPhone, code, "register");
-        setOtpTicket(ticket);
-      } catch (err) {
-        const status = err.response?.status;
-        const msg = err.response?.data?.message;
-        setOtpError(status === 429
-          ? (msg || "Trop d'essais. Renvoyez un code.")
-          : (msg || "Code incorrect. Vérifiez et réessayez."));
-        setOtpCode("");
-        setLoading(false);
-        return;
-      }
-    }
-
-    // 2) Créer le compte avec SON mot de passe (numéro déjà vérifié) → auto-login
-    try {
-      await registerPhone({
-        otp_ticket:        ticket,
-        full_name:         fullName,
-        password:          form.password,
-        email:             form.email.trim() || undefined,
-        role:              type,
-        restaurant_name:   isResto ? form.resto.trim() : undefined,
-        code_restaurateur: isResto ? form.code_restaurateur.trim().toUpperCase() : undefined,
-        code_organisateur: isOrga  ? form.code_organisateur.trim().toUpperCase() : undefined,
-      });
-      // Connecté : rediriger vers l'espace correspondant
-      setRedirecting(true);
-      navigate(isResto ? "/restaurant" : isOrga ? "/event" : "/", { replace: true });
-    } catch (err) {
-      const status = err.response?.status;
-      const msg = err.response?.data?.message;
-      if (status === 401) {
-        // Ticket expiré → recommencer la vérification du numéro
-        setOtpError("Vérification expirée. Renvoyez un code.");
-        setOtpTicket(""); setOtpCode("");
-        setLoading(false);
-      } else if (status === 400 || status === 409) {
-        // Le numéro est déjà vérifié : un 400/409 vient des INFOS du formulaire
-        // (code d'accès restaurateur/organisateur, e-mail déjà pris…). On renvoie
-        // l'utilisateur à l'étape 2 avec le message, au lieu de le bloquer sur l'OTP.
-        setError(msg || "Vérifiez vos informations (code d'accès, e-mail).");
-        setOtpTicket("");
-        setStep(2);
-        setLoading(false);
-      } else if (!status) {
-        setOtpError("Impossible de contacter le serveur. Vérifiez votre connexion.");
-        setLoading(false);
-      } else {
-        setOtpError(msg || "Une erreur est survenue. Réessayez.");
-        setLoading(false);
-      }
     }
   };
 
   // ── Garde-fou sécurité : bloquer l'inscription si déjà connecté ───────────
   // Empêche un admin/restaurateur/client connecté de créer un nouveau compte
   // sans se déconnecter — évite une session résiduelle exposée sur l'appareil.
-  if (user && !redirecting) return (
+  if (user && step !== 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24, fontFamily: FONT }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: "40px 36px",
@@ -291,79 +240,68 @@ export default function Inscription() {
     </div>
   );
 
-  // ── Étape OTP — vérification du numéro par WhatsApp ────────────────────────
-  if (step === "otp") return (
+  // ── Succès — Vérification email requise ───────────────────────────────────
+  if (step === 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24,
       direction: isRTL ? "rtl" : "ltr", fontFamily: FONT }}>
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        style={{ background: "#fff", borderRadius: 16, padding: "40px 34px",
+      <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{ background: "#fff", borderRadius: 16, padding: "44px 40px",
           border: `0.5px solid ${BORDER}`, maxWidth: 420, width: "100%", textAlign: "center",
           boxShadow: "0 8px 40px rgba(30,46,40,.09)" }}>
-
-        <button onClick={() => { setStep(2); setOtpError(""); setOtpCode(""); setOtpTicket(""); }}
-          style={{ alignSelf: "flex-start", background: "transparent", border: "none",
-            cursor: "pointer", fontSize: 12, color: MUTED, marginBottom: 16,
-            display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: FONT }}>
-          ← Modifier le numéro
-        </button>
-
-        {/* Icône WhatsApp */}
-        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#E7F7EE",
-          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-          <MessageCircle size={30} color="#1FA855" />
-        </div>
-
-        <h2 style={{ fontSize: 21, fontWeight: 600, color: DARK, marginBottom: 8 }}>
-          Vérifiez votre numéro
+        {/* Icône e-mail animée */}
+        <motion.div
+          animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+          style={{ width: 72, height: 72, borderRadius: "50%", background: "#FEF6EC",
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+          <Mail size={36} color={P} />
+        </motion.div>
+        <h2 style={{ fontSize: 22, fontWeight: 600, color: DARK, marginBottom: 8 }}>
+          Vérifiez votre e-mail !
         </h2>
-        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.65, marginBottom: 22 }}>
-          Nous avons envoyé un code à 6 chiffres par WhatsApp au<br />
-          <strong style={{ color: DARK, direction: "ltr", unicodeBidi: "embed" }}>{fullPhone}</strong>
+        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.7, marginBottom: 24 }}>
+          Un lien d'activation a été envoyé à<br />
+          <strong style={{ color: DARK }}>{form.email}</strong>
+          <br /><br />
+          Cliquez sur le lien dans l'e-mail pour activer votre compte. Vérifiez aussi vos spams.
         </p>
 
-        {/* Bandeau simulation (dev uniquement — jamais en production) */}
-        {devCode && (
-          <div style={{ background: "#FEF6EC", border: "0.5px solid #F0C98A", borderRadius: 9,
-            padding: "9px 12px", marginBottom: 16, fontSize: 12.5, color: "#7a5a1a" }}>
-            Mode test (WhatsApp non configuré) — code : <strong style={{ letterSpacing: 1 }}>{devCode}</strong>
+        {/* Étapes */}
+        {[
+          { num: "1", text: "Ouvrez votre boîte de réception" },
+          { num: "2", text: `Cherchez l'e-mail de TablièreCI` },
+          { num: "3", text: "Cliquez sur « Activer mon compte »" },
+        ].map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+            marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 9 }}>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", background: P,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 800, color: "#1A1000", flexShrink: 0 }}>
+              {s.num}
+            </div>
+            <span style={{ fontSize: 13, color: DARK }}>{s.text}</span>
           </div>
-        )}
+        ))}
 
-        <div style={{ marginBottom: 16 }}>
-          <OtpInput value={otpCode} onChange={setOtpCode}
-            onComplete={handleVerifyAndRegister} disabled={loading} accent={P} />
-        </div>
-
-        {otpError && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center",
-            background: "#FEF2F2", border: "0.5px solid #FECACA", borderRadius: 8,
-            padding: "9px 12px", marginBottom: 16 }}>
-            <AlertCircle size={14} color="#DC2626" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: "#DC2626" }}>{otpError}</span>
-          </div>
-        )}
-
-        <motion.button whileTap={{ scale: 0.97 }} disabled={loading || otpCode.length !== 6}
-          onClick={() => handleVerifyAndRegister()}
-          style={{ width: "100%", background: (loading || otpCode.length !== 6) ? "#F0C98A" : P,
-            color: "#1A1000", border: "none", borderRadius: 9, padding: "13px 0",
-            fontSize: 14, fontWeight: 700, cursor: (loading || otpCode.length !== 6) ? "not-allowed" : "pointer",
-            fontFamily: FONT, marginBottom: 14 }}>
-          {loading ? "Vérification…" : "Créer mon compte"}
-        </motion.button>
-
-        <div style={{ fontSize: 12.5, color: MUTED }}>
-          Code non reçu ?{" "}
-          {resendIn > 0 ? (
-            <span style={{ color: MUTED }}>Renvoyer dans {resendIn}s</span>
-          ) : (
-            <button onClick={handleResend} disabled={loading}
-              style={{ background: "none", border: "none", color: P, cursor: "pointer",
-                fontSize: 12.5, fontWeight: 600, textDecoration: "underline", fontFamily: FONT }}>
-              Renvoyer le code
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+          <motion.button whileTap={{ scale: 0.97 }}
+            onClick={() => navigate(type === "restaurateur" ? "/restaurant" : type === "organisateur" ? "/event" : "/")}
+            style={{ background: P, color: "#1A1000", border: "none", borderRadius: 9,
+              padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            {(type === "restaurateur" || type === "organisateur") ? "Accéder à mon espace" : "Continuer"}
+          </motion.button>
+          <span style={{ fontSize: 12, color: MUTED }}>
+            Vous n'avez pas reçu l'email ?{" "}
+            <button onClick={async () => {
+              try {
+                await api.post("/auth/resend-verification", { email: form.email });
+              } catch (_) {}
+              alert("E-mail renvoyé ! Vérifiez votre boîte de réception (et les spams).");
+            }} style={{ background: "none", border: "none", color: P, cursor: "pointer",
+              fontSize: 12, fontWeight: 600, textDecoration: "underline" }}>
+              Renvoyer
             </button>
-          )}
+          </span>
         </div>
       </motion.div>
     </div>
@@ -539,7 +477,7 @@ export default function Inscription() {
             ← {t("reg_prev")}
           </button>
 
-          <form onSubmit={handleSendOtp} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
             {error && (
               <div style={{ display: "flex", alignItems: "flex-start", gap: 8,
@@ -558,10 +496,10 @@ export default function Inscription() {
                 value={form.nom} onChange={v => set("nom", v)} placeholder="Amara" required />
             </div>
 
-            {/* Email — facultatif (le numéro est désormais l'identifiant principal) */}
-            <FField icon={Mail} label={`${t("reg_email")} (facultatif)`} type="email"
+            {/* Email */}
+            <FField icon={Mail} label={t("reg_email")} type="email"
               value={form.email} onChange={v => set("email", v)}
-              placeholder="vous@exemple.com" />
+              placeholder="vous@exemple.com" required />
 
             {/* Date de naissance (facultatif) */}
             <div>
@@ -576,9 +514,9 @@ export default function Inscription() {
               </div>
             </div>
 
-            {/* Téléphone — identifiant principal, vérifié par WhatsApp */}
+            {/* Téléphone */}
             <div>
-              <label style={lbl}>{t("reg_phone")} *</label>
+              <label style={lbl}>{t("reg_phone")}</label>
               <div style={{ display: "flex", gap: 8 }}>
                 <div style={{ position: "relative" }}>
                   <button type="button" onClick={() => setShowCountry(p => !p)}
@@ -629,12 +567,6 @@ export default function Inscription() {
                     style={{ border: "none", background: "transparent", fontSize: 13,
                       outline: "none", flex: 1, color: DARK, fontFamily: "inherit" }} />
                 </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-                <MessageCircle size={12} color="#1FA855" style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: MUTED, lineHeight: 1.4 }}>
-                  Un code de vérification vous sera envoyé par WhatsApp.
-                </span>
               </div>
             </div>
 
@@ -818,7 +750,7 @@ export default function Inscription() {
                 border: "none", borderRadius: 9, padding: "13px 0",
                 fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
                 marginTop: 4, transition: "background 0.2s", fontFamily: "inherit" }}>
-              {loading ? "Envoi du code…" : "Recevoir le code WhatsApp"}
+              {loading ? t("reg_loading") : t("reg_submit")}
             </motion.button>
           </form>
 

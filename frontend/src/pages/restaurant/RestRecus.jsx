@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Receipt, RefreshCw, Printer, CheckCircle2, Search, Wallet } from "lucide-react";
+import { Receipt, RefreshCw, Printer, CheckCircle2, Search, Wallet, BarChart3 } from "lucide-react";
 import { sessionsService } from "../../services/sessions.service.js";
 import { printTicket, itemsToLines, fmtMoney } from "../../utils/printer.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import RestCaisseHistorique from "./RestCaisseHistorique.jsx";
 
 const P = "#E8A045"; const PL = "#FEF6EC"; const DARK = "#1E2E28"; const BG = "#F8F5EF";
 const BORDER = "#E4DFD8"; const MUTED = "#9BA89F"; const GREEN = "#3D6B55";
@@ -13,6 +14,7 @@ const FONT = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-syst
 export default function RestRecus() {
   const { user } = useAuth();
   const restoName = user?.resto_name || "Restaurant";
+  const [view, setView]         = useState("encaisser"); // encaisser | historique
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [printNote, setPrintNote] = useState(null);
@@ -233,17 +235,36 @@ export default function RestRecus() {
 
   return (
     <div style={{ fontFamily: FONT, padding: 20, maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Receipt size={22} color={P} />
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: DARK, margin: 0 }}>Reçus par table</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: DARK, margin: 0 }}>Reçus &amp; caisse</h1>
         </div>
-        <button onClick={load} disabled={loading}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9,
-            border: `0.5px solid ${BORDER}`, background: "white", fontSize: 12.5, cursor: "pointer", color: MUTED, fontFamily: FONT }}>
-          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} /> Actualiser
-        </button>
+        {view === "encaisser" && (
+          <button onClick={load} disabled={loading}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9,
+              border: `0.5px solid ${BORDER}`, background: "white", fontSize: 12.5, cursor: "pointer", color: MUTED, fontFamily: FONT }}>
+            <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} /> Actualiser
+          </button>
+        )}
       </div>
+
+      {/* Basculeur Encaisser / Historique */}
+      <div style={{ display: "flex", gap: 6, background: "#F0EDE6", borderRadius: 11, padding: 4, marginBottom: 16, maxWidth: 420 }}>
+        {[["encaisser", "Encaisser", Wallet], ["historique", "Historique & stats", BarChart3]].map(([k, lab, Icon]) => (
+          <button key={k} onClick={() => setView(k)}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0",
+              borderRadius: 8, border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: view === k ? 700 : 500,
+              background: view === k ? "white" : "transparent", color: view === k ? DARK : MUTED,
+              boxShadow: view === k ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
+            <Icon size={15} /> {lab}
+          </button>
+        ))}
+      </div>
+
+      {view === "historique" && <RestCaisseHistorique />}
+
+      {view === "encaisser" && (<>
       <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
         Chaque table ouverte a sa note. Imprimez un reçu total ou un reçu par personne, puis clôturez.
       </p>
@@ -374,6 +395,7 @@ export default function RestRecus() {
         )}
         </>
       )}
+      </>)}
 
       {createPortal(
       <AnimatePresence>

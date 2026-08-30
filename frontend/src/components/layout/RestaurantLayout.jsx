@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,6 +7,7 @@ import axios from "axios";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSSE } from "../../hooks/useSSE.js";
 import { useToast } from "../../components/ui/Toast.jsx";
+import TabLoader from "../../components/ui/TabLoader.jsx";
 
 const P      = "#E8A045";
 const DARK   = "#1E2E28";
@@ -260,7 +261,13 @@ export default function RestaurantLayout() {
             <motion.div key={location.pathname}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
-              <Outlet />
+              {/* Suspense LOCALE : le chargement d'un onglet (chunk lazy) n'affiche
+                  le loader QUE dans cette zone, sans démonter la mise en page. La
+                  Suspense est À L'INTÉRIEUR du motion.div → l'animation d'entrée
+                  n'est plus interrompue (plus d'onglet blanc figé à opacity 0). */}
+              <Suspense fallback={<TabLoader />}>
+                <Outlet />
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

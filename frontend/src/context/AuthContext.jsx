@@ -64,13 +64,25 @@ export function AuthProvider({ children }) {
     } catch {}
   }, [user]);
 
-  const login = useCallback(async (email, password, remember = true) => {
+  const login = useCallback(async (identifier, password, remember = true) => {
+    // `identifier` = numéro de téléphone OU e-mail (comptes existants).
     // Purge TOUTE trace du compte précédent (favoris, session staff, état d'accueil…)
     // AVANT de charger le nouveau → empêche la bascule/fuite entre comptes.
     clearUserScopedData();
     localStorage.removeItem("tci_staff");
-    const u = await authService.login(email, password, remember);
+    const u = await authService.login(identifier, password, remember);
     setUser(u);
+    return u;
+  }, []);
+
+  // Inscription par téléphone : le numéro a déjà été vérifié par OTP WhatsApp,
+  // donc on connecte directement (le backend renvoie les tokens). Même purge
+  // anti-bascule que la connexion classique avant d'installer le nouveau compte.
+  const registerPhone = useCallback(async (data, remember = true) => {
+    clearUserScopedData();
+    localStorage.removeItem("tci_staff");
+    const { user: u } = await authService.registerPhone(data, remember);
+    if (u) setUser(u);
     return u;
   }, []);
 
@@ -113,7 +125,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginStaff, logout, register, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, loginStaff, logout, register, registerPhone, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

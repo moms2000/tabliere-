@@ -66,6 +66,12 @@ export const adminService = {
     return res.data.data;
   },
 
+  // Diffusion d'une notification push. roles = ["client","restaurateur","organisateur"]
+  async broadcastPush({ title, body, roles, route }) {
+    const res = await api.post("/admin/broadcast", { title, body, roles, route });
+    return res.data.data; // { recipients, devices, ok, ko }
+  },
+
   async listReservations(params = {}) {
     const res = await api.get("/admin/reservations", { params });
     return res.data;

@@ -50,11 +50,14 @@ export async function rotateRefreshToken(rawToken) {
 
   // Rôle/statut relus en base : un compte rétrogradé/suspendu ne garde pas ses droits.
   const { rows: [user] } = await query(
-    "SELECT id, role, status, email_verified FROM users WHERE id = $1", [decoded.id]
+    "SELECT id, role, status, email_verified, phone_verified FROM users WHERE id = $1", [decoded.id]
   );
   if (!user) return { error: "no_user" };
   if (["suspendu", "bloque"].includes(user.status)) return { error: "suspended" };
-  if (user.email_verified === false) return { error: "unverified" };
+  // Compte vérifié = e-mail vérifié OU numéro vérifié (inscription par téléphone).
+  // Sinon un utilisateur inscrit par téléphone AVEC un e-mail non vérifié serait
+  // déconnecté au premier renouvellement de jeton, alors que le login l'accepte.
+  if (user.email_verified === false && user.phone_verified !== true) return { error: "unverified" };
 
   // Ancien jeton (avant rotation) : pas de jti → on migre vers le nouveau système.
   if (!decoded.jti) {

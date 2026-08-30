@@ -91,6 +91,14 @@ export default function RestCaisseHistorique() {
         if (all.length >= tot || batch.length === 0 || p >= 40) break;
         p++;
       }
+      // Échappe une cellule CSV : neutralise l'injection de formule (une cellule
+      // commençant par = + - @ ou tab/CR est exécutée par Excel/Sheets) PUIS met
+      // entre guillemets. Nom du convive et n° de table sont saisis par des tiers.
+      const esc = (v) => {
+        let s = String(v ?? "");
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+        return `"${s.replace(/"/g, '""')}"`;
+      };
       const head = ["Date", "Heure", "Table", "Convive", "Moyen", "Montant (FCFA)", "Réf"];
       const lines = all.map(r => {
         const d = new Date(r.created_at);
@@ -102,7 +110,7 @@ export default function RestCaisseHistorique() {
           methodLabel(r.method),
           r.amount,
           r.ref || "",
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+        ].map(esc).join(",");
       });
       const csv = "﻿" + [head.join(","), ...lines].join("\r\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

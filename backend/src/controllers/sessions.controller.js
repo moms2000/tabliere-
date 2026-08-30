@@ -549,7 +549,9 @@ export const paymentsAnalytics = asyncHandler(async (req, res) => {
     [restoId, fromTs, toTs]);
 
   const { rows: by_day } = await query(
-    `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+    // Regroupement par jour en UTC (comme les bornes de parseRange) → indépendant
+    // du fuseau de la session Postgres. La Côte d'Ivoire est en UTC±0.
+    `SELECT to_char(date_trunc('day', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
             COALESCE(SUM(amount),0)::int AS amount, COUNT(*)::int AS count
        FROM session_payments
       WHERE restaurant_id = $1 AND created_at >= $2 AND created_at < $3

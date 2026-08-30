@@ -2,6 +2,7 @@ import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import client from "../config/redis.js";
 import { logger } from "../utils/logger.js";
+import { normalizePhone } from "../utils/phone.js";
 
 // Store partagé Redis : les compteurs survivent aux redéploiements Render et sont
 // cohérents en multi-instance (sinon les limites anti-brute-force sont remises à
@@ -31,6 +32,17 @@ const limiter = (windowMs, max, message, prefix = "rl:", extra = {}) =>
 // Auth : 10 tentatives / 15 min
 export const authLimiter = limiter(15 * 60 * 1000, 10, "Trop de tentatives, réessayez dans 15 minutes", "rl:auth:");
 
+// OTP : 5 envois / 15 min PAR NUMÉRO (en plus de authLimiter par IP) — anti-spam
+// SMS/WhatsApp et anti-coût. Repli sur l'IP si le numéro est absent/illisible.
+const otpKey = (req) => {
+  const p = normalizePhone(req.body?.phone);
+  return p ? `otp:${p}` : req.ip;
+};
+export const otpLimiter = limiter(
+  15 * 60 * 1000, 5, "Trop de demandes de code, patientez quelques minutes.", "rl:otpsend:",
+  { keyGenerator: otpKey, validate: { ip: false } }
+);
+
 // Réservations : 20 / 10 min
 export const reservationLimiter = limiter(10 * 60 * 1000, 20, "Limite de réservations atteinte, réessayez dans 10 minutes", "rl:resa:");
 
@@ -51,6 +63,11 @@ export const orderLimiter = limiter(
 
 // Vérification du code responsable (4 chiffres) : strict, anti-brute-force
 export const pinLimiter = limiter(10 * 60 * 1000, 8, "Trop d'essais de code, réessayez dans 10 minutes", "rl:pin:");
+
+// Diffusion push admin : envoi de masse, bruyant et irréversible. Même réservé aux
+// admins, on plafonne (10/heure) pour limiter les dégâts d'un token admin volé ou
+// d'une fausse manip. Repli sur l'IP (les admins sont peu nombreux).
+export const broadcastLimiter = limiter(60 * 60 * 1000, 10, "Trop de diffusions, patientez avant d'en envoyer une autre.", "rl:broadcast:");
 
 // Upload d'images (authentifié) : coûteux (base64 8 Mo + Cloudinary) → 20 / 5 min
 export const uploadLimiter = limiter(5 * 60 * 1000, 20, "Trop d'envois d'images, patientez quelques minutes", "rl:upload:");

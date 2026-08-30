@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { LogOut, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import TabLoader from "../../components/ui/TabLoader.jsx";
 
 const P    = "#E8A045";
 const DARK = "#1E2E28";
@@ -52,9 +54,12 @@ export default function EventLayout() {
         </div>
       </div>
 
-      {/* Contenu */}
+      {/* Contenu — Suspense LOCALE : le chargement d'un onglet reste confiné à
+          cette zone, la barre du haut ne se démonte pas → plus d'écran blanc. */}
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "18px 16px 60px" }}>
-        <Outlet />
+        <Suspense fallback={<TabLoader />}>
+          <Outlet />
+        </Suspense>
       </div>
     </div>
   );

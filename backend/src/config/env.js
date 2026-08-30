@@ -78,6 +78,10 @@ export const env = {
 // reste protégé : dès que la base n'est pas localhost, le garde-fou s'applique.
 const dbIsLocal = /localhost|127\.0\.0\.1/.test(env.DATABASE_URL || "");
 const isDevLocal = (env.NODE_ENV === "development" || env.NODE_ENV === "test") && dbIsLocal;
+// Exposé pour les fonctionnalités qui ne doivent JAMAIS fuiter en dehors du dev
+// local (ex : renvoyer un code OTP en clair). Ne pas se fier au seul isProd :
+// un déploiement distant qui oublie NODE_ENV=production retomberait sur "development".
+env.isDevLocal = isDevLocal;
 if (!isDevLocal) {
   if (env.JWT_SECRET === "change_me_in_production_super_secret_key") {
     throw new Error(

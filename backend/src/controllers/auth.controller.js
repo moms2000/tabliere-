@@ -11,6 +11,7 @@ import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { getSetting } from "../utils/platformSettings.js";
 import { env } from "../config/env.js";
+import { normalizePhone } from "../utils/phone.js";
 
 // Hash factice (valide) pour le login : on exécute TOUJOURS un bcrypt.compare,
 // même si l'email n'existe pas, afin d'avoir un temps de réponse constant
@@ -198,7 +199,7 @@ export const register = asyncHandler(async (req, res) => {
       `INSERT INTO users (full_name, email, phone, password_hash, role, status, email_verified, email_token, email_token_expires)
        VALUES ($1, $2, $3, $4, $5, 'actif', FALSE, $6, $7)
        RETURNING id, email, full_name, role, status`,
-      [full_name, email, phone || null, password_hash, role || "client", emailToken, tokenExpires]
+      [full_name, email, phone ? normalizePhone(phone) : null, password_hash, role || "client", emailToken, tokenExpires]
     );
 
     // Consommation ATOMIQUE du code d'accès (single-use, anti-course) DANS la
@@ -261,7 +262,7 @@ export const register = asyncHandler(async (req, res) => {
          AND walk_in_email IS NOT NULL AND lower(walk_in_email) = lower($2)
          AND ($3 = '' OR walk_in_phone IS NULL
               OR regexp_replace(walk_in_phone, '[^0-9]', '', 'g') = regexp_replace($3, '[^0-9]', '', 'g'))`,
-      [result.id, email, phone || ""]
+      [result.id, email, phone ? normalizePhone(phone) : ""]
     ).catch((e) => logger.warn("Rattachement réservations invité échoué", { error: e?.message }));
   }
 
@@ -282,25 +283,29 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  // Identifiant = numéro OU email. Rétrocompatible : accepte encore `email`.
+  const identifier = String(req.body.identifier || req.body.email || req.body.phone || "").trim();
+  const isEmail = identifier.includes("@");
+  const lookup = isEmail ? identifier.toLowerCase() : normalizePhone(identifier);
 
   const { rows } = await query(
-    `SELECT id, email, full_name, role, status, password_hash, restaurant_id, avatar_url, email_verified
-     FROM users WHERE email = $1`, [email]
+    `SELECT id, email, phone, full_name, role, status, password_hash, restaurant_id, avatar_url, email_verified, phone_verified
+     FROM users WHERE ${isEmail ? "email" : "phone"} = $1 LIMIT 1`, [lookup]
   );
   const user = rows[0];
 
-  // On exécute TOUJOURS un bcrypt.compare (hash factice si l'email n'existe pas)
-  // → temps de réponse constant, pas de fuite temporelle sur l'existence du compte.
-  // La vérif du mot de passe passe AVANT tout message sur le statut du compte.
+  // On exécute TOUJOURS un bcrypt.compare (hash factice si l'identifiant n'existe
+  // pas) → temps de réponse constant, pas de fuite sur l'existence du compte.
   const valid = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
-  if (!user || !valid) return unauth(res, "Email ou mot de passe incorrect");
+  if (!user || !valid) return unauth(res, "Identifiant ou mot de passe incorrect");
   if (["suspendu", "bloque"].includes(user.status)) throw new AppError("Compte suspendu. Contactez le support.", 403);
-  // Vérification d'e-mail OBLIGATOIRE avant toute connexion.
-  if (user.email_verified === false) {
+  // Compte vérifié par AU MOINS une méthode (numéro OU e-mail).
+  const verified = user.phone_verified === true || user.email_verified !== false;
+  if (!verified) {
     return res.status(403).json({
       success: false, code: "EMAIL_NOT_VERIFIED", email: user.email,
-      message: "Vérifiez votre adresse e-mail avant de vous connecter. Consultez votre boîte mail (et les spams).",
+      message: "Vérifiez votre compte avant de vous connecter.",
     });
   }
 

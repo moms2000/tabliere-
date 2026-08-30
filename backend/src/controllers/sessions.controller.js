@@ -13,7 +13,7 @@
 
 import crypto from "crypto";
 import { query, withTransaction } from "../config/db.js";
-import { ok, created, notFound } from "../utils/response.js";
+import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { logger } from "../utils/logger.js";
 import { emitToUser } from "../utils/sse.js";
@@ -514,6 +514,85 @@ export const cashReport = asyncHandler(async (req, res) => {
   let total = 0, count = 0;
   for (const r of rows) { byMethod[r.method] = { amount: r.amount, count: r.count }; total += r.amount; count += r.count; }
   return ok(res, { period, total, count, by_method: byMethod });
+});
+
+// Convertit ?from=YYYY-MM-DD&to=YYYY-MM-DD en bornes [fromTs, toTs) (fin de journée
+// « to » incluse). Défaut : aujourd'hui. Garde-fous : plage max 400 jours, ordre.
+// La Côte d'Ivoire est en UTC±0, donc les bornes UTC correspondent aux jours locaux.
+function parseRange(q) {
+  const DAY = 86400000;
+  const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let from = new Date((isDate(q.from) ? q.from : todayIso) + "T00:00:00Z");
+  let to = isDate(q.to)
+    ? new Date(new Date(q.to + "T00:00:00Z").getTime() + DAY)   // journée « to » incluse
+    : new Date(Date.now() + 1000);                              // jusqu'à maintenant
+  if (isNaN(from)) from = new Date(todayIso + "T00:00:00Z");
+  if (isNaN(to) || to <= from) to = new Date(from.getTime() + DAY);
+  if (to - from > 400 * DAY) from = new Date(to.getTime() - 400 * DAY);
+  return { fromTs: from.toISOString(), toTs: to.toISOString() };
+}
+
+// ── GET /sessions/analytics — CA et nombre d'encaissements par moyen de paiement ─
+// sur une plage de dates (from/to). Renvoie total, count, ventilation par méthode
+// et série par jour. Sert aux études (quel moyen de paiement domine, évolution).
+export const paymentsAnalytics = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const restoId = await resolveRestoId(req);
+  const { fromTs, toTs } = parseRange(req.query);
+
+  const { rows: by_method } = await query(
+    `SELECT method, COALESCE(SUM(amount),0)::int AS amount, COUNT(*)::int AS count
+       FROM session_payments
+      WHERE restaurant_id = $1 AND created_at >= $2 AND created_at < $3
+      GROUP BY method ORDER BY amount DESC`,
+    [restoId, fromTs, toTs]);
+
+  const { rows: by_day } = await query(
+    `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+            COALESCE(SUM(amount),0)::int AS amount, COUNT(*)::int AS count
+       FROM session_payments
+      WHERE restaurant_id = $1 AND created_at >= $2 AND created_at < $3
+      GROUP BY 1 ORDER BY 1`,
+    [restoId, fromTs, toTs]);
+
+  let total = 0, count = 0;
+  for (const r of by_method) { total += r.amount; count += r.count; }
+  return ok(res, { from: fromTs, to: toTs, total, count, by_method, by_day });
+});
+
+// ── GET /sessions/history — liste paginée des encaissements (reçus) sur une plage ─
+// Un reçu = une ligne d'encaissement (table entière ou part d'un convive).
+export const paymentsHistory = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const restoId = await resolveRestoId(req);
+  const { fromTs, toTs } = parseRange(req.query);
+  const method = PAYMENT_METHODS.includes(req.query.method) ? req.query.method : null;
+  const page   = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+
+  const params = [restoId, fromTs, toTs];
+  let methodClause = "";
+  if (method) { params.push(method); methodClause = `AND sp.method = $${params.length}`; }
+
+  const { rows } = await query(
+    `SELECT sp.ref, sp.amount, sp.method, sp.created_at,
+            ts.table_label, cv.name AS convive_name
+       FROM session_payments sp
+       JOIN table_sessions ts ON ts.id = sp.session_id
+       LEFT JOIN session_convives cv ON cv.id = sp.convive_id
+      WHERE sp.restaurant_id = $1 AND sp.created_at >= $2 AND sp.created_at < $3 ${methodClause}
+      ORDER BY sp.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]);
+
+  const { rows: [{ count }] } = await query(
+    `SELECT COUNT(*) FROM session_payments sp
+      WHERE sp.restaurant_id = $1 AND sp.created_at >= $2 AND sp.created_at < $3 ${methodClause}`,
+    params);
+
+  return paginated(res, rows, +count, page, limit);
 });
 
 // ── POST /sessions/:id/close — clôturer la note ─────────────────────────────

@@ -7,6 +7,7 @@ import {
   KeyRound, MessageCircle, UserPlus, Bell, BellOff,
 } from "lucide-react";
 import { Card, Btn, Modal, FormField, Input, Toggle, Badge } from "../../components/ui";
+import TabFallback from "../../components/ui/TabFallback.jsx";
 import { eventsService, eventOpsService } from "../../services/events.service.js";
 import QrScanner from "../../components/QrScanner.jsx";
 import { playOrderAlarm, unlockAudio } from "../../utils/sound.js";
@@ -36,14 +37,17 @@ export function DashboardTab({ event }) {
   const [busy, setBusy] = useState(null);
   const [live, setLive] = useState(true);
   const [updatedAt, setUpdatedAt] = useState(null);
-  const load = () => eventsService.dashboard(event.id).then(dd => { setD(dd); setUpdatedAt(new Date()); }).catch(console.error);
+  const [err, setErr] = useState(false);
+  const load = () => eventsService.dashboard(event.id)
+    .then(dd => { setD(dd); setUpdatedAt(new Date()); setErr(false); })
+    .catch(e => { console.error(e); setErr(true); });
   useEffect(() => { load(); }, [event.id]);
   useEffect(() => {
     if (!live) return;
     const t = setInterval(load, 15000); // rafraîchissement live toutes les 15 s
     return () => clearInterval(t);
   }, [live, event.id]);
-  if (!d) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  if (!d) return <TabFallback error={err} onRetry={load} />;
 
   const r = d.reservations || {}, o = d.orders || {}, v = d.vip || {}, c = d.cash || {}, servers = d.servers || [];
   const byTable = (d.by_table || []).filter(t => (t.paid || 0) > 0 || (t.reservations || 0) > 0);
@@ -671,6 +675,7 @@ const oGhost = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 1
 
 export function OrdersTab({ eventId, staffToken, onAuthError }) {
   const [orders, setOrders] = useState(null);
+  const [err, setErr] = useState(false);
   const [filter, setFilter] = useState("actives"); // actives | toutes
   const [sound, setSound] = useState(() => localStorage.getItem("tci_order_sound") !== "off");
   const seenRef = useRef(null);
@@ -684,8 +689,8 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
       seenRef.current = ids;
       if (hasNew && soundRef.current) playOrderAlarm();
     }
-    setOrders(list);
-  }).catch(e => { if (!onAuthError?.(e)) console.error(e); });
+    setOrders(list); setErr(false);
+  }).catch(e => { if (!onAuthError?.(e)) { console.error(e); setErr(true); } });
   // Rafraîchi souvent (8 s) → commandes visibles quasi en temps réel
   useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, [eventId]);
   const toggleSound = () => { const v = !sound; setSound(v); localStorage.setItem("tci_order_sound", v ? "on" : "off"); unlockAudio(); if (v) playOrderAlarm(); };
@@ -693,7 +698,7 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
     try { await eventOpsService.setOrderStatus(o.id, status, staffToken, eventId); load(); }
     catch (e) { if (!onAuthError?.(e)) alert(e.response?.data?.message || "Erreur"); }
   };
-  if (!orders) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  if (!orders) return <TabFallback error={err} onRetry={load} />;
   const pending = orders.filter(o => o.status === "en_attente");
   const paid = orders.filter(o => o.status === "paye");
   const revenue = paid.reduce((s, o) => s + (o.total || 0), 0);
@@ -772,13 +777,14 @@ export function OrdersTab({ eventId, staffToken, onAuthError }) {
 // ── Reçus par salon (événement) — pour serveurs / caisse / organisateur ──────
 export function EventRecusTab({ eventId, staffToken, onAuthError, eventName }) {
   const [orders, setOrders] = useState(null);
+  const [err, setErr] = useState(false);
   const [printing, setPrinting] = useState(false);
   const load = () => eventOpsService.listOrders(eventId, staffToken)
-    .then(d => setOrders(d?.orders || []))
-    .catch(e => { if (!onAuthError?.(e)) console.error(e); });
+    .then(d => { setOrders(d?.orders || []); setErr(false); })
+    .catch(e => { if (!onAuthError?.(e)) { console.error(e); setErr(true); } });
   useEffect(() => { load(); const id = setInterval(load, 12000); return () => clearInterval(id); }, [eventId]);
 
-  if (!orders) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED, fontFamily: FONT }}>Chargement…</div>;
+  if (!orders) return <TabFallback error={err} onRetry={load} />;
 
   const groups = {};
   orders.filter(o => o.status !== "annule").forEach(o => {
@@ -859,12 +865,15 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
   const [pinResult, setPinResult] = useState(null); // { pin, name, table } après check-in
   const [planTable, setPlanTable] = useState(null); // id de table à situer sur le plan
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
   const [balPay, setBalPay] = useState(null); // réservation dont on encaisse le solde
   const [balAmount, setBalAmount] = useState("");
   const [balMethod, setBalMethod] = useState("Espèces");
   const balanceLeft = (r) => Math.max(0, (Number(r.table_price) || 0) - (Number(r.deposit_amount) || 0) - (Number(r.balance_amount) || 0));
   const openBalance = (r) => { setBalAmount(String(balanceLeft(r))); setBalMethod(r.balance_method || "Espèces"); setBalPay(r); };
-  const load = () => eventOpsService.listCheckin(eventId, staffToken).then(setData).catch(e => { if (!onAuthError?.(e)) console.error(e); });
+  const load = () => eventOpsService.listCheckin(eventId, staffToken)
+    .then(d => { setData(d); setErr(false); })
+    .catch(e => { if (!onAuthError?.(e)) { console.error(e); setErr(true); } });
   // Rafraîchi en continu (10 s) → toutes les bornes d'entrée voient les arrivées
   // des autres en temps réel (compteurs, statut « arrivé », salons déjà pointés).
   useEffect(() => { load(); const id = setInterval(load, 10000); return () => clearInterval(id); }, [eventId]);
@@ -927,7 +936,7 @@ export function CheckinTab({ eventId, staffToken, onAuthError }) {
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   };
 
-  if (!data) return <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>Chargement…</div>;
+  if (!data) return <TabFallback error={err} onRetry={load} />;
   const t = data.totals || {};
   const remaining = t.remaining != null ? t.remaining : (t.capacity != null ? Math.max(0, (t.capacity || 0) - (t.arrived_covers || 0)) : null);
   const list = (data.reservations || []).filter(r => {

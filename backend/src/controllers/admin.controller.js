@@ -8,6 +8,7 @@ import { cache }   from "../config/redis.js";
 import { ok, created, paginated, notFound } from "../utils/response.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { revokeAllForUser } from "../utils/refreshTokens.js";
+import { sendPushToRoles } from "../services/push.service.js";
 import { logger }  from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------
@@ -438,6 +439,7 @@ export const listUsers = asyncHandler(async (req, res) => {
 
   const { rows } = await query(
     `SELECT DISTINCT ON (u.id) u.id, u.full_name, u.email, u.phone, u.role, u.status, u.created_at,
+       u.email_verified, u.phone_verified, u.last_login_at,
        (SELECT COUNT(*) FROM reservations WHERE client_id = u.id) AS resa_count,
        (SELECT name   FROM restaurants WHERE owner_id = u.id LIMIT 1) AS resto_name,
        (SELECT slug   FROM restaurants WHERE owner_id = u.id LIMIT 1) AS resto_slug,
@@ -839,10 +841,13 @@ export const exportCSV = asyncHandler(async (req, res) => {
   } else if (type === "users") {
     ({ rows } = await query(
       `SELECT full_name, email, phone, role, status, created_at,
+              CASE WHEN email_verified THEN 'Oui' ELSE 'Non' END AS email_verifie,
+              last_login_at,
               (SELECT COUNT(*) FROM reservations WHERE client_id = users.id) AS resa_count
        FROM users ORDER BY created_at DESC`
     ));
-    headers = ["Nom", "Email", "Téléphone", "Rôle", "Statut", "Inscrit le", "Réservations"];
+    headers = ["Nom", "Email", "Téléphone", "Rôle", "Statut", "Inscrit le",
+               "Email vérifié", "Dernière connexion", "Réservations"];
     filename = "utilisateurs.csv";
 
   } else if (type === "reservations") {
@@ -1364,4 +1369,32 @@ export const seedClean = asyncHandler(async (_req, res) => {
 
 export const seedStatus = asyncHandler(async (_req, res) => {
   return ok(res, await seedStats(), "Stats seed");
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/broadcast — notification push à une ou plusieurs catégories
+// Corps : { title, body, roles: ["client"|"restaurateur"|"organisateur"], route? }
+// Permet d'envoyer à une catégorie, deux, ou les trois ensemble.
+// ---------------------------------------------------------------------------
+const BROADCAST_ROLES = ["client", "restaurateur", "organisateur"];
+export const broadcastPush = asyncHandler(async (req, res) => {
+  const title = String(req.body?.title || "").trim();
+  const body  = String(req.body?.body  || "").trim();
+  const rawRoute = req.body?.route ? String(req.body.route).trim() : "";
+  const roles = Array.isArray(req.body?.roles)
+    ? [...new Set(req.body.roles)].filter((r) => BROADCAST_ROLES.includes(r))
+    : [];
+
+  if (title.length < 2 || title.length > 80)  throw new AppError("Le titre doit faire entre 2 et 80 caractères.", 400);
+  if (body.length  < 2 || body.length  > 300) throw new AppError("Le message doit faire entre 2 et 300 caractères.", 400);
+  if (!roles.length) throw new AppError("Choisissez au moins une catégorie de destinataires.", 400);
+
+  // Le `route` est poussé aux appareils et sert à ouvrir un écran de l'app. On
+  // n'accepte qu'un chemin interne relatif (/...) — jamais une URL absolue,
+  // protocole-relative (//), ou javascript: — pour éviter tout détournement.
+  const route = /^\/(?!\/)[A-Za-z0-9/_-]*$/.test(rawRoute) ? rawRoute : "";
+  const data = route ? { route } : {};
+  const result = await sendPushToRoles(roles, { title, body, data });
+  logger.info("[Admin] Diffusion push", { by: req.user?.id, roles, ...result });
+  return ok(res, result, `Notification envoyée à ${result.recipients} destinataire(s).`);
 });

@@ -78,6 +78,10 @@ async function runBusinessMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ`,
     // Invalidation des jetons d'accès émis avant un reset de mot de passe / une révocation forcée
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_from TIMESTAMPTZ`,
+    // Numéro vérifié (auth par téléphone). DOIT exister dès le démarrage : le login
+    // et le refresh lisent cette colonne. Sinon la connexion échoue (500) tant qu'un
+    // endpoint OTP (qui la crée à la demande) n'a pas été appelé.
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE`,
     // RATTRAPAGE une-fois : au déploiement de la vérification e-mail obligatoire au
     // login, on considère TOUS les comptes déjà créés comme vérifiés (sinon ils
     // seraient bloqués rétroactivement). Cutoff figé = instant du déploiement → les

@@ -35,6 +35,14 @@ export const sessionsService = {
   async report(period = "day") {
     return (await api.get("/sessions/report", { params: { period } })).data.data;
   },
+  // Statistiques par moyen de paiement sur une plage { from, to } (YYYY-MM-DD)
+  async analytics({ from, to } = {}) {
+    return (await api.get("/sessions/analytics", { params: { from, to } })).data.data;
+  },
+  // Historique paginé des encaissements { from, to, method?, page?, limit? }
+  async history({ from, to, method, page = 1, limit = 50 } = {}) {
+    return (await api.get("/sessions/history", { params: { from, to, method, page, limit } })).data;
+  },
   async close(id) {
     return (await api.post(`/sessions/${id}/close`)).data;
   },

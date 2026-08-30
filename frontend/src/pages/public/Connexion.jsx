@@ -157,7 +157,7 @@ function StepForm({ type, onBack }) {
   const location  = useLocation();
   const { login, loginStaff, logout } = useAuth();
 
-  const [email,    setEmail]    = useState("");
+  const [identifier, setIdentifier] = useState(""); // numéro de téléphone OU e-mail
   const [password, setPassword] = useState("");
   const [showPw,   setShowPw]   = useState(false);
   const [remember, setRemember] = useState(true);
@@ -199,7 +199,7 @@ function StepForm({ type, onBack }) {
     }
 
     try {
-      const user = await login(email, password, remember);
+      const user = await login(identifier.trim(), password, remember);
 
       // Vérification du rôle selon l'espace choisi
       // Vérifier la cohérence rôle/espace choisi
@@ -248,9 +248,9 @@ function StepForm({ type, onBack }) {
     } catch (err) {
       const status = err.response?.status;
       if (status === 401 || status === 400) {
-        setError("Email ou mot de passe incorrect.");
+        setError("Identifiant ou mot de passe incorrect.");
       } else if (status === 403 && err.response?.data?.code === "EMAIL_NOT_VERIFIED") {
-        setNeedsVerif(err.response?.data?.email || email); setResent(false); setError("");
+        setNeedsVerif(err.response?.data?.email || identifier); setResent(false); setError("");
       } else if (status === 403) {
         setError("Votre compte a été suspendu. Contactez le support.");
       } else {
@@ -406,11 +406,15 @@ function StepForm({ type, onBack }) {
             ) : (
               <>
             <div>
-              <label style={labelSt}>Adresse e-mail</label>
+              <label style={labelSt}>Téléphone ou e-mail</label>
               <div style={wrapSt}>
-                <Mail size={14} color={MUTED} />
-                <input value={email} onChange={e => setEmail(e.target.value)}
-                  type="email" placeholder="vous@exemple.com" required style={inpSt} />
+                <User size={14} color={MUTED} />
+                <input value={identifier} onChange={e => setIdentifier(e.target.value)}
+                  type="text" inputMode="email" autoComplete="username"
+                  placeholder="07 00 00 00 00 ou vous@exemple.com" required style={inpSt} />
+              </div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>
+                Numéro hors Côte d'Ivoire : ajoutez l'indicatif (ex : +221 …).
               </div>
             </div>
 

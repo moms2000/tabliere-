@@ -176,10 +176,44 @@ async function sendText(to, body) {
   }
 }
 
+// ── Code de vérification (OTP) ──────────────────────────────────────────────
+// Utilise un template d'AUTHENTIFICATION Meta « tabliereci_otp » (à créer/faire
+// approuver dans le Business Manager) : corps = code, bouton « copier le code ».
+// En mode simulation (WHATSAPP_TOKEN vide), on journalise le code pour tester.
+async function sendOtpCode(to, code) {
+  const phone = String(to || "").replace(/[^\d]/g, "");
+  if (!phone) return { skipped: true };
+  if (!env.WHATSAPP_TOKEN) {
+    logger.info(`[WhatsApp MOCK][OTP] → ${phone} | code: ${code}`);
+    return { messageId: `mock-otp-${Date.now()}` };
+  }
+  try {
+    const { data } = await axios.post(
+      BASE_URL,
+      {
+        messaging_product: "whatsapp", to: phone, type: "template",
+        template: {
+          name: "tabliereci_otp", language: { code: "fr" },
+          components: [
+            { type: "body", parameters: [{ type: "text", text: String(code) }] },
+            { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(code) }] },
+          ],
+        },
+      },
+      { headers: { Authorization: `Bearer ${env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
+    );
+    return { messageId: data.messages?.[0]?.id };
+  } catch (err) {
+    logger.warn("[WhatsApp] Échec envoi OTP (template tabliereci_otp approuvé ?)", { phone, error: err.response?.data?.error?.message || err.message });
+    return { failed: true };
+  }
+}
+
 export const whatsappService = {
   sendReservationConfirmation,
   sendConfirmedByResto,
   sendReminder,
   sendPaymentSuccess,
   sendText,
+  sendOtpCode,
 };

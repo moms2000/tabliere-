@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../middleware/auth.js";
+import { broadcastLimiter } from "../middleware/rateLimiter.js";
 import * as ctrl from "../controllers/admin.controller.js";
 
 const router = Router();
@@ -34,6 +35,9 @@ router.patch ("/users/batch",              ctrl.batchUserStatus);
 router.patch ("/users/:id",                ctrl.updateUser);
 router.patch ("/users/:id/status",         ctrl.setUserStatus);
 router.delete("/users/:id",               ctrl.deleteUser);
+
+// Notifications push (diffusion par catégorie : clients / restaurateurs / organisateurs)
+router.post  ("/broadcast",                broadcastLimiter, ctrl.broadcastPush);
 
 // Paiements & Réservations
 router.get   ("/payments",                 ctrl.listPayments);

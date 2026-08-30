@@ -4,6 +4,7 @@ import {
   Users, Search, ShieldOff, ShieldCheck, FileText, Sheet,
   CheckSquare, Square, X, Trash2, ChevronLeft, ChevronRight,
   ArrowUpAZ, ArrowDownAZ, Clock, Pencil, Save,
+  Bell, Send, Mail, Smartphone,
 } from "lucide-react";
 import { Card, SectionHeader, PageTitle, Badge, Btn, Table } from "../../components/ui";
 import { runAdminExport } from "../../services/adminExport.js";
@@ -18,6 +19,30 @@ const STATUS_BADGE = { actif: "green", bloque: "red", bloqué: "red", suspendu: 
 const ROLE_BADGE   = { client: "gray", restaurateur: "blue", admin: "green" };
 
 const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("fr-FR") : "—";
+// Dernière connexion : date + heure, ou "Jamais" si le compte ne s'est jamais connecté.
+const fmtLastLogin = (dt) => dt
+  ? new Date(dt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })
+  : "Jamais";
+
+// Petits indicateurs de vérification (e-mail / téléphone)
+function VerifBadges({ email, phone }) {
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <span title={email ? "E-mail vérifié" : "E-mail non vérifié"} style={{ display: "flex" }}>
+        <Mail size={13} color={email ? "#1D9E75" : "#d0d0d0"} />
+      </span>
+      <span title={phone ? "Téléphone vérifié" : "Téléphone non vérifié"} style={{ display: "flex" }}>
+        <Smartphone size={13} color={phone ? "#1D9E75" : "#d0d0d0"} />
+      </span>
+    </div>
+  );
+}
+
+const CATEGORIES = [
+  { key: "client",       label: "Clients" },
+  { key: "restaurateur", label: "Restaurateurs" },
+  { key: "organisateur", label: "Organisateurs" },
+];
 
 const SORT_OPTIONS = [
   { value: "name",   label: "A → Z",    icon: ArrowUpAZ },
@@ -42,6 +67,13 @@ export default function Utilisateurs() {
   const [editMsg,    setEditMsg]    = useState("");
   const [mainTab,    setMainTab]    = useState("clients"); // "clients" | "restaurants"
   const [roleFilter, setRoleFilter] = useState("client"); // "" | "client" | "restaurateur" | "admin"
+
+  // Diffusion de notifications push
+  const [showBc,   setShowBc]   = useState(false);
+  const [bc,       setBc]       = useState({ title: "", body: "", roles: ["client"] });
+  const [bcSending, setBcSending] = useState(false);
+  const [bcResult, setBcResult] = useState(null);
+  const [bcError,  setBcError]  = useState("");
 
   const LIMIT = 30;
   const totalPages = Math.ceil(total / LIMIT);
@@ -115,6 +147,28 @@ export default function Utilisateurs() {
     setExporting(null);
   };
 
+  const toggleBcRole = (role) => setBc(p => {
+    const has = p.roles.includes(role);
+    return { ...p, roles: has ? p.roles.filter(r => r !== role) : [...p.roles, role] };
+  });
+
+  const sendBroadcast = async () => {
+    setBcError(""); setBcResult(null);
+    if (bc.title.trim().length < 2)  { setBcError("Le titre est trop court."); return; }
+    if (bc.body.trim().length  < 2)  { setBcError("Le message est trop court."); return; }
+    if (!bc.roles.length)            { setBcError("Choisissez au moins une catégorie."); return; }
+    setBcSending(true);
+    try {
+      const res = await adminService.broadcastPush({ title: bc.title.trim(), body: bc.body.trim(), roles: bc.roles });
+      setBcResult(res);
+    } catch (e) {
+      setBcError(e.response?.data?.message || "Échec de l'envoi. Réessayez.");
+    }
+    setBcSending(false);
+  };
+
+  const closeBc = () => { setShowBc(false); setBc({ title: "", body: "", roles: ["client"] }); setBcResult(null); setBcError(""); };
+
   const allChecked = data.length > 0 && selected.size === data.length;
 
   const actionCol = (u) => {
@@ -146,8 +200,10 @@ export default function Utilisateurs() {
       render: u => (<button onClick={() => toggleSelect(u.id)} style={{ background:"none",border:"none",cursor:"pointer",padding:0,display:"flex" }}>{selected.has(u.id)?<CheckSquare size={15} color="#e8a045"/>:<Square size={15} color="#ddd"/>}</button>) },
     { key: "name",   label: "Client", render: u => (<div><div style={{ fontWeight:500, fontSize:13 }}>{u.full_name}</div><div style={{ fontSize:11, color:"#aaa" }}>{u.email}</div></div>) },
     { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize:12, color:"#888" }}>{u.phone||"—"}</span> },
+    { key: "verif",  label: "Vérifié", align: "center", render: u => <VerifBadges email={u.email_verified} phone={u.phone_verified} /> },
     { key: "reserv", label: "Réservations", align: "center", render: u => <span style={{ fontWeight:500 }}>{u.resa_count||0}</span> },
     { key: "status", label: "Statut", render: u => <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status]||"gray"} /> },
+    { key: "seen",   label: "Dernière connexion", render: u => <span style={{ fontSize:11, color: u.last_login_at ? "#888" : "#ccc" }}>{fmtLastLogin(u.last_login_at)}</span> },
     { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize:11, color:"#bbb" }}>{fmtDate(u.created_at)}</span> },
     { key: "actions", label: "", align: "right", render: u => actionCol(u) },
   ];
@@ -165,6 +221,7 @@ export default function Utilisateurs() {
     { key: "name",   label: "Restaurant", render: u => (<div><div style={{ fontWeight:600, fontSize:13, color:"#1e2e28" }}>{u.resto_name||"—"}</div><div style={{ fontSize:11, color:"#aaa" }}>{u.full_name} · {u.email}</div></div>) },
     { key: "phone",  label: "Téléphone", render: u => <span style={{ fontSize:12, color:"#888" }}>{u.phone||"—"}</span> },
     { key: "status", label: "Statut", render: u => <Badge label={displayStatus(u.status)} variant={STATUS_BADGE[u.status]||"gray"} /> },
+    { key: "seen",   label: "Dernière connexion", render: u => <span style={{ fontSize:11, color: u.last_login_at ? "#888" : "#ccc" }}>{fmtLastLogin(u.last_login_at)}</span> },
     { key: "joined", label: "Inscrit", render: u => <span style={{ fontSize:11, color:"#bbb" }}>{fmtDate(u.created_at)}</span> },
     { key: "actions", label: "", align: "right", render: u => actionCol(u) },
   ];
@@ -264,6 +321,13 @@ export default function Utilisateurs() {
                   border: "0.5px solid #e4dfd8", borderRadius: 8, background: "white",
                   cursor: exporting ? "default" : "pointer", fontSize: 12, color: "#666" }}>
                 <Sheet size={13} />{exporting === "xls" ? "…" : "Excel"}
+              </button>
+              {/* Diffusion de notifications push */}
+              <button onClick={() => setShowBc(true)}
+                style={{ display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 12px",
+                  border: "none", borderRadius: 8, background: "#E8A045",
+                  cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#1A1000" }}>
+                <Bell size={13} /> Notifier
               </button>
             </div>
           </div>
@@ -440,6 +504,128 @@ export default function Utilisateurs() {
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Modal diffusion de notification push ── */}
+      <AnimatePresence>
+        {showBc && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeBc}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50 }} />
+            <div style={{ position: "fixed", inset: 0, zIndex: 60,
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "none" }}>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+                style={{ background: "white", borderRadius: 16, padding: 24,
+                  width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,.2)", pointerEvents: "auto" }}>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#FEF6EC",
+                      display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Bell size={17} color="#E8A045" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1e2e28" }}>Envoyer une notification</div>
+                      <div style={{ fontSize: 12, color: "#9ba89f" }}>Push vers l'application mobile</div>
+                    </div>
+                  </div>
+                  <button onClick={closeBc} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+                    <X size={18} color="#9ba89f" />
+                  </button>
+                </div>
+
+                {bcResult ? (
+                  <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#e1f5ee",
+                      display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+                      <Send size={24} color="#1D9E75" />
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1e2e28", marginBottom: 6 }}>
+                      Notification envoyée
+                    </div>
+                    <div style={{ fontSize: 13, color: "#666", lineHeight: 1.6, marginBottom: 18 }}>
+                      {bcResult.recipients} destinataire(s) ciblé(s), {bcResult.devices} appareil(s).<br />
+                      {bcResult.ok} envoi(s) réussi(s){bcResult.ko ? `, ${bcResult.ko} échec(s)` : ""}.
+                      {bcResult.mock && <><br /><span style={{ color: "#c47d1a" }}>Mode simulation : notifications push non configurées (FCM).</span></>}
+                      {bcResult.devices === 0 && <><br /><span style={{ color: "#c47d1a" }}>Aucun appareil enregistré pour ces catégories.</span></>}
+                    </div>
+                    <button onClick={closeBc}
+                      style={{ border: "none", borderRadius: 9, padding: "11px 28px", background: "#e8a045",
+                        color: "#1A1000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      Terminé
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {bcError && (
+                      <div style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                        background: "#faece7", color: "#993C1D" }}>{bcError}</div>
+                    )}
+
+                    {/* Catégories de destinataires */}
+                    <div>
+                      <label style={bcLbl}>Destinataires</label>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {CATEGORIES.map(c => {
+                          const on = bc.roles.includes(c.key);
+                          return (
+                            <button key={c.key} type="button" onClick={() => toggleBcRole(c.key)}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+                                borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 500,
+                                border: `1.5px solid ${on ? "#E8A045" : "#e4dfd8"}`,
+                                background: on ? "#FEF6EC" : "white", color: on ? "#c47d1a" : "#888" }}>
+                              {on ? <CheckSquare size={14} color="#E8A045" /> : <Square size={14} color="#ccc" />}
+                              {c.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9ba89f", marginTop: 6 }}>
+                        Sélectionnez une, deux ou les trois catégories.
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={bcLbl}>Titre</label>
+                      <input value={bc.title} onChange={e => setBc(p => ({ ...p, title: e.target.value.slice(0, 80) }))}
+                        placeholder="Ex : Nouveauté sur TablièreCI"
+                        style={bcInp} />
+                    </div>
+
+                    <div>
+                      <label style={bcLbl}>Message</label>
+                      <textarea value={bc.body} onChange={e => setBc(p => ({ ...p, body: e.target.value.slice(0, 300) }))}
+                        placeholder="Votre message…" rows={3}
+                        style={{ ...bcInp, resize: "vertical", fontFamily: "inherit" }} />
+                      <div style={{ fontSize: 11, color: "#ccc", textAlign: "right", marginTop: 3 }}>{bc.body.length}/300</div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                      <button onClick={closeBc}
+                        style={{ flex: 1, border: "0.5px solid #eee", borderRadius: 9, padding: "11px 0",
+                          background: "white", cursor: "pointer", fontSize: 13, color: "#888" }}>
+                        Annuler
+                      </button>
+                      <button onClick={sendBroadcast} disabled={bcSending}
+                        style={{ flex: 2, border: "none", borderRadius: 9, padding: "11px 0",
+                          background: "#e8a045", color: "#1A1000", fontSize: 13, fontWeight: 700,
+                          cursor: bcSending ? "not-allowed" : "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <Send size={14} /> {bcSending ? "Envoi…" : "Envoyer la notification"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
+
+const bcLbl = { display: "block", fontSize: 10, fontWeight: 700, color: "#9ba89f",
+  textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 7 };
+const bcInp = { width: "100%", border: "0.5px solid #e4dfd8", borderRadius: 8,
+  padding: "10px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "#f8f5ef" };

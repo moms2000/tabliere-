@@ -9,11 +9,41 @@ export const authService = {
     return res.data.data; // { user, email_sent, needs_verification }
   },
 
-  async login(email, password, remember = true) {
-    const res = await api.post("/auth/login", { email, password });
+  async login(identifier, password, remember = true) {
+    // `identifier` = numéro de téléphone OU e-mail. Le backend accepte les deux
+    // (rétrocompatibilité des comptes e-mail existants) via le champ `identifier`.
+    const res = await api.post("/auth/login", { identifier, password });
     const { access_token, refresh_token, user } = res.data.data;
     setTokens(access_token, refresh_token, remember);
     return user;
+  },
+
+  // ── Inscription / réinitialisation par NUMÉRO + OTP WhatsApp ────────────────
+  // Étape 1 : demander un code. `purpose` = "register" | "reset".
+  async sendOtp(phone, purpose = "register") {
+    const res = await api.post("/auth/otp/send", { phone, purpose });
+    return res.data.data; // { sent, dev_code? (mode simulation uniquement) }
+  },
+
+  // Étape 2 : vérifier le code → renvoie un ticket signé (courte durée).
+  async verifyOtp(phone, code, purpose = "register") {
+    const res = await api.post("/auth/otp/verify", { phone, code, purpose });
+    return res.data.data.ticket;
+  },
+
+  // Étape 3a (inscription) : créer le compte + choisir SON mot de passe.
+  // Le backend renvoie les tokens → connexion automatique (numéro déjà vérifié).
+  async registerPhone(data, remember = true) {
+    const res = await api.post("/auth/otp/register", data);
+    const { access_token, refresh_token, user } = res.data.data || {};
+    if (access_token && refresh_token) setTokens(access_token, refresh_token, remember);
+    return { user, access_token, refresh_token };
+  },
+
+  // Étape 3b (mot de passe oublié) : définir un nouveau mot de passe via le ticket.
+  async resetPasswordPhone(otp_ticket, password) {
+    const res = await api.post("/auth/otp/reset", { otp_ticket, password });
+    return res.data.data;
   },
 
   // Connexion d'un membre du staff restaurant (identifiant + PIN)

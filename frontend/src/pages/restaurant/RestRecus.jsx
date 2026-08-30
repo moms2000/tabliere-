@@ -14,6 +14,8 @@ const FONT = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-syst
 export default function RestRecus() {
   const { user } = useAuth();
   const restoName = user?.resto_name || "Restaurant";
+  // Stats + historique réservés au restaurateur : le staff ne voit que l'encaissement.
+  const isStaff = user?.is_staff === true;
   const [view, setView]         = useState("encaisser"); // encaisser | historique
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -249,22 +251,24 @@ export default function RestRecus() {
         )}
       </div>
 
-      {/* Basculeur Encaisser / Historique */}
-      <div style={{ display: "flex", gap: 6, background: "#F0EDE6", borderRadius: 11, padding: 4, marginBottom: 16, maxWidth: 420 }}>
-        {[["encaisser", "Encaisser", Wallet], ["historique", "Historique & stats", BarChart3]].map(([k, lab, Icon]) => (
-          <button key={k} onClick={() => setView(k)}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0",
-              borderRadius: 8, border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: view === k ? 700 : 500,
-              background: view === k ? "white" : "transparent", color: view === k ? DARK : MUTED,
-              boxShadow: view === k ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
-            <Icon size={15} /> {lab}
-          </button>
-        ))}
-      </div>
+      {/* Basculeur Encaisser / Historique — historique réservé au restaurateur */}
+      {!isStaff && (
+        <div style={{ display: "flex", gap: 6, background: "#F0EDE6", borderRadius: 11, padding: 4, marginBottom: 16, maxWidth: 420 }}>
+          {[["encaisser", "Encaisser", Wallet], ["historique", "Historique & stats", BarChart3]].map(([k, lab, Icon]) => (
+            <button key={k} onClick={() => setView(k)}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0",
+                borderRadius: 8, border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: view === k ? 700 : 500,
+                background: view === k ? "white" : "transparent", color: view === k ? DARK : MUTED,
+                boxShadow: view === k ? "0 1px 3px rgba(0,0,0,.08)" : "none" }}>
+              <Icon size={15} /> {lab}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {view === "historique" && <RestCaisseHistorique />}
+      {!isStaff && view === "historique" && <RestCaisseHistorique />}
 
-      {view === "encaisser" && (<>
+      {(isStaff || view === "encaisser") && (<>
       <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
         Chaque table ouverte a sa note. Imprimez un reçu total ou un reçu par personne, puis clôturez.
       </p>

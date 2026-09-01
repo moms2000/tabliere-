@@ -509,17 +509,10 @@ export default function Inscription() {
               value={form.email} onChange={v => set("email", v)}
               placeholder="vous@exemple.com" />
 
-            {/* Date de naissance (facultatif) */}
+            {/* Date de naissance (facultatif) — 3 menus, jamais de date auto, vidable */}
             <div>
               <label style={lbl}>Date de naissance <span style={{ color: MUTED, fontWeight: 400 }}>(facultatif)</span></label>
-              <div style={wrap}>
-                <Calendar size={14} color={MUTED} />
-                <input type="date" value={form.date_naissance}
-                  onChange={e => set("date_naissance", e.target.value)}
-                  max={new Date(Date.now() - 14 * 365.25 * 86400000).toISOString().split("T")[0]}
-                  style={{ border: "none", background: "transparent", fontSize: 13,
-                    outline: "none", flex: 1, color: form.date_naissance ? DARK : MUTED, fontFamily: "inherit" }} />
-              </div>
+              <BirthDateSelect value={form.date_naissance} onChange={v => set("date_naissance", v)} />
             </div>
 
             {/* Téléphone */}
@@ -797,3 +790,41 @@ const wrap = {
   display: "flex", alignItems: "center", gap: 10,
   border: `0.5px solid #E4DFD8`, borderRadius: 9, padding: "11px 14px", background: "#F8F5EF",
 };
+
+// Sélecteur de date de naissance : 3 menus (jour/mois/année). Contrôlé, jamais de
+// date auto au clic (contrairement à <input type=date> sur mobile), et vidable.
+const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+function BirthDateSelect({ value, onChange }) {
+  const parts = (value || "").split("-");
+  const [y, setY] = useState(parts[0] || "");
+  const [m, setM] = useState(parts[1] || "");
+  const [d, setD] = useState(parts[2] || "");
+  const emit = (yy, mm, dd) => onChange(yy && mm && dd ? `${yy}-${mm}-${dd}` : "");
+  const nowY = new Date().getFullYear();
+  const years = []; for (let yr = nowY - 14; yr >= nowY - 100; yr--) years.push(String(yr));
+  const days = []; for (let i = 1; i <= 31; i++) days.push(String(i).padStart(2, "0"));
+  const clear = () => { setY(""); setM(""); setD(""); onChange(""); };
+  const sel = { flex: 1, minWidth: 0, border: `0.5px solid #E4DFD8`, borderRadius: 9, padding: "11px 8px",
+    fontSize: 13, background: "#F8F5EF", outline: "none", color: (value ? "#1E2E28" : "#9BA89F"), fontFamily: "inherit", cursor: "pointer" };
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <select value={d} onChange={e => { setD(e.target.value); emit(y, m, e.target.value); }} style={sel}>
+        <option value="">Jour</option>
+        {days.map(dd => <option key={dd} value={dd}>{parseInt(dd)}</option>)}
+      </select>
+      <select value={m} onChange={e => { setM(e.target.value); emit(y, e.target.value, d); }} style={{ ...sel, flex: 1.6 }}>
+        <option value="">Mois</option>
+        {MOIS.map((name, i) => <option key={name} value={String(i + 1).padStart(2, "0")}>{name}</option>)}
+      </select>
+      <select value={y} onChange={e => { setY(e.target.value); emit(e.target.value, m, d); }} style={sel}>
+        <option value="">Année</option>
+        {years.map(yr => <option key={yr} value={yr}>{yr}</option>)}
+      </select>
+      {(y || m || d) && (
+        <button type="button" onClick={clear} title="Effacer"
+          style={{ border: `0.5px solid #E4DFD8`, background: "white", borderRadius: 9, width: 34, height: 40,
+            cursor: "pointer", color: "#9BA89F", flexShrink: 0, fontSize: 16, lineHeight: 1 }}>×</button>
+      )}
+    </div>
+  );
+}

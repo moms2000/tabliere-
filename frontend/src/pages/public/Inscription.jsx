@@ -99,6 +99,7 @@ export default function Inscription() {
   const [showPw,      setShowPw]      = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
+  const [redirecting, setRedirecting] = useState(false);
   const [countryIdx,  setCountryIdx]  = useState(0);
   const [legalModal,  setLegalModal]  = useState(null); // "cgu" | "confidentialite" | null
 
@@ -139,9 +140,11 @@ export default function Inscription() {
       const age = (Date.now() - new Date(form.date_naissance).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
       if (age < 14) return t("err_age");
     }
-    if (form.localPhone) {
-      if (!country.pattern.test(form.localPhone.replace(/\s/g, ""))) return t("err_phone_format");
-    }
+    // Téléphone obligatoire (identifiant principal)
+    if (!form.localPhone) return "Le numéro de téléphone est obligatoire.";
+    if (!country.pattern.test(form.localPhone.replace(/\s/g, ""))) return t("err_phone_format");
+    // E-mail facultatif : validé seulement s'il est renseigné
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Adresse e-mail invalide.";
     if (!/[a-zA-Z]/.test(form.password) || !/[0-9]/.test(form.password) || form.password.length < 8) {
       return t("err_password_weak");
     }
@@ -168,38 +171,43 @@ export default function Inscription() {
     // (évite toute race condition si React re-render entre les appels)
     const isResto = type === "restaurateur";
     const isOrga  = type === "organisateur";
-    const code    = isResto ? form.code_restaurateur.trim().toUpperCase() : undefined;
     const payload = {
       full_name:         fullName,
-      email:             form.email.trim(),
-      phone:             fullPhone || undefined,
+      phone:             fullPhone,
+      email:             form.email.trim() || undefined,
       password:          form.password,
       role:              type,
       restaurant_name:   isResto ? form.resto.trim() : undefined,
-      code_restaurateur: code,
-      code_organisateur: isOrga ? form.code_organisateur.trim().toUpperCase() : undefined,
+      code_restaurateur: isResto ? form.code_restaurateur.trim().toUpperCase() : undefined,
+      code_organisateur: isOrga  ? form.code_organisateur.trim().toUpperCase() : undefined,
+      ref:               searchParams.get("ref") || undefined,   // provenance QR campagne
     };
 
+    let registered = false;
     try {
       await register(payload);
-      // PAS d'auto-login : évite d'écraser/exposer une session existante
-      // (ex: un admin qui crée un compte ne doit pas mélanger sa session).
-      // L'utilisateur se connecte ensuite manuellement.
-      setStep(3);
+      registered = true;
+      // Compte actif immédiatement (plus de vérif e-mail) → connexion auto par
+      // téléphone puis redirection vers l'espace correspondant.
+      await login(fullPhone, form.password, true);
+      setRedirecting(true);
+      navigate(isResto ? "/restaurant" : isOrga ? "/event" : "/", { replace: true });
     } catch (err) {
+      if (registered) {
+        // Compte bien créé mais l'auto-connexion a échoué → aller à la connexion.
+        navigate("/connexion", { replace: true });
+        return;
+      }
       const status = err.response?.status;
       if (!status) {
-        // Pas de réponse = problème réseau ou mauvaise URL API
         setError("Impossible de contacter le serveur. Vérifiez votre connexion internet et réessayez.");
       } else if (status === 409) {
-        // Le message précis vient du backend (email OU téléphone)
-        setError(err.response?.data?.message || "Un compte existe déjà avec ces informations. Vérifiez votre e-mail et numéro de téléphone.");
+        setError(err.response?.data?.message || "Un compte existe déjà avec ce numéro (ou cet e-mail). Connectez-vous.");
       } else if (status === 400) {
         setError(err.response?.data?.message || "Données invalides. Vérifiez les champs.");
       } else {
         setError(err.response?.data?.message || "Une erreur est survenue. Réessayez dans quelques instants.");
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -207,7 +215,7 @@ export default function Inscription() {
   // ── Garde-fou sécurité : bloquer l'inscription si déjà connecté ───────────
   // Empêche un admin/restaurateur/client connecté de créer un nouveau compte
   // sans se déconnecter — évite une session résiduelle exposée sur l'appareil.
-  if (user && step !== 3) return (
+  if (user && !redirecting && step !== 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24, fontFamily: FONT }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: "40px 36px",
@@ -496,10 +504,10 @@ export default function Inscription() {
                 value={form.nom} onChange={v => set("nom", v)} placeholder="Amara" required />
             </div>
 
-            {/* Email */}
-            <FField icon={Mail} label={t("reg_email")} type="email"
+            {/* Email — facultatif (le numéro est l'identifiant principal) */}
+            <FField icon={Mail} label={`${t("reg_email")} (facultatif)`} type="email"
               value={form.email} onChange={v => set("email", v)}
-              placeholder="vous@exemple.com" required />
+              placeholder="vous@exemple.com" />
 
             {/* Date de naissance (facultatif) */}
             <div>
@@ -516,7 +524,7 @@ export default function Inscription() {
 
             {/* Téléphone */}
             <div>
-              <label style={lbl}>{t("reg_phone")}</label>
+              <label style={lbl}>{t("reg_phone")} *</label>
               <div style={{ display: "flex", gap: 8 }}>
                 <div style={{ position: "relative" }}>
                   <button type="button" onClick={() => setShowCountry(p => !p)}

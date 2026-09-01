@@ -160,7 +160,13 @@ app.get("/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 // obtient toujours un 200 rapide au déploiement, quel que soit l'état de la base
 // ou des migrations en cours. Diagnostics DB détaillés → /health/db.
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok", uptime_s: Math.floor(process.uptime()) });
+  // `commit` = SHA court du déploiement (Render fournit RENDER_GIT_COMMIT) : permet
+  // de vérifier de l'extérieur QUELLE version tourne réellement en production.
+  res.status(200).json({
+    status: "ok",
+    uptime_s: Math.floor(process.uptime()),
+    commit: (process.env.RENDER_GIT_COMMIT || "").slice(0, 7) || null,
+  });
 });
 
 // Diagnostic détaillé (mémoire, pool DB) — ADMIN uniquement (non utilisé par le

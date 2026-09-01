@@ -88,6 +88,12 @@ async function runBusinessMigrations() {
     // NOUVELLES inscriptions (après) devront vérifier. Idempotent (cutoff fixe).
     `UPDATE users SET email_verified = TRUE
        WHERE email_verified = FALSE AND created_at < TIMESTAMPTZ '2026-07-15 17:56:55+00'`,
+    // RATTRAPAGE 2 (2026-09-01) : SendGrid hors service → plus d'email de vérification
+    // possible. On approuve TOUS les comptes déjà inscrits pour ne pas les bloquer à
+    // la connexion. Cutoff figé (tous les comptes créés jusqu'à cette date). La
+    // vérification des NOUVEAUX comptes passera par le téléphone (WhatsApp/Twilio).
+    `UPDATE users SET email_verified = TRUE
+       WHERE email_verified = FALSE AND created_at < TIMESTAMPTZ '2026-09-02 00:00:00+00'`,
 
     // Table avis clients
     `CREATE TABLE IF NOT EXISTS reviews (

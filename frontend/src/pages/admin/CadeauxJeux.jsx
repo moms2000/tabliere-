@@ -25,14 +25,13 @@ export default function CadeauxJeux() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [{ campaigns }, r] = await Promise.all([
-        promotionsService.listCampaigns(),
-        adminService.listRestaurants({ limit: 500 }),
-      ]);
-      setCampaigns(campaigns || []);
-      setRestos((r?.data || []).map(x => ({ id: x.id, name: x.name })));
-    } catch (_) {}
+    // Les deux chargements sont indépendants : un échec de l'un ne doit pas vider l'autre.
+    const [camp, resto] = await Promise.allSettled([
+      promotionsService.listCampaigns(),
+      adminService.listRestaurants({ limit: 2000, sort: "name" }),
+    ]);
+    if (camp.status === "fulfilled") setCampaigns(camp.value?.campaigns || []);
+    if (resto.status === "fulfilled") setRestos((resto.value?.data || []).map(x => ({ id: x.id, name: x.name })));
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -125,6 +124,9 @@ function CampaignCard({ c, onDraw, onWinners }) {
     a.download = `qr-${c.ref_code}.svg`; document.body.appendChild(a); a.click(); a.remove();
   };
   const target = c.winners_count;
+  // Tirage terminé si la campagne est marquée « tirée » OU l'objectif est atteint
+  // (une campagne « tirée » avec moins d'éligibles que prévu ne doit pas rester cliquable).
+  const done = c.status === "drawn" || c.winners_issued >= target;
   return (
     <div style={{ background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -152,11 +154,11 @@ function CampaignCard({ c, onDraw, onWinners }) {
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onDraw} disabled={c.winners_issued >= target}
+        <button onClick={onDraw} disabled={done}
           style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 9, border: "none",
-            background: c.winners_issued >= target ? "#E4DFD8" : P, color: c.winners_issued >= target ? MUTED : "#1A1000",
-            fontSize: 13, fontWeight: 700, cursor: c.winners_issued >= target ? "default" : "pointer", fontFamily: FONT }}>
-          <Dices size={15} /> {c.winners_issued >= target ? "Tirage complet" : "Lancer le tirage"}
+            background: done ? "#E4DFD8" : P, color: done ? MUTED : "#1A1000",
+            fontSize: 13, fontWeight: 700, cursor: done ? "default" : "pointer", fontFamily: FONT }}>
+          <Dices size={15} /> {done ? "Tirage effectué" : "Lancer le tirage"}
         </button>
         <button onClick={onWinners}
           style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,

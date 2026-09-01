@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate, authorize, requireTab, denyStaff } from "../middleware/auth.js";
+import { voucherLimiter } from "../middleware/rateLimiter.js";
 import * as ctrl from "../controllers/promotions.controller.js";
 
 const router = Router();
@@ -14,7 +15,7 @@ router.get ("/campaigns/:id/winners", admin, ctrl.listWinners);
 router.post("/gifts",                 admin, ctrl.createGift);
 
 // ── Restaurateur / staff caisse : valider un bon présenté par un client ──────
-router.post("/validate", authorize("restaurateur"), requireTab("recus", "commandes", "pos"), ctrl.validateVoucher);
+router.post("/validate", voucherLimiter, authorize("restaurateur"), requireTab("recus", "commandes", "pos"), ctrl.validateVoucher);
 
 // ── Client : mes cadeaux (bons) ──────────────────────────────────────────────
 router.get("/mine", denyStaff, ctrl.myVouchers);

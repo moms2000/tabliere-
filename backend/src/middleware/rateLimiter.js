@@ -64,6 +64,11 @@ export const orderLimiter = limiter(
 // Vérification du code responsable (4 chiffres) : strict, anti-brute-force
 export const pinLimiter = limiter(10 * 60 * 1000, 8, "Trop d'essais de code, réessayez dans 10 minutes", "rl:pin:");
 
+// Validation de bons cadeaux : anti-devinette de codes (un resto ne doit pas
+// pouvoir brûler des bons au hasard). 60 / 10 min par IP — large pour un service
+// chargé, mais bloque le balayage de l'espace de codes.
+export const voucherLimiter = limiter(10 * 60 * 1000, 60, "Trop de tentatives de validation, patientez quelques minutes.", "rl:voucher:");
+
 // Diffusion push admin : envoi de masse, bruyant et irréversible. Même réservé aux
 // admins, on plafonne (10/heure) pour limiter les dégâts d'un token admin volé ou
 // d'une fausse manip. Repli sur l'IP (les admins sont peu nombreux).

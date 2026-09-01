@@ -334,6 +334,12 @@ export default function Profil() {
         </button>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => navigate("/mes-cadeaux")}
+            style={{ display: "flex", alignItems: "center", gap: 5, border: "0.5px solid #F0C98A",
+              borderRadius: 8, padding: "6px 12px", background: "#FEF6EC",
+              cursor: "pointer", fontSize: 12, color: "#C47D1A", fontWeight: 600 }}>
+            <Gift size={13} /> Mes cadeaux
+          </button>
           <div style={{ position: "relative" }}>
             <button onClick={() => setShowLang(p => !p)}
               style={{ display: "flex", alignItems: "center", gap: 5, border: "0.5px solid #ddd",

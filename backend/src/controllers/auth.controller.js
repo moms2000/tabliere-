@@ -19,12 +19,13 @@ import { normalizePhone } from "../utils/phone.js";
 const DUMMY_HASH = bcrypt.hashSync("tabliere_dummy_password", 12);
 
 // ── Helper email SendGrid (direct, ne bloque jamais l'inscription) ────────────
+// Renvoie true si l'email est réellement parti (ou mock en dev), false sinon.
 async function sendVerificationEmail(email, fullName, token) {
   if (!env.SENDGRID_API_KEY) {
     // Ne jamais journaliser un token en clair en production (fuite de compte).
-    if (!env.isProd) logger.info(`[Email MOCK] Vérification → ${email} | token=${token}`);
-    else logger.error("[Email] SENDGRID_API_KEY manquant en prod — email de vérification NON envoyé", { email });
-    return;
+    if (!env.isProd) { logger.info(`[Email MOCK] Vérification → ${email} | token=${token}`); return true; }
+    logger.error("[Email] SENDGRID_API_KEY manquant en prod — email de vérification NON envoyé", { email });
+    return false;
   }
   const fromEmail = (env.EMAIL_FROM || "noreply@tabliereci.net")
     .replace("tabliereci.ci", "tabliereci.net");
@@ -68,10 +69,13 @@ async function sendVerificationEmail(email, fullName, token) {
         Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
         "Content-Type": "application/json",
       },
+      timeout: 8000,
     });
     logger.info("[Email] Vérification envoyée", { email });
+    return true;
   } catch (e) {
-    logger.warn("[Email] Échec envoi vérification", { email, error: e.response?.data || e.message });
+    logger.error("[Email] Échec envoi vérification (SendGrid)", { email, error: e.response?.data || e.message });
+    return false;
   }
 }
 
@@ -268,16 +272,18 @@ export const register = asyncHandler(async (req, res) => {
 
   // (Le code d'accès a été consommé atomiquement dans la transaction ci-dessus.)
 
-  // Envoi email de vérification (le token a été posé dans l'INSERT, fail-closed)
-  sendVerificationEmail(email, full_name, emailToken).catch(() => {});
+  // Envoi email de vérification (le token a été posé dans l'INSERT, fail-closed).
+  // On ATTEND le résultat réel pour le refléter dans la réponse : un échec SendGrid
+  // n'est plus silencieux (avant, email_sent=true était codé en dur).
+  const email_sent = await sendVerificationEmail(email, full_name, emailToken).catch(() => false);
 
   // PAS d'auto-connexion : aucun token tant que l'e-mail n'est pas vérifié.
   // L'utilisateur doit cliquer le lien reçu par e-mail puis se connecter.
-  logger.info("Nouvel utilisateur inscrit (en attente de vérification e-mail)", { userId: result.id, role });
+  logger.info("Nouvel utilisateur inscrit (en attente de vérification e-mail)", { userId: result.id, role, email_sent });
 
   return created(res, {
     user:               { id: result.id, email: result.email, full_name: result.full_name, role: result.role },
-    email_sent:         true,
+    email_sent,
     needs_verification: true,
   }, "Compte créé — vérifiez votre e-mail pour vous connecter.");
 });

@@ -12,10 +12,13 @@ const router = Router();
 
 const registerSchema = Joi.object({
   full_name:         Joi.string().min(2).max(100).required(),
-  email:             Joi.string().email().lowercase().required(),
-  phone:             Joi.string().pattern(/^\+?[0-9]{8,15}$/).optional().allow("", null),
+  // Téléphone = identifiant principal (obligatoire). Email désormais facultatif.
+  phone:             Joi.string().pattern(/^\+?[0-9\s().-]{8,20}$/).required(),
+  email:             Joi.string().email().lowercase().optional().allow("", null),
   password:          Joi.string().min(8).required(),
   role:              Joi.string().valid("client", "restaurateur", "organisateur").default("client"),
+  // Code de provenance (QR d'une campagne) — facultatif, sert au tirage au sort.
+  ref:               Joi.string().max(40).optional().allow("", null),
   restaurant_name:   Joi.when("role", {
     is:        "restaurateur",
     then:      Joi.string().min(2).max(150).required(),

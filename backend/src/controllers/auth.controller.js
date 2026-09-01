@@ -136,7 +136,7 @@ async function sendResetEmail(email, fullName, token) {
 }
 
 export const register = asyncHandler(async (req, res) => {
-  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur, code_organisateur } = req.body;
+  const { full_name, email, phone, password, role, restaurant_name, code_restaurateur, code_organisateur, ref } = req.body;
 
   // Réglage plateforme : inscriptions ouvertes ? (les restaurateurs/organisateurs
   // avec code restent autorisés — inscription contrôlée par code de toute façon.)
@@ -186,24 +186,29 @@ export const register = asyncHandler(async (req, res) => {
     }
   }
 
-  const { rows: existing } = await query(
-    "SELECT id FROM users WHERE email = $1", [email]
-  );
-  if (existing.length > 0) throw new AppError("Email déjà utilisé", 409);
+  // Téléphone = identifiant principal (obligatoire, unique). Email facultatif.
+  const phoneNorm = normalizePhone(phone);
+  if (!phoneNorm || phoneNorm.length < 8) throw new AppError("Numéro de téléphone invalide.", 400);
+  const { rows: phoneTaken } = await query("SELECT id FROM users WHERE phone = $1", [phoneNorm]);
+  if (phoneTaken.length > 0) throw new AppError("Ce numéro a déjà un compte. Connectez-vous.", 409);
+
+  const emailNorm = email ? String(email).trim().toLowerCase() : null;
+  if (emailNorm) {
+    const { rows: emailTaken } = await query("SELECT id FROM users WHERE email = $1", [emailNorm]);
+    if (emailTaken.length > 0) throw new AppError("Cet e-mail est déjà utilisé.", 409);
+  }
+  const signupRef = (ref || "").trim().slice(0, 40) || null;
 
   const password_hash = await bcrypt.hash(password, 12);
-  // Token de vérification généré AVANT l'insert → email_verified=FALSE posé
-  // atomiquement (fail-closed : jamais de compte « vérifié » par défaut si un
-  // UPDATE échoue).
-  const emailToken   = crypto.randomBytes(32).toString("hex");
-  const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 jours
-
+  // Vérification e-mail désactivée (SendGrid HS) : le compte est ACTIF immédiatement
+  // (email_verified=TRUE). L'identité repose sur le numéro. La vérification par
+  // téléphone (OTP WhatsApp/Twilio) sera réactivée pour les nouveaux comptes.
   const result = await withTransaction(async (client) => {
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (full_name, email, phone, password_hash, role, status, email_verified, email_token, email_token_expires)
-       VALUES ($1, $2, $3, $4, $5, 'actif', FALSE, $6, $7)
+      `INSERT INTO users (full_name, email, phone, password_hash, role, status, email_verified, signup_ref)
+       VALUES ($1, $2, $3, $4, $5, 'actif', TRUE, $6)
        RETURNING id, email, full_name, role, status`,
-      [full_name, email, phone ? normalizePhone(phone) : null, password_hash, role || "client", emailToken, tokenExpires]
+      [full_name, emailNorm, phoneNorm, password_hash, role || "client", signupRef]
     );
 
     // Consommation ATOMIQUE du code d'accès (single-use, anti-course) DANS la
@@ -266,26 +271,19 @@ export const register = asyncHandler(async (req, res) => {
          AND walk_in_email IS NOT NULL AND lower(walk_in_email) = lower($2)
          AND ($3 = '' OR walk_in_phone IS NULL
               OR regexp_replace(walk_in_phone, '[^0-9]', '', 'g') = regexp_replace($3, '[^0-9]', '', 'g'))`,
-      [result.id, email, phone ? normalizePhone(phone) : ""]
+      [result.id, emailNorm, phoneNorm]
     ).catch((e) => logger.warn("Rattachement réservations invité échoué", { error: e?.message }));
   }
 
   // (Le code d'accès a été consommé atomiquement dans la transaction ci-dessus.)
-
-  // Envoi email de vérification (le token a été posé dans l'INSERT, fail-closed).
-  // On ATTEND le résultat réel pour le refléter dans la réponse : un échec SendGrid
-  // n'est plus silencieux (avant, email_sent=true était codé en dur).
-  const email_sent = await sendVerificationEmail(email, full_name, emailToken).catch(() => false);
-
-  // PAS d'auto-connexion : aucun token tant que l'e-mail n'est pas vérifié.
-  // L'utilisateur doit cliquer le lien reçu par e-mail puis se connecter.
-  logger.info("Nouvel utilisateur inscrit (en attente de vérification e-mail)", { userId: result.id, role, email_sent });
+  // Compte actif immédiatement : pas d'email de vérification (SendGrid HS).
+  logger.info("Nouvel utilisateur inscrit (compte actif)", { userId: result.id, role });
 
   return created(res, {
     user:               { id: result.id, email: result.email, full_name: result.full_name, role: result.role },
-    email_sent,
-    needs_verification: true,
-  }, "Compte créé — vérifiez votre e-mail pour vous connecter.");
+    active:             true,
+    needs_verification: false,
+  }, "Compte créé. Connectez-vous.");
 });
 
 export const login = asyncHandler(async (req, res) => {

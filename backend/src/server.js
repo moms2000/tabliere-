@@ -82,6 +82,11 @@ async function runBusinessMigrations() {
     // et le refresh lisent cette colonne. Sinon la connexion échoue (500) tant qu'un
     // endpoint OTP (qui la crée à la demande) n'a pas été appelé.
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE`,
+    // Email désormais facultatif (téléphone = identifiant principal) → colonne nullable.
+    `ALTER TABLE users ALTER COLUMN email DROP NOT NULL`,
+    // Provenance d'inscription (code du QR d'une campagne) pour le tirage au sort.
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ref VARCHAR(40)`,
+    `CREATE INDEX IF NOT EXISTS idx_users_signup_ref ON users(signup_ref) WHERE signup_ref IS NOT NULL`,
     // RATTRAPAGE une-fois : au déploiement de la vérification e-mail obligatoire au
     // login, on considère TOUS les comptes déjà créés comme vérifiés (sinon ils
     // seraient bloqués rétroactivement). Cutoff figé = instant du déploiement → les

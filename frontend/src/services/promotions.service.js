@@ -14,6 +14,12 @@ export const promotionsService = {
   async winners(id) {
     return (await api.get(`/promotions/campaigns/${id}/winners`)).data.data; // { winners }
   },
+  async deleteCampaign(id) {
+    return (await api.delete(`/promotions/campaigns/${id}`)).data;
+  },
+  async listClients(search) {
+    return (await api.get("/promotions/clients", { params: { search } })).data.data; // { clients }
+  },
   async createGift(body) {
     return (await api.post("/promotions/gifts", body)).data.data; // { voucher, user }
   },

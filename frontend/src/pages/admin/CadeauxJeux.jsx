@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import QRCode from "react-qr-code";
-import { Gift, Dices, Plus, Trophy, Download, Copy, Check, X, Sparkles, RefreshCw } from "lucide-react";
+import { Gift, Dices, Plus, Trophy, Download, Copy, Check, X, Sparkles, RefreshCw, Trash2, Zap, Search } from "lucide-react";
 import { Card, PageTitle } from "../../components/ui";
 import { promotionsService } from "../../services/promotions.service.js";
 import { adminService } from "../../services/admin.service.js";
@@ -49,6 +49,12 @@ export default function CadeauxJeux() {
     try { const { winners: list } = await promotionsService.winners(c.id); setWinners({ campaign: c, list: list || [] }); }
     catch (_) {}
   };
+  const runDelete = async (c) => {
+    if (!window.confirm(`Supprimer le jeu « ${c.name} » ? Les bons déjà distribués seront aussi supprimés.`)) return;
+    setMsg("");
+    try { await promotionsService.deleteCampaign(c.id); setMsg("Jeu supprimé."); load(); }
+    catch (e) { setMsg(e.response?.data?.message || "Suppression impossible."); }
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
@@ -92,7 +98,7 @@ export default function CadeauxJeux() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 14 }}>
               {campaigns.filter(c => c.type === "lottery").map(c => (
-                <CampaignCard key={c.id} c={c} onDraw={() => runDraw(c)} onWinners={() => openWinners(c)} />
+                <CampaignCard key={c.id} c={c} onDraw={() => runDraw(c)} onWinners={() => openWinners(c)} onDelete={() => runDelete(c)} />
               ))}
             </div>
           )}
@@ -111,8 +117,9 @@ export default function CadeauxJeux() {
   );
 }
 
-function CampaignCard({ c, onDraw, onWinners }) {
+function CampaignCard({ c, onDraw, onWinners, onDelete }) {
   const [copied, setCopied] = useState(false);
+  const isAuto = c.draw_mode === "auto";
   const qrRef = useRef(null);
   const url = `${SITE}/inscription?ref=${c.ref_code}`;
   const copy = () => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); };
@@ -131,10 +138,21 @@ function CampaignCard({ c, onDraw, onWinners }) {
     <div style={{ background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: DARK }}>{c.name}</div>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20,
-          background: c.status === "drawn" ? "#e1f5ee" : PL, color: c.status === "drawn" ? GREEN : "#C47D1A" }}>
-          {c.status === "drawn" ? "Tiré" : "Ouvert"}
-        </span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {isAuto && (
+            <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "#EEF2FF", color: "#4F5BD5" }}>
+              <Zap size={10} /> Auto
+            </span>
+          )}
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20,
+            background: c.status === "drawn" ? "#e1f5ee" : PL, color: c.status === "drawn" ? GREEN : "#C47D1A" }}>
+            {c.status === "drawn" ? "Tiré" : "Ouvert"}
+          </span>
+          <button onClick={onDelete} title="Supprimer le jeu"
+            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, display: "flex" }}>
+            <Trash2 size={14} color="#dc2626" />
+          </button>
+        </div>
       </div>
       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 2 }}>{c.restaurant_name}</div>
       <div style={{ fontSize: 13, color: DARK, marginBottom: 12 }}><Sparkles size={12} color={P} /> {c.reward_label}</div>
@@ -154,12 +172,19 @@ function CampaignCard({ c, onDraw, onWinners }) {
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onDraw} disabled={done}
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 9, border: "none",
-            background: done ? "#E4DFD8" : P, color: done ? MUTED : "#1A1000",
-            fontSize: 13, fontWeight: 700, cursor: done ? "default" : "pointer", fontFamily: FONT }}>
-          <Dices size={15} /> {done ? "Tirage effectué" : "Lancer le tirage"}
-        </button>
+        {isAuto ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 9,
+            background: "#EEF2FF", color: "#4F5BD5", fontSize: 12.5, fontWeight: 700 }}>
+            <Zap size={14} /> Tirage automatique
+          </div>
+        ) : (
+          <button onClick={onDraw} disabled={done}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 9, border: "none",
+              background: done ? "#E4DFD8" : P, color: done ? MUTED : "#1A1000",
+              fontSize: 13, fontWeight: 700, cursor: done ? "default" : "pointer", fontFamily: FONT }}>
+            <Dices size={15} /> {done ? "Tirage effectué" : "Lancer le tirage"}
+          </button>
+        )}
         <button onClick={onWinners}
           style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,
             background: "white", color: DARK, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
@@ -171,7 +196,7 @@ function CampaignCard({ c, onDraw, onWinners }) {
 }
 
 function NewCampaign({ restos, onClose, onCreated }) {
-  const [f, setF] = useState({ restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30 });
+  const [f, setF] = useState({ restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30, draw_mode: "manual" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -203,8 +228,20 @@ function NewCampaign({ restos, onClose, onCreated }) {
           <input type="number" min="1" value={f.voucher_expires_days} onChange={e => set("voucher_expires_days", e.target.value)} style={inp} />
         </Field>
       </div>
+      <Field label="Mode de tirage">
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["manual", "Manuel", "Vous lancez le tirage quand vous voulez"], ["auto", "Automatique", "Gagnants tirés à l'inscription (max 4 par 10, aléatoire)"]].map(([k, lab, desc]) => (
+            <button key={k} type="button" onClick={() => set("draw_mode", k)}
+              style={{ flex: 1, textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontFamily: FONT,
+                border: `1.5px solid ${f.draw_mode === k ? P : BORDER}`, background: f.draw_mode === k ? PL : "white" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: f.draw_mode === k ? "#C47D1A" : DARK }}>{lab}</div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 1.3 }}>{desc}</div>
+            </button>
+          ))}
+        </div>
+      </Field>
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
-        Un QR sera généré. Les gens qui s'inscrivent via ce QR entrent dans le tirage. Vous lancez le tirage quand vous voulez.
+        Un QR sera généré. Les gens qui s'inscrivent via ce QR entrent dans le tirage.
       </div>
       <ModalActions onClose={onClose} onSubmit={submit} busy={busy} submitLabel="Créer le jeu" />
     </Overlay>
@@ -212,29 +249,43 @@ function NewCampaign({ restos, onClose, onCreated }) {
 }
 
 function GiftForm({ restos, onDone }) {
-  const [f, setF] = useState({ restaurant_id: "", user_identifier: "", reward_label: "", voucher_expires_days: 30 });
+  const [f, setF] = useState({ restaurant_id: "", reward_label: "", voucher_expires_days: 30 });
+  const [client, setClient] = useState(null);   // client sélectionné { id, full_name, phone, resa_count }
+  const [search, setSearch] = useState("");
+  const [clients, setClients] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  // Liste des clients (triés par réservations) — au montage et à chaque recherche.
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(() => {
+      promotionsService.listClients(search).then(d => { if (alive) setClients(d?.clients || []); }).catch(() => {});
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [search]);
+
   const submit = async () => {
     setErr(""); setOkMsg("");
     if (!f.restaurant_id) return setErr("Choisissez un restaurant.");
-    if (!f.user_identifier.trim()) return setErr("Numéro ou e-mail du client requis.");
+    if (!client) return setErr("Choisissez un client dans la liste.");
     if (f.reward_label.trim().length < 2) return setErr("Décrivez le cadeau.");
     setBusy(true);
     try {
-      const res = await promotionsService.createGift(f);
-      setOkMsg(`Cadeau envoyé à ${res?.user?.full_name || "ce client"} (code ${res?.voucher?.code}).`);
-      setF({ ...f, user_identifier: "", reward_label: "" });
+      const res = await promotionsService.createGift({ ...f, user_id: client.id });
+      setOkMsg(`Cadeau envoyé à ${res?.user?.full_name || client.full_name} (code ${res?.voucher?.code}).`);
+      setF({ ...f, reward_label: "" }); setClient(null); setSearch("");
       onDone?.("Cadeau envoyé.");
     } catch (e) { setErr(e.response?.data?.message || "Envoi impossible."); }
     setBusy(false);
   };
+
   return (
     <Card>
       <div style={{ fontSize: 15, fontWeight: 800, color: DARK, marginBottom: 4 }}>Offrir un cadeau à un client</div>
-      <div style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Un repas, une boisson… le client reçoit un bon avec un code à présenter au restaurant.</div>
+      <div style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Choisissez un client (les plus fidèles apparaissent en premier). Il reçoit un bon avec un code à présenter au restaurant.</div>
       {err && <ErrBox>{err}</ErrBox>}
       {okMsg && <div style={{ background: "#e1f5ee", color: "#0f7a56", borderRadius: 8, padding: "9px 12px", fontSize: 13, marginBottom: 12 }}>{okMsg}</div>}
       <div style={{ maxWidth: 480 }}>
@@ -244,7 +295,44 @@ function GiftForm({ restos, onDone }) {
             {restos.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </Field>
-        <Field label="Client (numéro ou e-mail)"><input value={f.user_identifier} onChange={e => set("user_identifier", e.target.value)} placeholder="07 00 00 00 00 ou client@mail.com" style={inp} /></Field>
+
+        <Field label="Client">
+          {client ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: `1.5px solid ${P}`, background: PL, borderRadius: 9, padding: "10px 12px" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{client.full_name}</div>
+                <div style={{ fontSize: 11.5, color: MUTED }}>{client.phone || client.email || ""} · {client.resa_count} réservation(s)</div>
+              </div>
+              <button onClick={() => setClient(null)} style={{ border: "none", background: "transparent", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+            </div>
+          ) : (
+            <>
+              <div style={{ position: "relative" }}>
+                <Search size={14} color={MUTED} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un client (nom, numéro…)"
+                  style={{ ...inp, paddingLeft: 34 }} />
+              </div>
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 9, marginTop: 6, maxHeight: 220, overflowY: "auto", background: "white" }}>
+                {clients.length === 0 ? (
+                  <div style={{ padding: 14, fontSize: 12.5, color: MUTED, textAlign: "center" }}>Aucun client trouvé.</div>
+                ) : clients.map(cl => (
+                  <button key={cl.id} onClick={() => setClient(cl)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 12px",
+                      border: "none", borderBottom: `1px solid ${BG}`, background: "white", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
+                    <div>
+                      <div style={{ fontSize: 13, color: DARK, fontWeight: 500 }}>{cl.full_name}</div>
+                      <div style={{ fontSize: 11, color: MUTED }}>{cl.phone || cl.email || ""}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cl.resa_count > 0 ? "#C47D1A" : MUTED, background: cl.resa_count > 0 ? PL : BG, padding: "2px 8px", borderRadius: 20 }}>
+                      {cl.resa_count} résa
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </Field>
+
         <Field label="Cadeau"><input value={f.reward_label} onChange={e => set("reward_label", e.target.value)} placeholder="Ex : 1 boisson offerte" style={inp} /></Field>
         <Field label="Validité (jours)"><input type="number" min="1" value={f.voucher_expires_days} onChange={e => set("voucher_expires_days", e.target.value)} style={{ ...inp, maxWidth: 140 }} /></Field>
         <button onClick={submit} disabled={busy}

@@ -12,6 +12,7 @@ import { logger } from "../utils/logger.js";
 import { getSetting } from "../utils/platformSettings.js";
 import { env } from "../config/env.js";
 import { normalizePhone } from "../utils/phone.js";
+import { autoAwardOnSignup } from "./promotions.controller.js";
 
 // Hash factice (valide) pour le login : on exécute TOUJOURS un bcrypt.compare,
 // même si l'email n'existe pas, afin d'avoir un temps de réponse constant
@@ -278,6 +279,12 @@ export const register = asyncHandler(async (req, res) => {
   // (Le code d'accès a été consommé atomiquement dans la transaction ci-dessus.)
   // Compte actif immédiatement : pas d'email de vérification (SendGrid HS).
   logger.info("Nouvel utilisateur inscrit (compte actif)", { userId: result.id, role });
+
+  // Tirage AUTOMATIQUE : si le client s'inscrit via le QR d'une campagne en mode
+  // auto, il peut être tiré gagnant sur-le-champ (best-effort, ne bloque jamais).
+  if ((role || "client") === "client" && signupRef) {
+    autoAwardOnSignup(result.id, signupRef).catch(() => {});
+  }
 
   return created(res, {
     user:               { id: result.id, email: result.email, full_name: result.full_name, role: result.role },

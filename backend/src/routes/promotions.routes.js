@@ -12,6 +12,8 @@ router.post("/campaigns",             admin, ctrl.createCampaign);
 router.get ("/campaigns",             admin, ctrl.listCampaigns);
 router.post("/campaigns/:id/draw",    admin, ctrl.drawCampaign);
 router.get ("/campaigns/:id/winners", admin, ctrl.listWinners);
+router.delete("/campaigns/:id",       admin, ctrl.deleteCampaign);
+router.get ("/clients",               admin, ctrl.listClients);
 router.post("/gifts",                 admin, ctrl.createGift);
 
 // ── Restaurateur / staff caisse : valider un bon présenté par un client ──────

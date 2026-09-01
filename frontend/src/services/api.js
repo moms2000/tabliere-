@@ -41,7 +41,10 @@ export const setTokens = (accessToken, refreshToken, remember = true) => {
 // d'appareil). CRUCIAL : sans ça, le compte suivant sur le même appareil hérite
 // des favoris, de l'état d'accueil et surtout de la session staff du précédent
 // → bascule de compte / fuite de données. Appelé au login ET au logout.
-const KEEP_KEYS = new Set(["tci_lang", "tci_notif_optin", "tci_order_sound", "tci_debug"]);
+// Clés conservées à la connexion/déconnexion : préférences liées à l'APPAREIL,
+// pas au compte. `tci_onboarded` = intro déjà vue → ne doit jamais réapparaître
+// après un login/logout (sinon l'écran d'accueil se ré-affiche à tort).
+const KEEP_KEYS = new Set(["tci_lang", "tci_notif_optin", "tci_order_sound", "tci_debug", "tci_onboarded"]);
 export const clearUserScopedData = () => {
   for (const store of [localStorage, sessionStorage]) {
     try {

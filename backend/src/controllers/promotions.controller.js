@@ -40,6 +40,7 @@ async function ensureTables() {
       ref_code             VARCHAR(40)  UNIQUE,
       winners_count        INT          NOT NULL DEFAULT 0,
       voucher_expires_days INT          NOT NULL DEFAULT 30,
+      draw_mode            VARCHAR(10)  NOT NULL DEFAULT 'manual',
       status               VARCHAR(20)  NOT NULL DEFAULT 'open',
       created_by           UUID,
       created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -66,6 +67,8 @@ async function ensureTables() {
   // ciblés ont campaign_id NULL et ne sont pas concernés.)
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS uidx_vouchers_campaign_user
                ON vouchers(campaign_id, user_id) WHERE campaign_id IS NOT NULL`).catch(() => {});
+  // Colonne ajoutée après coup (tables déjà créées en prod).
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS draw_mode VARCHAR(10) NOT NULL DEFAULT 'manual'`).catch(() => {});
   migrated = true;
 }
 
@@ -100,6 +103,50 @@ async function resolveRestoId(req) {
   throw new AppError("Aucun restaurant associé à ce compte", 400);
 }
 
+// ── Tirage AUTOMATIQUE : appelé à l'inscription d'un client via un QR de campagne.
+// Règle : ~40 % de chance, plafonné à 4 gagnants max par lot de 10 inscrits, et au
+// total winners_count. Aléa côté SERVEUR (non influençable). Transactionnel + verrou
+// sur la campagne → pas de dépassement même en inscriptions simultanées.
+export async function autoAwardOnSignup(userId, refCode) {
+  if (!userId || !refCode) return;
+  await ensureTables();
+  let won = null;
+  try {
+    won = await withTransaction(async (client) => {
+      const { rows: [c] } = await client.query(
+        "SELECT * FROM campaigns WHERE ref_code = $1 AND type='lottery' AND draw_mode='auto' AND status <> 'closed' LIMIT 1 FOR UPDATE",
+        [refCode]);
+      if (!c) return null;
+      const { rows: [{ w }] } = await client.query("SELECT COUNT(*)::int AS w FROM vouchers WHERE campaign_id = $1", [c.id]);
+      if (w >= c.winners_count) return null; // objectif total atteint
+      const { rows: [{ s }] } = await client.query(
+        "SELECT COUNT(*)::int AS s FROM users WHERE signup_ref = $1 AND role='client' AND status='actif'", [refCode]);
+      const maxW = 4 * Math.floor(s / 10) + Math.min(4, s % 10); // 4 max par lot de 10
+      if (w >= maxW) return null;
+      if (crypto.randomInt(0, 100) >= 40) return null; // ~40 % de chance
+      const code = await uniqueVoucherCode(c.name);
+      const expires = new Date(Date.now() + c.voucher_expires_days * 86400000).toISOString();
+      try {
+        await client.query(
+          `INSERT INTO vouchers (campaign_id, restaurant_id, user_id, code, reward_label, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [c.id, c.restaurant_id, userId, code, c.reward_label, expires]);
+      } catch (e) {
+        if (e?.code === "23505") return null; // déjà gagnant / collision code → on ignore
+        throw e;
+      }
+      return { reward: c.reward_label };
+    });
+  } catch (e) { logger.warn("[Promo] auto-award échoué", { error: e.message }); return; }
+  if (won) {
+    sendPushToUser(userId, {
+      title: "🎉 Vous avez gagné !",
+      body: `${won.reward} vous attend. Ouvrez « Mes cadeaux » pour votre code.`,
+      data: { route: "/mes-cadeaux" },
+    }).catch(() => {});
+  }
+}
+
 // ── ADMIN : créer une campagne ───────────────────────────────────────────────
 export const createCampaign = asyncHandler(async (req, res) => {
   await ensureTables();
@@ -110,6 +157,7 @@ export const createCampaign = asyncHandler(async (req, res) => {
   const restaurant_id = String(b.restaurant_id || "").trim();
   const winners = Math.max(0, Math.min(5000, parseInt(b.winners_count) || 0));
   const expDays = Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30));
+  const drawMode = b.draw_mode === "auto" ? "auto" : "manual";
 
   if (name.length < 2)   throw new AppError("Nom de campagne requis.", 400);
   if (reward.length < 2) throw new AppError("Décrivez la récompense (ex : 1 café offert).", 400);
@@ -121,9 +169,9 @@ export const createCampaign = asyncHandler(async (req, res) => {
 
   const ref_code = type === "lottery" ? await uniqueRefCode() : null;
   const { rows: [c] } = await query(
-    `INSERT INTO campaigns (restaurant_id, name, type, reward_label, ref_code, winners_count, voucher_expires_days, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [restaurant_id, name, type, reward, ref_code, winners, expDays, req.user.id]);
+    `INSERT INTO campaigns (restaurant_id, name, type, reward_label, ref_code, winners_count, voucher_expires_days, draw_mode, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [restaurant_id, name, type, reward, ref_code, winners, expDays, drawMode, req.user.id]);
   logger.info("[Promo] Campagne créée", { id: c.id, type, restaurant_id, by: req.user.id });
   return created(res, { campaign: c }, "Campagne créée.");
 });
@@ -155,6 +203,7 @@ export const drawCampaign = asyncHandler(async (req, res) => {
     const { rows: [c] } = await client.query("SELECT * FROM campaigns WHERE id = $1 FOR UPDATE", [id]);
     if (!c) throw new AppError("Campagne introuvable.", 404);
     if (c.type !== "lottery") throw new AppError("Cette campagne n'est pas un tirage au sort.", 400);
+    if (c.draw_mode === "auto") throw new AppError("Cette campagne est en tirage automatique (gagnants tirés à l'inscription).", 400);
     if (c.status === "closed") throw new AppError("Cette campagne est clôturée.", 400);
 
     const { rows: [{ n: already }] } = await client.query(
@@ -210,30 +259,66 @@ export const listWinners = asyncHandler(async (req, res) => {
   return ok(res, { winners: rows });
 });
 
+// ── ADMIN : liste des clients (pour choisir un destinataire de cadeau) ────────
+// Triés par nombre de réservations décroissant (les plus fidèles d'abord), avec
+// recherche par nom/numéro/e-mail. Sert au sélecteur du cadeau ciblé.
+export const listClients = asyncHandler(async (req, res) => {
+  const search = String(req.query.search || "").trim();
+  const params = [];
+  let where = "role = 'client' AND status = 'actif' AND full_name <> 'Compte supprimé'";
+  if (search) {
+    params.push(`%${search}%`);
+    where += ` AND (full_name ILIKE $${params.length} OR phone ILIKE $${params.length} OR email ILIKE $${params.length})`;
+  }
+  const { rows } = await query(
+    `SELECT id, full_name, phone, email,
+            (SELECT COUNT(*) FROM reservations WHERE client_id = users.id)::int AS resa_count
+       FROM users WHERE ${where}
+      ORDER BY resa_count DESC, full_name ASC LIMIT 100`, params);
+  return ok(res, { clients: rows });
+});
+
+// ── ADMIN : supprimer une campagne (et ses bons, en cascade) ─────────────────
+export const deleteCampaign = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const id = parseInt(req.params.id);
+  if (!Number.isInteger(id)) throw new AppError("Campagne invalide.", 400);
+  const { rowCount } = await query("DELETE FROM campaigns WHERE id = $1", [id]);
+  if (!rowCount) throw new AppError("Campagne introuvable.", 404);
+  logger.info("[Promo] Campagne supprimée", { id, by: req.user.id });
+  return ok(res, {}, "Jeu supprimé.");
+});
+
 // ── ADMIN : cadeau ciblé à un client précis ──────────────────────────────────
 export const createGift = asyncHandler(async (req, res) => {
   await ensureTables();
   const b = req.body || {};
   const restaurant_id = String(b.restaurant_id || "").trim();
   const reward = String(b.reward_label || "").trim().slice(0, 160);
+  const userId = String(b.user_id || "").trim();
   const identifier = String(b.user_identifier || "").trim();
   const expDays = Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30));
   if (!restaurant_id) throw new AppError("Restaurant requis.", 400);
   if (reward.length < 2) throw new AppError("Décrivez le cadeau.", 400);
-  if (!identifier) throw new AppError("Indiquez le client (numéro ou e-mail).", 400);
+  if (!userId && !identifier) throw new AppError("Choisissez un client.", 400);
 
   const { rows: [resto] } = await query("SELECT id FROM restaurants WHERE id = $1", [restaurant_id]);
   if (!resto) throw new AppError("Restaurant introuvable.", 404);
 
-  // Retrouver le client par e-mail ou par numéro. Le numéro est normalisé comme au
-  // login (défaut CI 225) pour matcher les numéros stockés au format normalisé.
-  const isEmail = identifier.includes("@");
-  const normPhone = normalizePhone(identifier);          // ex : 07... -> 22507...
-  const rawDigits = identifier.replace(/[^0-9]/g, "");   // tel stocké non normalisé (legacy)
-  const { rows: [user] } = isEmail
-    ? await query("SELECT id, full_name FROM users WHERE email = $1 LIMIT 1", [identifier.toLowerCase()])
-    : await query("SELECT id, full_name FROM users WHERE regexp_replace(phone,'[^0-9]','','g') IN ($1,$2) LIMIT 1", [normPhone, rawDigits]);
-  if (!user) throw new AppError("Client introuvable avec cet identifiant.", 404);
+  // Client choisi dans la liste (user_id) — chemin normal ; sinon repli par
+  // e-mail/numéro (numéro normalisé comme au login, + variante brute legacy).
+  let user;
+  if (userId) {
+    ({ rows: [user] } = await query("SELECT id, full_name FROM users WHERE id = $1 AND role = 'client' LIMIT 1", [userId]));
+  } else {
+    const isEmail = identifier.includes("@");
+    const normPhone = normalizePhone(identifier);
+    const rawDigits = identifier.replace(/[^0-9]/g, "");
+    ({ rows: [user] } = isEmail
+      ? await query("SELECT id, full_name FROM users WHERE email = $1 LIMIT 1", [identifier.toLowerCase()])
+      : await query("SELECT id, full_name FROM users WHERE regexp_replace(phone,'[^0-9]','','g') IN ($1,$2) LIMIT 1", [normPhone, rawDigits]));
+  }
+  if (!user) throw new AppError("Client introuvable.", 404);
 
   const code = await uniqueVoucherCode("CAD");
   const expires = new Date(Date.now() + expDays * 86400000).toISOString();

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Receipt, RefreshCw, Printer, CheckCircle2, Search, Wallet, BarChart3 } from "lucide-react";
+import { Receipt, RefreshCw, Printer, CheckCircle2, Search, Wallet, BarChart3, Gift, Ticket } from "lucide-react";
+import { promotionsService } from "../../services/promotions.service.js";
 import { sessionsService } from "../../services/sessions.service.js";
 import { printTicket, itemsToLines, fmtMoney } from "../../utils/printer.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -272,6 +273,9 @@ export default function RestRecus() {
       <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
         Chaque table ouverte a sa note. Imprimez un reçu total ou un reçu par personne, puis clôturez.
       </p>
+
+      {/* Valider un bon cadeau présenté par un client */}
+      <ValidateVoucherCard />
 
       {/* Rapport de caisse */}
       <div style={{ background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 18 }}>
@@ -646,3 +650,56 @@ const stepBtn = {
   width: 30, height: 30, borderRadius: 8, border: "1px solid #E4DFD8", background: "white",
   color: "#1E2E28", fontSize: 18, fontWeight: 700, cursor: "pointer", lineHeight: 1, fontFamily: FONT,
 };
+
+// Validation d'un bon cadeau (code présenté par un client gagnant).
+function ValidateVoucherCard() {
+  const [code, setCode]   = useState("");
+  const [busy, setBusy]   = useState(false);
+  const [result, setResult] = useState(null); // { ok, message, reward, client }
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    const c = code.trim().toUpperCase();
+    if (!c || busy) return;
+    setBusy(true); setResult(null);
+    try {
+      const res = await promotionsService.validate(c);
+      setResult({ ok: true, reward: res?.data?.reward_label, client: res?.data?.client });
+      setCode("");
+    } catch (err) {
+      setResult({ ok: false, message: err.response?.data?.message || "Bon invalide." });
+    }
+    setBusy(false);
+  };
+  return (
+    <div style={{ background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Gift size={17} color={P} />
+        <span style={{ fontSize: 15, fontWeight: 800, color: DARK }}>Valider un bon cadeau</span>
+      </div>
+      <form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <Ticket size={15} color={MUTED} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" }} />
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+            placeholder="Code du bon (ex : PB-7K3M9)"
+            style={{ width: "100%", border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: "11px 12px 11px 34px",
+              fontSize: 14, fontWeight: 700, letterSpacing: "1px", background: BG, outline: "none",
+              fontFamily: FONT, boxSizing: "border-box", color: DARK, textTransform: "uppercase" }} />
+        </div>
+        <button type="submit" disabled={busy || !code.trim()}
+          style={{ border: "none", borderRadius: 10, padding: "0 18px", background: (busy || !code.trim()) ? "#F0C98A" : P,
+            color: "#1A1000", fontSize: 13.5, fontWeight: 800, cursor: (busy || !code.trim()) ? "default" : "pointer", fontFamily: FONT }}>
+          {busy ? "…" : "Valider"}
+        </button>
+      </form>
+      {result && (
+        <div style={{ marginTop: 10, padding: "10px 13px", borderRadius: 9, fontSize: 13,
+          background: result.ok ? "#e1f5ee" : "#FEF2F2", color: result.ok ? "#0f7a56" : "#B1352F",
+          border: `0.5px solid ${result.ok ? "#b7e6d5" : "#FECACA"}` }}>
+          {result.ok
+            ? <><strong>✓ Bon valide.</strong> Offrez : <strong>{result.reward}</strong>{result.client ? ` — ${result.client}` : ""}.</>
+            : result.message}
+        </div>
+      )}
+    </div>
+  );
+}

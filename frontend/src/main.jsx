@@ -57,6 +57,8 @@ const StaffConsole      = lazy(() => import("./pages/public/StaffConsole"));
 
 const ClientMenu        = lazy(() => import("./pages/client/ClientMenu"));
 const Profil            = lazy(() => import("./pages/client/Profil"));
+const MesCadeaux        = lazy(() => import("./pages/client/MesCadeaux"));
+const CadeauxJeux       = lazy(() => import("./pages/admin/CadeauxJeux"));
 
 // Pages publiques — préchargées car critiques au premier chargement
 import Home             from "./pages/public/Home";
@@ -294,6 +296,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                       <Profil />
                     </ProtectedRoute>
                   } />
+                  <Route path="/mes-cadeaux" element={
+                    <ProtectedRoute roles={["client"]}>
+                      <MesCadeaux />
+                    </ProtectedRoute>
+                  } />
 
                   {/* ── Admin ────────────────────────────────────────────── */}
                   <Route path="/admin" element={
@@ -310,6 +317,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     <Route path="systeme"       element={<Systeme />} />
                     <Route path="parametres"    element={<Parametres />} />
                     <Route path="qr-themes"     element={<QRThemes />} />
+                    <Route path="cadeaux"       element={<CadeauxJeux />} />
               <Route path="codes"         element={<CodesRestaurateurs />} />
                     <Route path="codes-organisateurs" element={<CodesOrganisateurs />} />
                     <Route path="integrations"  element={<AdminIntegrations />} />

@@ -124,8 +124,22 @@ api.interceptors.response.use(
 
     // Mode maintenance : le backend renvoie 503 + code MAINTENANCE → on prévient
     // l'app (MaintenanceGate affiche la page d'interruption).
-    if (status === 503 && err.response?.data?.code === "MAINTENANCE") {
-      if (typeof window !== "undefined") window.dispatchEvent(new Event("tci:maintenance"));
+    const isMaintenance = status === 503 && err.response?.data?.code === "MAINTENANCE";
+    if (isMaintenance && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("tci:maintenance"));
+    }
+
+    // Réessai automatique des GET sur coupure PASSAGÈRE (erreur réseau, timeout,
+    // 502/503/504) : réveil à froid du backend Render, redéploiement, blip réseau.
+    // Absorbe la coupure au lieu d'afficher tout de suite « Connexion interrompue ».
+    const isGet = (original?.method || "get").toLowerCase() === "get";
+    const transient = !err.response || err.code === "ECONNABORTED" || [502, 503, 504].includes(status);
+    if (isGet && transient && !isMaintenance) {
+      original._retryCount = (original._retryCount || 0) + 1;
+      if (original._retryCount <= 3) {
+        await new Promise((r) => setTimeout(r, 800 * original._retryCount)); // 0.8s, 1.6s, 2.4s
+        return api(original);
+      }
     }
 
     // Ne PAS tenter de refresh sur login/register/refresh (sinon boucle ou

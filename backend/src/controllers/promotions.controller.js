@@ -61,6 +61,11 @@ async function ensureTables() {
     )`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS idx_vouchers_user  ON vouchers(user_id, status)`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS idx_vouchers_resto ON vouchers(restaurant_id)`).catch(() => {});
+  // Un seul bon par (campagne, utilisateur) : empêche qu'un tirage relancé (ou
+  // deux tirages simultanés) attribue deux bons au même gagnant. (Les cadeaux
+  // ciblés ont campaign_id NULL et ne sont pas concernés.)
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS uidx_vouchers_campaign_user
+               ON vouchers(campaign_id, user_id) WHERE campaign_id IS NOT NULL`).catch(() => {});
   migrated = true;
 }
 
@@ -73,13 +78,15 @@ async function uniqueRefCode() {
   }
   throw new AppError("Impossible de générer un code de campagne.", 500);
 }
-// Génère un code de bon unique (préfixe + 5 caractères), lisible.
-async function uniqueVoucherCode(prefix) {
+// Génère un code de bon unique (préfixe + 5 caractères), lisible. `seen` évite les
+// collisions entre bons d'un même tirage (encore non commités, donc invisibles en DB).
+async function uniqueVoucherCode(prefix, seen) {
   const pfx = (prefix || "").replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 3) || "TC";
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 30; i++) {
     const c = `${pfx}-${randCode(5)}`;
+    if (seen && seen.has(c)) continue;
     const { rows } = await query("SELECT 1 FROM vouchers WHERE code = $1", [c]);
-    if (!rows.length) return c;
+    if (!rows.length) { seen && seen.add(c); return c; }
   }
   throw new AppError("Impossible de générer un code de bon.", 500);
 }
@@ -98,10 +105,10 @@ export const createCampaign = asyncHandler(async (req, res) => {
   await ensureTables();
   const b = req.body || {};
   const type = CAMPAIGN_TYPES.includes(b.type) ? b.type : "lottery";
-  const name = String(b.name || "").trim();
-  const reward = String(b.reward_label || "").trim();
+  const name = String(b.name || "").trim().slice(0, 120);
+  const reward = String(b.reward_label || "").trim().slice(0, 160);
   const restaurant_id = String(b.restaurant_id || "").trim();
-  const winners = Math.max(0, Math.min(100000, parseInt(b.winners_count) || 0));
+  const winners = Math.max(0, Math.min(5000, parseInt(b.winners_count) || 0));
   const expDays = Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30));
 
   if (name.length < 2)   throw new AppError("Nom de campagne requis.", 400);
@@ -138,52 +145,63 @@ export const listCampaigns = asyncHandler(async (_req, res) => {
 export const drawCampaign = asyncHandler(async (req, res) => {
   await ensureTables();
   const id = parseInt(req.params.id);
-  const { rows: [c] } = await query("SELECT * FROM campaigns WHERE id = $1", [id]);
-  if (!c) throw new AppError("Campagne introuvable.", 404);
-  if (c.type !== "lottery") throw new AppError("Cette campagne n'est pas un tirage au sort.", 400);
-  if (c.status === "closed") throw new AppError("Cette campagne est clôturée.", 400);
+  if (!Number.isInteger(id)) throw new AppError("Campagne invalide.", 400);
 
-  // Combien de gagnants manque-t-il pour atteindre l'objectif ?
-  const { rows: [{ n: already }] } = await query(
-    "SELECT COUNT(*)::int AS n FROM vouchers WHERE campaign_id = $1", [id]);
-  const need = c.winners_count - already;
-  if (need <= 0) throw new AppError("Le nombre de gagnants est déjà atteint.", 400);
+  // Tout le tirage dans UNE transaction avec verrou sur la campagne (FOR UPDATE) :
+  // deux tirages simultanés (double-clic, deux admins) sont sérialisés → jamais de
+  // sur-attribution ni de gagnant en double. L'index unique (campaign_id,user_id)
+  // est un dernier filet.
+  const result = await withTransaction(async (client) => {
+    const { rows: [c] } = await client.query("SELECT * FROM campaigns WHERE id = $1 FOR UPDATE", [id]);
+    if (!c) throw new AppError("Campagne introuvable.", 404);
+    if (c.type !== "lottery") throw new AppError("Cette campagne n'est pas un tirage au sort.", 400);
+    if (c.status === "closed") throw new AppError("Cette campagne est clôturée.", 400);
 
-  // Vivier : inscrits via le QR de la campagne, clients actifs, pas déjà gagnants.
-  const { rows: winners } = await query(
-    `SELECT id, full_name FROM users
-      WHERE signup_ref = $1 AND role = 'client' AND status = 'actif'
-        AND id NOT IN (SELECT user_id FROM vouchers WHERE campaign_id = $2)
-      ORDER BY random() LIMIT $3`,
-    [c.ref_code, id, need]);
+    const { rows: [{ n: already }] } = await client.query(
+      "SELECT COUNT(*)::int AS n FROM vouchers WHERE campaign_id = $1", [id]);
+    const need = c.winners_count - already;
+    if (need <= 0) throw new AppError("Le nombre de gagnants est déjà atteint.", 400);
 
-  if (!winners.length) throw new AppError("Aucun inscrit éligible pour ce tirage (personne ne s'est inscrit via ce QR, ou tous ont déjà gagné).", 400);
+    const { rows: winners } = await client.query(
+      `SELECT id FROM users
+        WHERE signup_ref = $1 AND role = 'client' AND status = 'actif'
+          AND id NOT IN (SELECT user_id FROM vouchers WHERE campaign_id = $2)
+        ORDER BY random() LIMIT $3`,
+      [c.ref_code, id, need]);
+    if (!winners.length) throw new AppError("Aucun inscrit éligible pour ce tirage (personne ne s'est inscrit via ce QR, ou tous ont déjà gagné).", 400);
 
-  const expires = new Date(Date.now() + c.voucher_expires_days * 86400000).toISOString();
-  const issued = [];
-  for (const w of winners) {
-    const code = await uniqueVoucherCode(c.name);
-    await query(
-      `INSERT INTO vouchers (campaign_id, restaurant_id, user_id, code, reward_label, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, c.restaurant_id, w.id, code, c.reward_label, expires]);
-    issued.push({ user_id: w.id, code });
-    // Notification push (silencieuse si l'utilisateur n'a pas l'app).
-    sendPushToUser(w.id, {
+    const expires = new Date(Date.now() + c.voucher_expires_days * 86400000).toISOString();
+    const seen = new Set();
+    const issued = [];
+    for (const w of winners) {
+      const code = await uniqueVoucherCode(c.name, seen);
+      await client.query(
+        `INSERT INTO vouchers (campaign_id, restaurant_id, user_id, code, reward_label, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [id, c.restaurant_id, w.id, code, c.reward_label, expires]);
+      issued.push({ user_id: w.id });
+    }
+    await client.query("UPDATE campaigns SET status = 'drawn', drawn_at = NOW() WHERE id = $1", [id]);
+    return { reward: c.reward_label, issued, already };
+  });
+
+  // Notifications APRÈS le commit (une par gagnant ; silencieuse sans app).
+  for (const w of result.issued) {
+    sendPushToUser(w.user_id, {
       title: "🎉 Vous avez gagné !",
-      body: `${c.reward_label} vous attend. Ouvrez « Mes cadeaux » pour votre code.`,
+      body: `${result.reward} vous attend. Ouvrez « Mes cadeaux » pour votre code.`,
       data: { route: "/mes-cadeaux" },
     }).catch(() => {});
   }
-  await query("UPDATE campaigns SET status = 'drawn', drawn_at = NOW() WHERE id = $1", [id]);
-  logger.info("[Promo] Tirage effectué", { campaign: id, issued: issued.length });
-  return ok(res, { issued: issued.length, total_winners: already + issued.length }, `${issued.length} gagnant(s) tiré(s).`);
+  logger.info("[Promo] Tirage effectué", { campaign: id, issued: result.issued.length });
+  return ok(res, { issued: result.issued.length, total_winners: result.already + result.issued.length }, `${result.issued.length} gagnant(s) tiré(s).`);
 });
 
 // ── ADMIN : lister les gagnants d'une campagne ───────────────────────────────
 export const listWinners = asyncHandler(async (req, res) => {
   await ensureTables();
   const id = parseInt(req.params.id);
+  if (!Number.isInteger(id)) throw new AppError("Campagne invalide.", 400);
   const { rows } = await query(
     `SELECT v.code, v.reward_label, v.status, v.expires_at, v.used_at, v.created_at,
             u.full_name, u.phone
@@ -197,7 +215,7 @@ export const createGift = asyncHandler(async (req, res) => {
   await ensureTables();
   const b = req.body || {};
   const restaurant_id = String(b.restaurant_id || "").trim();
-  const reward = String(b.reward_label || "").trim();
+  const reward = String(b.reward_label || "").trim().slice(0, 160);
   const identifier = String(b.user_identifier || "").trim();
   const expDays = Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30));
   if (!restaurant_id) throw new AppError("Restaurant requis.", 400);
@@ -210,10 +228,11 @@ export const createGift = asyncHandler(async (req, res) => {
   // Retrouver le client par e-mail ou par numéro. Le numéro est normalisé comme au
   // login (défaut CI 225) pour matcher les numéros stockés au format normalisé.
   const isEmail = identifier.includes("@");
-  const normPhone = normalizePhone(identifier);
+  const normPhone = normalizePhone(identifier);          // ex : 07... -> 22507...
+  const rawDigits = identifier.replace(/[^0-9]/g, "");   // tel stocké non normalisé (legacy)
   const { rows: [user] } = isEmail
     ? await query("SELECT id, full_name FROM users WHERE email = $1 LIMIT 1", [identifier.toLowerCase()])
-    : await query("SELECT id, full_name FROM users WHERE regexp_replace(phone,'[^0-9]','','g') = $1 LIMIT 1", [normPhone]);
+    : await query("SELECT id, full_name FROM users WHERE regexp_replace(phone,'[^0-9]','','g') IN ($1,$2) LIMIT 1", [normPhone, rawDigits]);
   if (!user) throw new AppError("Client introuvable avec cet identifiant.", 404);
 
   const code = await uniqueVoucherCode("CAD");
@@ -236,11 +255,18 @@ export const validateVoucher = asyncHandler(async (req, res) => {
   await ensureTables();
   const code = String(req.body?.code || "").trim().toUpperCase();
   if (!code) throw new AppError("Code requis.", 400);
-  const restoId = await resolveRestoId(req);
 
-  const { rows: [v] } = await query(
-    `SELECT v.*, u.full_name FROM vouchers v JOIN users u ON u.id = v.user_id
-      WHERE v.code = $1 AND v.restaurant_id = $2 LIMIT 1`, [code, restoId]);
+  // Le bon doit appartenir à un restaurant du restaurateur : le staff est limité à
+  // SON resto ; le propriétaire peut valider pour N'IMPORTE LEQUEL de ses restaurants
+  // (corrige le cas multi-restaurants où le 1er resto seul était pris en compte).
+  const { rows: [v] } = req.user.is_staff
+    ? await query(
+        `SELECT v.*, u.full_name FROM vouchers v JOIN users u ON u.id = v.user_id
+          WHERE v.code = $1 AND v.restaurant_id = $2 LIMIT 1`, [code, req.user.restaurant_id])
+    : await query(
+        `SELECT v.*, u.full_name FROM vouchers v JOIN users u ON u.id = v.user_id
+          WHERE v.code = $1 AND v.restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = $2) LIMIT 1`,
+        [code, req.user.id]);
   if (!v) throw new AppError("Bon introuvable pour ce restaurant.", 404);
   if (v.status === "used") throw new AppError(`Bon déjà utilisé le ${new Date(v.used_at).toLocaleString("fr-FR")}.`, 409);
   if (v.expires_at && new Date(v.expires_at) < new Date()) {
@@ -254,7 +280,7 @@ export const validateVoucher = asyncHandler(async (req, res) => {
     [req.user.id, v.id]);
   if (!rowCount) throw new AppError("Ce bon vient d'être utilisé.", 409);
 
-  logger.info("[Promo] Bon validé", { code, restaurant: restoId, by: req.user.id });
+  logger.info("[Promo] Bon validé", { code, restaurant: v.restaurant_id, by: req.user.id });
   return ok(res, { valid: true, reward_label: v.reward_label, client: v.full_name }, "Bon validé — offrez la récompense.");
 });
 

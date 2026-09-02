@@ -41,6 +41,8 @@ async function ensureTables() {
       winners_count        INT          NOT NULL DEFAULT 0,
       voucher_expires_days INT          NOT NULL DEFAULT 30,
       draw_mode            VARCHAR(10)  NOT NULL DEFAULT 'manual',
+      auto_per_batch       INT          NOT NULL DEFAULT 4,
+      auto_batch_size      INT          NOT NULL DEFAULT 10,
       status               VARCHAR(20)  NOT NULL DEFAULT 'open',
       created_by           UUID,
       created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -69,6 +71,8 @@ async function ensureTables() {
                ON vouchers(campaign_id, user_id) WHERE campaign_id IS NOT NULL`).catch(() => {});
   // Colonne ajoutée après coup (tables déjà créées en prod).
   await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS draw_mode VARCHAR(10) NOT NULL DEFAULT 'manual'`).catch(() => {});
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS auto_per_batch INT NOT NULL DEFAULT 4`).catch(() => {});
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS auto_batch_size INT NOT NULL DEFAULT 10`).catch(() => {});
   migrated = true;
 }
 
@@ -108,22 +112,23 @@ async function resolveRestoId(req) {
 // total winners_count. Aléa côté SERVEUR (non influençable). Transactionnel + verrou
 // sur la campagne → pas de dépassement même en inscriptions simultanées.
 export async function autoAwardOnSignup(userId, refCode) {
-  if (!userId || !refCode) return;
+  if (!userId || !refCode) return { played: false };
   await ensureTables();
-  let won = null;
+  let res = { played: false };
   try {
-    won = await withTransaction(async (client) => {
+    res = await withTransaction(async (client) => {
       const { rows: [c] } = await client.query(
         "SELECT * FROM campaigns WHERE ref_code = $1 AND type='lottery' AND draw_mode='auto' AND status <> 'closed' LIMIT 1 FOR UPDATE",
         [refCode]);
-      if (!c) return null;
+      if (!c) return { played: false };            // pas un jeu auto → pas de cinématique
       const { rows: [{ w }] } = await client.query("SELECT COUNT(*)::int AS w FROM vouchers WHERE campaign_id = $1", [c.id]);
-      if (w >= c.winners_count) return null; // objectif total atteint
+      if (w >= c.winners_count) return { played: true, won: false }; // objectif total atteint
       const { rows: [{ s }] } = await client.query(
         "SELECT COUNT(*)::int AS s FROM users WHERE signup_ref = $1 AND role='client' AND status='actif'", [refCode]);
-      const maxW = 4 * Math.floor(s / 10) + Math.min(4, s % 10); // 4 max par lot de 10
-      if (w >= maxW) return null;
-      if (crypto.randomInt(0, 100) >= 40) return null; // ~40 % de chance
+      const N = c.auto_per_batch || 4, X = c.auto_batch_size || 10;
+      const maxW = N * Math.floor(s / X) + Math.min(N, s % X);       // N gagnants max par X inscrits
+      if (w >= maxW) return { played: true, won: false };            // plafond du lot atteint
+      if (crypto.randomInt(0, X) >= N) return { played: true, won: false }; // proba N/X, perdu
       const code = await uniqueVoucherCode(c.name);
       const expires = new Date(Date.now() + c.voucher_expires_days * 86400000).toISOString();
       try {
@@ -132,19 +137,20 @@ export async function autoAwardOnSignup(userId, refCode) {
            VALUES ($1,$2,$3,$4,$5,$6)`,
           [c.id, c.restaurant_id, userId, code, c.reward_label, expires]);
       } catch (e) {
-        if (e?.code === "23505") return null; // déjà gagnant / collision code → on ignore
+        if (e?.code === "23505") return { played: true, won: false }; // déjà gagnant / collision → perdu
         throw e;
       }
-      return { reward: c.reward_label };
+      return { played: true, won: true, reward: c.reward_label, code };
     });
-  } catch (e) { logger.warn("[Promo] auto-award échoué", { error: e.message }); return; }
-  if (won) {
+  } catch (e) { logger.warn("[Promo] auto-award échoué", { error: e.message }); return { played: false }; }
+  if (res?.won) {
     sendPushToUser(userId, {
       title: "🎉 Vous avez gagné !",
-      body: `${won.reward} vous attend. Ouvrez « Mes cadeaux » pour votre code.`,
+      body: `${res.reward} vous attend. Ouvrez « Mes cadeaux » pour votre code.`,
       data: { route: "/mes-cadeaux" },
     }).catch(() => {});
   }
+  return res;
 }
 
 // ── ADMIN : créer une campagne ───────────────────────────────────────────────
@@ -158,6 +164,9 @@ export const createCampaign = asyncHandler(async (req, res) => {
   const winners = Math.max(0, Math.min(5000, parseInt(b.winners_count) || 0));
   const expDays = Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30));
   const drawMode = b.draw_mode === "auto" ? "auto" : "manual";
+  // Ratio du tirage automatique : « perBatch gagnants max par batchSize inscrits ».
+  const batchSize = Math.max(1, Math.min(1000, parseInt(b.auto_batch_size) || 10));
+  const perBatch  = Math.max(1, Math.min(batchSize, parseInt(b.auto_per_batch) || 4));
 
   if (name.length < 2)   throw new AppError("Nom de campagne requis.", 400);
   if (reward.length < 2) throw new AppError("Décrivez la récompense (ex : 1 café offert).", 400);
@@ -169,9 +178,9 @@ export const createCampaign = asyncHandler(async (req, res) => {
 
   const ref_code = type === "lottery" ? await uniqueRefCode() : null;
   const { rows: [c] } = await query(
-    `INSERT INTO campaigns (restaurant_id, name, type, reward_label, ref_code, winners_count, voucher_expires_days, draw_mode, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [restaurant_id, name, type, reward, ref_code, winners, expDays, drawMode, req.user.id]);
+    `INSERT INTO campaigns (restaurant_id, name, type, reward_label, ref_code, winners_count, voucher_expires_days, draw_mode, auto_per_batch, auto_batch_size, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [restaurant_id, name, type, reward, ref_code, winners, expDays, drawMode, perBatch, batchSize, req.user.id]);
   logger.info("[Promo] Campagne créée", { id: c.id, type, restaurant_id, by: req.user.id });
   return created(res, { campaign: c }, "Campagne créée.");
 });

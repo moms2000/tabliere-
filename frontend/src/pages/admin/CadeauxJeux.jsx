@@ -196,7 +196,7 @@ function CampaignCard({ c, onDraw, onWinners, onDelete }) {
 }
 
 function NewCampaign({ restos, onClose, onCreated }) {
-  const [f, setF] = useState({ restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30, draw_mode: "manual" });
+  const [f, setF] = useState({ restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30, draw_mode: "manual", auto_per_batch: 4, auto_batch_size: 10 });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -240,6 +240,23 @@ function NewCampaign({ restos, onClose, onCreated }) {
           ))}
         </div>
       </Field>
+      {f.draw_mode === "auto" && (
+        <div style={{ background: "#EEF2FF", border: "1px solid #DDE3FF", borderRadius: 10, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#4F5BD5", marginBottom: 8 }}>Réglage du tirage automatique</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, color: DARK }}>
+            <span>Au maximum</span>
+            <input type="number" min="1" value={f.auto_per_batch} onChange={e => set("auto_per_batch", e.target.value)}
+              style={{ ...inp, width: 70, padding: "8px 10px" }} />
+            <span>gagnant(s) pour</span>
+            <input type="number" min="1" value={f.auto_batch_size} onChange={e => set("auto_batch_size", e.target.value)}
+              style={{ ...inp, width: 70, padding: "8px 10px" }} />
+            <span>inscrit(s).</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6 }}>
+            Ex : 3 gagnants pour 15 inscrits. Le choix est aléatoire à l'inscription, dans cette limite.
+          </div>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
         Un QR sera généré. Les gens qui s'inscrivent via ce QR entrent dans le tirage.
       </div>

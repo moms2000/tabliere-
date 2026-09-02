@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLang } from "../../context/LanguageContext.jsx";
+import GameReveal from "../../components/GameReveal.jsx";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const P      = "#E8A045";
@@ -100,6 +101,7 @@ export default function Inscription() {
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
   const [redirecting, setRedirecting] = useState(false);
+  const [gameResult,  setGameResult]  = useState(null); // résultat jeu auto (cinématique)
   const [countryIdx,  setCountryIdx]  = useState(0);
   const [legalModal,  setLegalModal]  = useState(null); // "cgu" | "confidentialite" | null
 
@@ -185,13 +187,16 @@ export default function Inscription() {
 
     let registered = false;
     try {
-      await register(payload);
+      const res = await register(payload);
       registered = true;
       // Compte actif immédiatement (plus de vérif e-mail) → connexion auto par
       // téléphone puis redirection vers l'espace correspondant.
       await login(fullPhone, form.password, true);
       setRedirecting(true);
-      navigate(isResto ? "/restaurant" : isOrga ? "/event" : "/", { replace: true });
+      // Jeu automatique : si l'inscription a « joué », on montre la cinématique
+      // (gagné/perdu) ; la redirection se fait ensuite depuis GameReveal.
+      if (res?.game?.played) setGameResult(res.game);
+      else navigate(isResto ? "/restaurant" : isOrga ? "/event" : "/", { replace: true });
     } catch (err) {
       if (registered) {
         // Compte bien créé mais l'auto-connexion a échoué → aller à la connexion.
@@ -215,6 +220,12 @@ export default function Inscription() {
   // ── Garde-fou sécurité : bloquer l'inscription si déjà connecté ───────────
   // Empêche un admin/restaurateur/client connecté de créer un nouveau compte
   // sans se déconnecter — évite une session résiduelle exposée sur l'appareil.
+  // Cinématique du jeu automatique (prioritaire) : décompte puis gagné/perdu.
+  if (gameResult) return (
+    <GameReveal result={gameResult}
+      onDone={() => navigate(gameResult.won ? "/mes-cadeaux" : "/", { replace: true })} />
+  );
+
   if (user && !redirecting && step !== 3) return (
     <div style={{ minHeight: "100vh", background: BG, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 24, fontFamily: FONT }}>

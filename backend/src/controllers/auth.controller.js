@@ -281,15 +281,18 @@ export const register = asyncHandler(async (req, res) => {
   logger.info("Nouvel utilisateur inscrit (compte actif)", { userId: result.id, role });
 
   // Tirage AUTOMATIQUE : si le client s'inscrit via le QR d'une campagne en mode
-  // auto, il peut être tiré gagnant sur-le-champ (best-effort, ne bloque jamais).
+  // auto, il peut être tiré gagnant sur-le-champ. On attend le résultat pour le
+  // renvoyer au front (cinématique gagné/perdu). Ne bloque jamais l'inscription.
+  let game = { played: false };
   if ((role || "client") === "client" && signupRef) {
-    autoAwardOnSignup(result.id, signupRef).catch(() => {});
+    game = await autoAwardOnSignup(result.id, signupRef).catch(() => ({ played: false }));
   }
 
   return created(res, {
     user:               { id: result.id, email: result.email, full_name: result.full_name, role: result.role },
     active:             true,
     needs_verification: false,
+    game,               // { played, won, reward?, code? } — pour la cinématique (jeu auto)
   }, "Compte créé. Connectez-vous.");
 });
 

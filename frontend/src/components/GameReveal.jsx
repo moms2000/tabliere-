@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift, Sparkles, RotateCcw } from "lucide-react";
+import { Gift, Sparkles, ArrowRight } from "lucide-react";
 
 const P = "#E8A045"; const GOLD = "#F0A81E"; const DARK = "#1E2E28"; const MUTED = "#9BA89F";
 const FONT = "'Avenir Next','Avenir','Century Gothic','Trebuchet MS',-apple-system,sans-serif";
@@ -157,7 +157,7 @@ function Lose({ onDone }) {
       <p style={{ fontSize: 15.5, color: "#5A6B62", margin: "0 0 26px", lineHeight: 1.6 }}>
         Votre compte est bien créé. Retentez votre chance aux prochains jeux TablièreCI.
       </p>
-      <button onClick={onDone} style={cta(DARK, "#fff")}><RotateCcw size={17} /> Continuer</button>
+      <button onClick={onDone} style={cta(DARK, "#fff")}>Continuer <ArrowRight size={18} /></button>
     </motion.div>
   );
 }

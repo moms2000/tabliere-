@@ -25,10 +25,10 @@ export default function MesCadeaux() {
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: FONT, padding: "20px 16px 60px" }}>
       <div style={{ maxWidth: 620, margin: "0 auto" }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => navigate("/", { replace: true })}
           style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer",
             color: MUTED, fontSize: 13, marginBottom: 18, padding: 0, fontFamily: FONT }}>
-          <ArrowLeft size={14} /> Retour
+          <ArrowLeft size={14} /> Accueil
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>

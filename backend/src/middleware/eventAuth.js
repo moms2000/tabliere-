@@ -7,6 +7,7 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { query } from "../config/db.js";
+import { cache } from "../config/redis.js";
 import { unauth, forbidden } from "../utils/response.js";
 
 export function signStaffToken(staff) {
@@ -40,9 +41,15 @@ const bearer = (req) => {
 export const ownerOrStaff = async (req, res, next) => {
   const token = bearer(req);
   if (!token) return unauth(res, "Authentification requise");
+  // Jeton révoqué au logout (blacklist Redis) → refusé partout, comme sur l'API
+  // principale (auth.js). Sans ça, un token déconnecté restait valide ici.
+  const revoked = await cache.get(`blacklist:${token}`).catch(() => null);
+  if (revoked) return unauth(res, "Session révoquée");
   let decoded;
   try { decoded = jwt.verify(token, env.JWT_SECRET); }
   catch { return unauth(res, "Session invalide ou expirée"); }
+  // Un refresh token n'authentifie jamais une requête d'opérations.
+  if (decoded.type === "refresh") return unauth(res, "Token invalide");
 
   // Staff : périmètre = événement du token. On revérifie que le compte staff
   // existe encore et est actif (révocation immédiate si supprimé/désactivé).
@@ -57,9 +64,17 @@ export const ownerOrStaff = async (req, res, next) => {
     return next();
   }
 
-  // Sinon token utilisateur → organisateur propriétaire (ou admin)
-  const { rows: [u] } = await query("SELECT id, role FROM users WHERE id = $1", [decoded.id]);
+  // Sinon token utilisateur → organisateur propriétaire (ou admin). On applique
+  // les MÊMES garde-fous que `authenticate` : compte suspendu et invalidation des
+  // jetons émis avant un reset de mot de passe (sessions_valid_from).
+  const { rows: [u] } = await query(
+    "SELECT id, role, status, sessions_valid_from FROM users WHERE id = $1", [decoded.id]);
   if (!u) return unauth(res, "Session invalide");
+  if (["suspendu", "bloque"].includes(u.status)) return forbidden(res, "Compte suspendu");
+  if (u.sessions_valid_from && decoded.iat &&
+      decoded.iat * 1000 < new Date(u.sessions_valid_from).getTime() - 1000) {
+    return unauth(res, "Session expirée. Reconnectez-vous.");
+  }
   req.user = u;
   // event_id vient de la query ou du body (jamais de :id qui peut être une commande/résa)
   const eventId = req.query.event_id || req.body?.event_id;

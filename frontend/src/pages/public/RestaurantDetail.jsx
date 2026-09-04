@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Star, MapPin, Clock, Users, Calendar,
   UtensilsCrossed, CheckCircle, X, CalendarCheck, Phone,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, MessageCircle, Share2,
 } from "lucide-react";
 import { restaurantsService } from "../../services/restaurants.service.js";
 import { reservationsService } from "../../services/reservations.service.js";
@@ -474,7 +474,11 @@ export default function RestaurantDetail() {
   const [menu,    setMenu]    = useState(null); // catégories du menu si menu_public
   const [menuCat, setMenuCat] = useState("all"); // catégorie affichée dans l'onglet Menu
   const [tab,     setTab]     = useState("reserver"); // reserver | menu
-  usePageMeta(resto?.name, resto ? `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI` : undefined);
+  usePageMeta(resto?.name, resto
+    ? (resto.listing_mode === "vitrine"
+        ? `${resto.name} — ${resto.quartier || "Abidjan"} · Menu, horaires, contact · TablièreCI`
+        : `Réservez une table chez ${resto.name} — ${resto.quartier || "Abidjan"} · TablièreCI`)
+    : undefined);
   const [loading,  setLoading]  = useState(true);
   const [modal,    setModal]    = useState(false);
 
@@ -541,8 +545,11 @@ export default function RestaurantDetail() {
       .then(d => {
         const r = d.restaurant || d;
         setResto(r);
-        // Menu public : on le charge si le restaurant l'a activé
-        if (r?.menu_public && r?.slug) {
+        // Lieu en mode vitrine : pas de réservation → on ouvre directement le menu.
+        if (r?.listing_mode === "vitrine") setTab("menu");
+        // Menu : chargé si le restaurant l'a activé, OU toujours pour une vitrine
+        // (le menu est l'élément central d'une page vitrine).
+        if ((r?.menu_public || r?.listing_mode === "vitrine") && r?.slug) {
           menuService.getPublicMenu(r.slug, preview)
             .then(m => setMenu((m.categories || []).filter(c => (c.items || []).length > 0)))
             .catch(() => {});
@@ -689,6 +696,24 @@ export default function RestaurantDetail() {
     </div>
   );
 
+  // Lieu en mode vitrine : page sans réservation (food truck, kiosque, maquis).
+  const isVitrine = resto.listing_mode === "vitrine";
+  // Actions de la page vitrine
+  const waNumber = String(resto.phone || "").replace(/[^\d]/g, "");
+  const mapsUrl = (resto.latitude && resto.longitude)
+    ? `https://www.google.com/maps/search/?api=1&query=${resto.latitude},${resto.longitude}`
+    : (resto.address || resto.quartier)
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([resto.address, resto.quartier, resto.ville].filter(Boolean).join(", "))}`
+      : null;
+  const shareVitrine = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    try {
+      if (navigator.share) { await navigator.share({ title: resto.name, url }); return; }
+      await navigator.clipboard.writeText(url);
+      alert("Lien copié !");
+    } catch (_) {}
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: FONT }}>
 
@@ -766,7 +791,7 @@ export default function RestaurantDetail() {
       {/* Body */}
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "28px 20px",
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
+        gridTemplateColumns: (isMobile || isVitrine) ? "1fr" : "1fr 320px",
         gap: 28, alignItems: "start" }}>
 
         {/* Main */}
@@ -821,7 +846,50 @@ export default function RestaurantDetail() {
             </div>
           )}
 
-          {/* ── Onglets Réserver / Menu (toujours affichés) ── */}
+          {/* ── VITRINE : barre d'actions (pas de réservation) ── */}
+          {isVitrine && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
+              <a href="#menu-section"
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, textDecoration: "none",
+                  background: P, color: "#1A1000", borderRadius: 10, padding: "11px 18px",
+                  fontSize: 14, fontWeight: 700, fontFamily: FONT }}>
+                <UtensilsCrossed size={16} /> Voir le menu
+              </a>
+              {waNumber && (
+                <>
+                  <a href={`tel:${resto.phone}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, textDecoration: "none",
+                      background: "white", color: DARK, border: `0.5px solid ${BORDER}`, borderRadius: 10,
+                      padding: "11px 16px", fontSize: 14, fontWeight: 600, fontFamily: FONT }}>
+                    <Phone size={15} color={P} /> Appeler
+                  </a>
+                  <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, textDecoration: "none",
+                      background: "white", color: DARK, border: `0.5px solid ${BORDER}`, borderRadius: 10,
+                      padding: "11px 16px", fontSize: 14, fontWeight: 600, fontFamily: FONT }}>
+                    <MessageCircle size={15} color="#25D366" /> WhatsApp
+                  </a>
+                </>
+              )}
+              {mapsUrl && (
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, textDecoration: "none",
+                    background: "white", color: DARK, border: `0.5px solid ${BORDER}`, borderRadius: 10,
+                    padding: "11px 16px", fontSize: 14, fontWeight: 600, fontFamily: FONT }}>
+                  <MapPin size={15} color={P} /> Itinéraire
+                </a>
+              )}
+              <button onClick={shareVitrine}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+                  background: "white", color: DARK, border: `0.5px solid ${BORDER}`, borderRadius: 10,
+                  padding: "11px 16px", fontSize: 14, fontWeight: 600, fontFamily: FONT }}>
+                <Share2 size={15} color={P} /> Partager
+              </button>
+            </div>
+          )}
+
+          {/* ── Onglets Réserver / Menu (restaurants réservables uniquement) ── */}
+          {!isVitrine && (
           <div style={{ display: "flex", gap: 4, marginBottom: 22, borderBottom: `0.5px solid ${BORDER}` }}>
             {[["reserver", "Réserver"], ["menu", "Menu"]].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
@@ -833,9 +901,13 @@ export default function RestaurantDetail() {
               </button>
             ))}
           </div>
+          )}
 
-          {/* Onglet Réserver — créneaux + widget mobile */}
-          {tab === "reserver" && (
+          {/* Ancre menu (pour le bouton « Voir le menu » de la vitrine) */}
+          {isVitrine && <div id="menu-section" style={{ scrollMarginTop: 12 }} />}
+
+          {/* Onglet Réserver — créneaux + widget mobile (jamais en vitrine) */}
+          {!isVitrine && tab === "reserver" && (
             <>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: DARK,
@@ -878,7 +950,7 @@ export default function RestaurantDetail() {
             <div style={{ textAlign: "center", padding: "40px 20px", color: MUTED }}>
               <UtensilsCrossed size={30} color={BORDER} style={{ marginBottom: 10 }} />
               <div style={{ fontSize: 14 }}>Le menu n'est pas encore disponible.</div>
-              <div style={{ fontSize: 12.5, marginTop: 4 }}>Réservez votre table dès maintenant.</div>
+              {!isVitrine && <div style={{ fontSize: 12.5, marginTop: 4 }}>Réservez votre table dès maintenant.</div>}
             </div>
           )}
           {tab === "menu" && menu && menu.length > 0 && (() => {
@@ -946,8 +1018,8 @@ export default function RestaurantDetail() {
           })()}
         </div>
 
-        {/* Sidebar — desktop seulement */}
-        {!isMobile && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
+        {/* Sidebar — desktop seulement, jamais en vitrine (pas de réservation) */}
+        {!isMobile && !isVitrine && <BookingWidget onBook={openModal} initialDate={prefillDate} initialGuests={prefillGuests} />}
       </div>
 
       {/* ── Où nous trouver (carte) — si coordonnées précises ── */}

@@ -2,7 +2,7 @@ import { Router } from "express";
 import Joi from "joi";
 import { validate }     from "../middleware/validate.js";
 import { authenticate, denyStaff } from "../middleware/auth.js";
-import { authLimiter, otpLimiter } from "../middleware/rateLimiter.js";
+import { authLimiter, otpLimiter, loginAccountLimiter } from "../middleware/rateLimiter.js";
 import * as ctrl        from "../controllers/auth.controller.js";
 import * as otpCtrl     from "../controllers/otpAuth.controller.js";
 
@@ -94,7 +94,7 @@ const verifyCodeSchema = Joi.object({
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 router.post("/register",        authLimiter, validate(registerSchema),    ctrl.register);
-router.post("/login",           authLimiter, validate(loginSchema),       ctrl.login);
+router.post("/login",           loginAccountLimiter, authLimiter, validate(loginSchema), ctrl.login);
 router.post("/logout",          authenticate,                              ctrl.logout);
 router.post("/refresh",         authLimiter,                               ctrl.refresh);
 router.get ("/me",              authenticate, denyStaff,                   ctrl.me);

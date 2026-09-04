@@ -29,8 +29,30 @@ const limiter = (windowMs, max, message, prefix = "rl:", extra = {}) =>
     ...extra,
   });
 
-// Auth : 10 tentatives / 15 min
+// Auth : 10 tentatives / 15 min PAR IP
 export const authLimiter = limiter(15 * 60 * 1000, 10, "Trop de tentatives, réessayez dans 15 minutes", "rl:auth:");
+
+// Connexion : 2e limite PAR COMPTE (identifiant), en plus de authLimiter (par IP).
+// L'IP seule ne suffit pas : un attaquant qui tourne sur des centaines d'IP
+// (botnet/proxies) obtient 10 essais PAR IP contre un même compte → le compte
+// visé (ex. admin) n'a aucun plafond global. On clé donc aussi sur l'identifiant.
+// `skipSuccessfulRequests` : seuls les ÉCHECS comptent — une connexion réussie
+// (200) est décomptée, donc le vrai propriétaire n'est jamais gêné. Repli sur
+// l'IP si l'identifiant est absent. Fenêtre courte (15 min) et plafond assez
+// large (20) pour qu'aucun utilisateur honnête ne l'atteigne, tout en rendant le
+// forçage d'un compte impossible (20 essais/15 min = crackage hors de portée).
+const loginAcctKey = (req) => {
+  const raw = String(req.body?.identifier || req.body?.email || req.body?.phone || "").trim();
+  if (!raw) return req.ip;
+  const key = raw.includes("@") ? raw.toLowerCase() : (normalizePhone(raw) || raw.toLowerCase());
+  return `acct:${key}`;
+};
+export const loginAccountLimiter = limiter(
+  15 * 60 * 1000, 20,
+  "Trop de tentatives sur ce compte. Patientez 15 minutes avant de réessayer.",
+  "rl:loginacct:",
+  { keyGenerator: loginAcctKey, skipSuccessfulRequests: true, validate: { ip: false } }
+);
 
 // OTP : 5 envois / 15 min PAR NUMÉRO (en plus de authLimiter par IP) — anti-spam
 // SMS/WhatsApp et anti-coût. Repli sur l'IP si le numéro est absent/illisible.

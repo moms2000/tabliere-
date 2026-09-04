@@ -115,10 +115,15 @@ export const create = asyncHandler(async (req, res) => {
 
   // Les restaurateurs passent en statut "actif" même si leur resto est en_attente
   const { rows: [resto] } = await query(
-    "SELECT id, name, capacity, status, auto_confirm, seating_duration, is_published FROM restaurants WHERE id = $1",
+    "SELECT id, name, capacity, status, auto_confirm, seating_duration, is_published, COALESCE(listing_mode, 'restaurant') AS listing_mode FROM restaurants WHERE id = $1",
     [effectiveRestoId]
   );
   if (!resto) throw new AppError("Restaurant introuvable", 404);
+  // GARDE-FOU MODE VITRINE : un lieu en vitrine n'accepte AUCUNE réservation de
+  // table, même via l'API (pas seulement le bouton caché côté client). Vaut pour
+  // tout le monde, y compris le restaurateur lui-même et les walk-in.
+  if (resto.listing_mode === "vitrine")
+    throw new AppError("Ce lieu ne prend pas de réservation de table.", 409);
   // Un resto suspendu par la plateforme ne peut recevoir AUCUNE réservation (même du restaurateur).
   if (resto.status === "suspendu") throw new AppError("Restaurant suspendu", 403);
   // Un client ne peut réserver que dans un resto actif ET publié (pas « en préparation »).

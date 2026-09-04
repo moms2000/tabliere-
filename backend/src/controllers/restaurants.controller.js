@@ -26,6 +26,13 @@ export const list = asyncHandler(async (req, res) => {
   // COALESCE → les restos sans la colonne renseignée restent visibles.
   const conditions = ["r.status = $1", "COALESCE(r.is_published, TRUE) = TRUE"];
 
+  // Mode d'affichage : par défaut on ne renvoie QUE les restaurants réservables.
+  // ?mode=vitrine → uniquement les « Bonnes adresses » (lieux sans réservation).
+  // COALESCE → les lignes sans valeur (anciennes) comptent comme 'restaurant'.
+  const mode = req.query.mode === "vitrine" ? "vitrine" : "restaurant";
+  params.push(mode);
+  conditions.push(`COALESCE(r.listing_mode, 'restaurant') = $${params.length}`);
+
   // Correspondances partielles (ILIKE %..%) pour tolérer "ivoi" → "Ivoirien", etc.
   if (ville)         { params.push(`%${ville}%`);        conditions.push(`r.ville ILIKE $${params.length}`); }
   if (quartier)      { params.push(`%${quartier}%`);     conditions.push(`r.quartier ILIKE $${params.length}`); }
@@ -52,7 +59,7 @@ export const list = asyncHandler(async (req, res) => {
 
   // ── Cache Redis/mémoire — clé unique par combinaison de filtres ────────────
   // TTL 2 min pour la liste (données peu critiques, mise à jour fréquente)
-  const cacheKey = `restaurants:list:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${option||""}:${search||""}:${min_capacity||""}`;
+  const cacheKey = `restaurants:list:${mode}:${sort}:${page}:${limit}:${ville||""}:${quartier||""}:${cuisine_type||""}:${option||""}:${search||""}:${min_capacity||""}`;
   const cached = await cache.get(cacheKey).catch(() => null);
   if (cached) return res.status(200).json(cached);
 
@@ -115,6 +122,7 @@ export const getOne = asyncHandler(async (req, res) => {
             r.qr_active, r.qr_code_url, r.status, r.created_at, r.updated_at,
             r.deposit_enabled, r.deposit_min_party, r.deposit_message,
             r.latitude, r.longitude, r.menu_public, r.stories_enabled, r.seating_duration,
+            COALESCE(r.listing_mode, 'restaurant') AS listing_mode,
             u.full_name AS owner_name
      FROM restaurants r
      JOIN users u ON u.id = r.owner_id
@@ -189,6 +197,8 @@ export const update = asyncHandler(async (req, res) => {
     "stories_enabled",
     // Publication de la page (restaurateur) : visible publiquement ou en préparation
     "is_published",
+    // Mode d'affichage : 'restaurant' (réservable) ou 'vitrine' (sans réservation)
+    "listing_mode",
   ];
   const updates = [];
   const values  = [];
@@ -250,6 +260,11 @@ export const update = asyncHandler(async (req, res) => {
     if (field === "seating_duration") {
       const n = parseInt(val, 10);
       val = (Number.isFinite(n) && n >= 30 && n <= 480) ? n : 120;
+    }
+    // Mode d'affichage : énum strict — toute valeur autre que 'vitrine'
+    // retombe sur 'restaurant' (jamais de valeur libre en base).
+    if (field === "listing_mode") {
+      val = (val === "vitrine") ? "vitrine" : "restaurant";
     }
     values.push(val);
     updates.push(`${field} = $${values.length}`);

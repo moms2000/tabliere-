@@ -12,6 +12,7 @@ const COL = {
   category:    ["categorie", "category", "cat", "rubrique"],
   subcategory: ["sous-categorie", "sous categorie", "souscategorie", "subcategory", "sub-category", "sous-cat", "sous rubrique"],
   name:        ["nom", "name", "plat", "produit", "article", "designation", "libelle"],
+  size:        ["taille", "tailles", "size", "format", "portion", "contenance", "volume"],
   price:       ["prix", "price", "tarif", "montant"],
   description: ["description", "desc", "details", "detail"],
 };
@@ -25,6 +26,27 @@ const colOf = (header) => {
   return null;
 };
 const toPrice = (v) => Math.max(0, Math.round(Number(String(v ?? "").replace(/[^\d]/g, "")) || 0));
+
+// Colonnes de prix PAR TAILLE : en-têtes du type « Prix S », « Prix M »,
+// « Prix Grand », « Prix 50cl »… → on en extrait le libellé de taille. Permet la
+// mise en page horizontale (une colonne de prix par taille sur une seule ligne).
+const SIZE_TOKENS = ["s", "m", "l", "xl", "xxl", "xs", "petit", "moyen", "grand", "small", "medium",
+  "large", "mini", "maxi", "simple", "double", "solo", "duo", "junior", "senior", "familial",
+  "individuel", "normal", "standard", "demi", "entier"];
+const sizePriceLabel = (header) => {
+  const h = stripAccents(header);
+  const mm = h.match(/^(?:prix|price|tarif|tarifs|montant)[\s:._()-]*(.*)$/);
+  if (!mm) return null;
+  const rest = mm[1].replace(/[()]/g, "").trim();
+  if (!rest) return null;                                   // « Prix » seul = prix de base
+  if (/^(fcfa|cfa|xof|f|euro|eur|en\s?fcfa|en\s?cfa)$/.test(rest)) return null; // note de devise
+  const isVolume = /^\d{1,4}\s?(cl|ml|l)$/.test(rest);
+  const isSize = isVolume || SIZE_TOKENS.some((t) => rest === t || rest.startsWith(t));
+  if (!isSize) return null;
+  // Libellé propre depuis l'en-tête ORIGINAL (préserve casse/accents), ex. « L », « Grand », « 50cl »
+  const om = String(header).trim().match(/^(?:prix|price|tarif|tarifs|montant)[\s:._()-]*(.*)$/i);
+  return (om ? om[1].replace(/[()]/g, "").trim() : rest) || rest;
+};
 
 export default function MenuImportModal({ onClose, onImported }) {
   const [tab, setTab] = useState("excel"); // "excel" | "pdf"
@@ -40,14 +62,18 @@ export default function MenuImportModal({ onClose, onImported }) {
   const downloadTemplate = async () => {
     const XLSX = await import("xlsx");
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Catégorie", "Sous-catégorie", "Nom", "Prix", "Description"],
-      ["Entrées", "", "Salade César", 3500, "Salade, poulet grillé, parmesan"],
-      ["Plats", "Viandes", "Boeuf grillé", 6000, "Sauce au poivre, frites"],
-      ["Plats", "Poissons", "Attiéké poisson", 5000, "Poisson braisé, attiéké, alloco"],
-      ["Boissons", "Softs", "Coca-Cola 33cl", 1000, ""],
-      ["Boissons", "Jus naturels", "Bissap", 1500, ""],
+      ["Catégorie", "Sous-catégorie", "Nom", "Taille", "Prix", "Description"],
+      ["Entrées", "", "Salade César", "", 3500, "Salade, poulet grillé, parmesan"],
+      ["Plats", "Viandes", "Boeuf grillé", "", 6000, "Sauce au poivre, frites"],
+      // Tailles : une ligne par taille, colonne « Taille » remplie. Laissez « Taille »
+      // vide pour un plat sans taille.
+      ["Pizzas", "", "Margherita", "S", 3000, "Tomate, mozzarella"],
+      ["Pizzas", "", "Margherita", "M", 4500, "Tomate, mozzarella"],
+      ["Pizzas", "", "Margherita", "L", 6000, "Tomate, mozzarella"],
+      ["Boissons", "Softs", "Coca-Cola 33cl", "", 1000, ""],
+      ["Boissons", "Jus naturels", "Bissap", "", 1500, ""],
     ]);
-    ws["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 28 }, { wch: 10 }, { wch: 38 }];
+    ws["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 10 }, { wch: 10 }, { wch: 38 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Menu");
     XLSX.writeFile(wb, "modele-menu-tabliereci.xlsx");
@@ -66,9 +92,16 @@ export default function MenuImportModal({ onClose, onImported }) {
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
       if (!rows.length) throw new Error("empty");
 
-      // Mapper les en-têtes du fichier vers nos colonnes
+      // Mapper les en-têtes du fichier vers nos colonnes. Les en-têtes de prix
+      // PAR TAILLE (« Prix S », « Prix M »…) sont détectés à part pour ne pas
+      // s'écraser mutuellement sur la colonne « prix » générique.
       const headerMap = {};
-      Object.keys(rows[0]).forEach(h => { const c = colOf(h); if (c) headerMap[h] = c; });
+      const sizePriceHeaders = {}; // en-tête -> libellé de taille
+      Object.keys(rows[0]).forEach(h => {
+        const szLabel = sizePriceLabel(h);
+        if (szLabel) { sizePriceHeaders[h] = szLabel; return; }
+        const c = colOf(h); if (c) headerMap[h] = c;
+      });
       const hasName = Object.values(headerMap).includes("name");
       if (!hasName) throw new Error("headers");
 
@@ -83,12 +116,36 @@ export default function MenuImportModal({ onClose, onImported }) {
         const cat = String(rec.category || "Autres").trim() || "Autres";
         const key = stripAccents(cat);
         if (!map[key]) { map[key] = { name: cat, items: [] }; order.push(key); }
-        map[key].items.push({
-          name: name.slice(0, 120),
-          subcategory: String(rec.subcategory || "").trim().slice(0, 80),
-          price: toPrice(rec.price),
-          description: String(rec.description || "").trim().slice(0, 500),
-        });
+
+        const subcategory = String(rec.subcategory || "").trim().slice(0, 80);
+        const description = String(rec.description || "").trim().slice(0, 500);
+        const basePrice   = toPrice(rec.price);
+        const tailleVal   = String(rec.size || "").trim().slice(0, 24);
+
+        // Prix par taille présents sur cette ligne (mise en page horizontale)
+        const sized = [];
+        for (const [h, label] of Object.entries(sizePriceHeaders)) {
+          const p = toPrice(row[h]);
+          if (p > 0) sized.push({ size: String(label).slice(0, 24), price: p });
+        }
+
+        // Une taille (colonne "Taille" OU une colonne prix par taille) devient un
+        // plat distinct nommé « Nom (Taille) » : compatible avec toute la chaîne
+        // commande/caisse/reçu sans rien changer d'autre.
+        let variants;
+        if (sized.length)        variants = sized;
+        else if (tailleVal)      variants = [{ size: tailleVal, price: basePrice }];
+        else                     variants = [{ size: "", price: basePrice }];
+
+        for (const v of variants) {
+          map[key].items.push({
+            name: (v.size ? `${name} (${v.size})` : name).slice(0, 120),
+            size: v.size || "",
+            subcategory,
+            price: v.price,
+            description,
+          });
+        }
       }
       const result = order.map(k => map[k]).filter(c => c.items.length);
       if (!result.length) throw new Error("empty");
@@ -159,7 +216,11 @@ export default function MenuImportModal({ onClose, onImported }) {
           ) : !preview ? (
             <>
               <div style={{ fontSize: 13, color: "#4a5a52", lineHeight: 1.6, marginBottom: 14 }}>
-                Téléchargez le modèle, remplissez-le (une ligne = un plat), puis réimportez-le. Colonnes : <strong>Catégorie, Sous-catégorie, Nom, Prix, Description</strong>.
+                Téléchargez le modèle, remplissez-le (une ligne = un plat), puis réimportez-le. Colonnes : <strong>Catégorie, Sous-catégorie, Nom, Taille, Prix, Description</strong>.
+                <br />
+                <span style={{ color: MUTED }}>
+                  Tailles (S, M, L…) : mettez une ligne par taille avec la colonne <strong>Taille</strong> remplie. Vous pouvez aussi utiliser des colonnes <strong>Prix S</strong>, <strong>Prix M</strong>, <strong>Prix L</strong> (un prix par taille sur une même ligne). Laissez <strong>Taille</strong> vide pour un plat sans taille.
+                </span>
               </div>
               <button onClick={downloadTemplate}
                 style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "white", color: DARK, borderRadius: 10, padding: "10px 14px", cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 600, marginBottom: 12 }}>
@@ -187,6 +248,7 @@ export default function MenuImportModal({ onClose, onImported }) {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600, color: DARK, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                               {it.name}
+                              {it.size && <span style={{ fontSize: 10.5, fontWeight: 700, color: GREEN, background: "#EAF6F0", borderRadius: 6, padding: "1px 7px" }}>{it.size}</span>}
                               {it.subcategory && <span style={{ fontSize: 10.5, fontWeight: 600, color: "#8a5a10", background: "#FEF6EC", borderRadius: 6, padding: "1px 7px" }}>{it.subcategory}</span>}
                             </div>
                             {it.description && <div style={{ fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.description}</div>}

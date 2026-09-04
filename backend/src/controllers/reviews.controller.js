@@ -63,7 +63,10 @@ export const listReviews = asyncHandler(async (req, res) => {
 
 // ── POST /restaurants/:slug/reviews ──────────────────────────────────────────
 export const createReview = asyncHandler(async (req, res) => {
-  const { rating, comment } = req.body;
+  const { rating } = req.body;
+  // Borne la longueur du commentaire (comme le chat à 2000) — évite le stockage
+  // d'un texte démesuré via l'API.
+  const comment = req.body.comment != null ? String(req.body.comment).slice(0, 2000) : null;
 
   if (!rating || rating < 1 || rating > 5)
     throw new AppError("La note doit être entre 1 et 5", 400);

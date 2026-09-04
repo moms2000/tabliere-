@@ -121,6 +121,23 @@ export const generateKey = asyncHandler(async (req, res) => {
 });
 
 // ── PATCH /integration — régler l'URL de webhook / activer-désactiver ────────
+// Bloque les hôtes internes (anti-SSRF) sur un URL de webhook.
+function webhookHostBlocked(url) {
+  let h;
+  try { h = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, ""); } catch { return true; }
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "::1" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true; // loopback / link-local / ULA IPv6
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 0 || a === 127 || a === 10 ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        (a === 169 && b === 254)) return true; // 169.254.169.254 = métadonnées cloud
+  }
+  return false;
+}
+
 export const updateConfig = asyncHandler(async (req, res) => {
   await ensureTable();
   const restoId = await ownerRestoId(req);
@@ -129,6 +146,10 @@ export const updateConfig = asyncHandler(async (req, res) => {
   if (b.webhook_url !== undefined) {
     const url = b.webhook_url ? String(b.webhook_url).trim() : null;
     if (url && !/^https:\/\/.+/i.test(url)) throw new AppError("L'URL du webhook doit commencer par https://", 400);
+    // Anti-SSRF : refuser une URL qui pointe vers une adresse interne (localhost,
+    // plages privées, link-local, métadonnées cloud). Sans ça, un restaurateur
+    // pouvait faire appeler des services internes par le serveur.
+    if (url && webhookHostBlocked(url)) throw new AppError("URL de webhook non autorisée (adresse interne).", 400);
     vals.push(url); sets.push(`webhook_url = $${vals.length}`);
   }
   if (b.is_active !== undefined) { vals.push(!!b.is_active); sets.push(`is_active = $${vals.length}`); }

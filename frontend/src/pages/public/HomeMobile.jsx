@@ -991,7 +991,7 @@ export default function HomeMobile() {
         <div style={{ marginTop: 22 }}>
           <div style={{ padding: "0 16px 10px" }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: DARK }}>Bonnes adresses</div>
-            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis — sans réservation</div>
+            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis · sans réservation</div>
           </div>
           <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "2px 16px 6px", WebkitOverflowScrolling: "touch" }}>
             {vitrines.map((r, i) => {

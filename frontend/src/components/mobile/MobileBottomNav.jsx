@@ -1,10 +1,10 @@
 /**
  * MobileBottomNav — Navigation bas de page style OpenTable
- * 5 onglets : Accueil · Recherche · Récompenses · Réservations · Profil
+ * 5 onglets : Accueil · Recherche · Adresses · Réservations · Profil
  * Visible uniquement sur mobile (< 768px)
  */
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, Search, Award, CalendarCheck, User } from "lucide-react";
+import { Home, Search, MapPin, CalendarCheck, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const P     = "#E8A045";
@@ -14,7 +14,8 @@ const FONT  = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 const NAV = [
   { icon: Home,          label: "Accueil",      path: "/",                        auth: false },
   { icon: Search,        label: "Recherche",    path: "/?view=map",               auth: false },
-  { icon: Award,         label: "Récompenses",  path: "/profil?tab=rewards",       auth: true  },
+  // Bonnes adresses (lieux vitrine, sans réservation) — accès public, sans connexion.
+  { icon: MapPin,        label: "Adresses",     path: "/bonnes-adresses",          auth: false },
   { icon: CalendarCheck, label: "Réservations", path: "/profil?tab=reservations",  auth: true  },
   { icon: User,          label: "Profil",       path: "/profil",                   auth: true  },
 ];
@@ -31,7 +32,7 @@ export default function MobileBottomNav() {
   const isActive = (item) => {
     if (item.path === "/") return location.pathname === "/" && !location.search.includes("view=map");
     if (item.path.includes("view=map"))          return location.pathname === "/" && location.search.includes("view=map");
-    if (item.path.includes("tab=rewards"))       return onProfil && tab === "rewards";
+    if (item.path === "/bonnes-adresses")        return location.pathname === "/bonnes-adresses";
     if (item.path.includes("tab=reservations"))  return onProfil && tab === "reservations";
     if (item.path === "/profil")                 return onProfil && (!tab || tab === "profile");
     return false;

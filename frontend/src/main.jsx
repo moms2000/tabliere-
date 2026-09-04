@@ -66,6 +66,7 @@ const ConnexionAdmin   = lazy(() => import("./pages/public/ConnexionAdmin"));
 import Connexion        from "./pages/public/Connexion";
 const Inscription      = lazy(() => import("./pages/public/Inscription"));
 const RestaurantDetail = lazy(() => import("./pages/public/RestaurantDetail"));
+const BonnesAdresses   = lazy(() => import("./pages/public/BonnesAdresses"));
 const Confidentialite  = lazy(() => import("./pages/public/Confidentialite"));
 const VerifyEmail       = lazy(() => import("./pages/public/VerifyEmail"));
 const MotDePasseOublie  = lazy(() => import("./pages/public/MotDePasseOublie"));
@@ -278,6 +279,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   <Route path="/connexion/admin"   element={<ConnexionAdmin />} />
                   <Route path="/inscription"       element={<Inscription />} />
                   <Route path="/restaurants/:slug" element={<RestaurantDetail />} />
+                  <Route path="/bonnes-adresses"   element={<BonnesAdresses />} />
                   <Route path="/evenements"          element={<Evenements />} />
                   <Route path="/evenement/:slug"     element={<EventDetail />} />
                   <Route path="/evenement/:slug/carte" element={<EventOrder />} />

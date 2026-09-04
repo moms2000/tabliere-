@@ -1521,7 +1521,7 @@ export default function Home() {
           <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 28, marginBottom: 32 }}>
             <div style={{ marginBottom: 16, fontFamily: FONT }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Bonnes adresses</div>
-              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis — sans réservation</div>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis · sans réservation</div>
             </div>
             <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
               {vitrines.map((r, i) => {

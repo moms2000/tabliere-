@@ -575,6 +575,7 @@ export default function Home() {
   const pendingScroll = useRef(saved.scrollY || 0);
 
   const [restaurants, setRestaurants] = useState([]);
+  const [vitrines,    setVitrines]    = useState([]); // « Bonnes adresses » (mode vitrine)
   const [total,       setTotal]       = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [page,        setPage]        = useState(saved.page || 1);
@@ -721,6 +722,13 @@ export default function Home() {
 
   // L'état sauvegardé n'est restauré qu'une fois
   useEffect(() => { try { sessionStorage.removeItem("tci_home_state_d"); } catch {} }, []);
+
+  // « Bonnes adresses » (lieux en mode vitrine, sans réservation) — une seule fois.
+  useEffect(() => {
+    restaurantsService.list({ mode: "vitrine", limit: 12, sort: "recent" })
+      .then(res => setVitrines(res.data || []))
+      .catch(() => {});
+  }, []);
 
   // Sauvegarde de l'état avant d'ouvrir une fiche restaurant
   const saveHomeState = useCallback(() => {
@@ -1507,6 +1515,46 @@ export default function Home() {
             })()}
           </div>
         </div>
+
+        {/* ── Bonnes adresses (lieux vitrine, sans réservation) ── */}
+        {vitrines.length > 0 && (
+          <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 28, marginBottom: 32 }}>
+            <div style={{ marginBottom: 16, fontFamily: FONT }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: DARK }}>Bonnes adresses</div>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis — sans réservation</div>
+            </div>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
+              {vitrines.map((r, i) => {
+                const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+                const imgSrc = photos ? photos[0] : r.logo_url;
+                return (
+                  <motion.div key={r.id || i} whileHover={{ y: -3, boxShadow: "0 4px 16px rgba(30,46,40,.07)" }}
+                    onClick={() => { saveHomeState(); navigate(`/restaurants/${r.slug}`); }}
+                    style={{ minWidth: 230, flexShrink: 0, border: `0.5px solid ${BORDER}`, borderRadius: 14,
+                      overflow: "hidden", background: WHITE, cursor: "pointer" }}>
+                    <div style={{ position: "relative", height: 130, background: BG, display: "flex",
+                      alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {imgSrc
+                        ? <img src={imgSrc} alt={r.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                        : <UtensilsCrossed size={36} color={P} style={{ opacity: 0.35 }} />}
+                      <span style={{ position: "absolute", top: 8, left: 8, fontSize: 10, fontWeight: 700,
+                        color: "#1A1000", background: "rgba(255,255,255,.92)", padding: "3px 10px", borderRadius: 20 }}>
+                        Bonne adresse
+                      </span>
+                    </div>
+                    <div style={{ padding: "11px 14px 13px", fontFamily: FONT }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4, color: MUTED, fontSize: 12.5 }}>
+                        {r.quartier && <span style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}><MapPin size={12} /><span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.quartier}</span></span>}
+                        {r.cuisine_type && <><span style={{ color: BORDER }}>·</span><span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.cuisine_type}</span></>}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Expériences ─────────────────────────────────────────────────── */}
         <div ref={experiencesRef}

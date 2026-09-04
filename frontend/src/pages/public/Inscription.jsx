@@ -510,9 +510,9 @@ export default function Inscription() {
             {/* Prénom + Nom */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, minWidth: 0, overflow: "hidden" }}>
               <FField icon={User} label={t("reg_firstname")} type="text"
-                value={form.prenom} onChange={v => set("prenom", v)} placeholder="Fatou" required />
+                value={form.prenom} onChange={v => set("prenom", v)} placeholder="Aya" required />
               <FField icon={User} label={t("reg_lastname")} type="text"
-                value={form.nom} onChange={v => set("nom", v)} placeholder="Amara" required />
+                value={form.nom} onChange={v => set("nom", v)} placeholder="Kouassi" required />
             </div>
 
             {/* Email — facultatif (le numéro est l'identifiant principal) */}

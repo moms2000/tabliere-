@@ -134,7 +134,7 @@ const TRANSLATIONS = {
     reg_phone:          "Numéro WhatsApp",
     reg_country:        "Pays",
     reg_password:       "Mot de passe",
-    reg_pw_placeholder: "8 caractères min., lettres + chiffres",
+    reg_pw_placeholder: "8+ caractères, lettres/chiffres",
     reg_resto_name:     "Nom du restaurant",
     reg_terms:          "J'accepte les",
     reg_terms_link:     "Conditions Générales d'Utilisation",

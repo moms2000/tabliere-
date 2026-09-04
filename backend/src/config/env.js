@@ -33,9 +33,21 @@ export const env = {
   SENDGRID_API_KEY: optional("SENDGRID_API_KEY", ""),
   EMAIL_FROM:       optional("EMAIL_FROM", "noreply@tabliereci.net"),
 
-  // WhatsApp Business API
+  // WhatsApp Business API (Meta) — fournisseur historique
   WHATSAPP_TOKEN:    optional("WHATSAPP_TOKEN", ""),
   WHATSAPP_PHONE_ID: optional("WHATSAPP_PHONE_ID", ""),
+
+  // Infobip (WhatsApp OTP) — fournisseur préféré quand configuré.
+  // BASE_URL = domaine propre au compte (ex : https://xxxxx.api.infobip.com).
+  // API_KEY = secret (jamais commité, dans les variables d'env Render/.env).
+  // WA_SENDER = numéro WhatsApp expéditeur enregistré sur Infobip (chiffres).
+  // OTP_TEMPLATE = nom du template d'authentification approuvé.
+  INFOBIP_BASE_URL:     optional("INFOBIP_BASE_URL", ""),
+  INFOBIP_API_KEY:      optional("INFOBIP_API_KEY", ""),
+  INFOBIP_WA_SENDER:    optional("INFOBIP_WA_SENDER", ""),
+  INFOBIP_OTP_TEMPLATE: optional("INFOBIP_OTP_TEMPLATE", "tabliereci_otp"),
+  INFOBIP_WA_LANG:      optional("INFOBIP_WA_LANG", "fr"),
+  INFOBIP_OTP_BUTTON:   optional("INFOBIP_OTP_BUTTON", "true"),
 
   // Notifications push (Firebase Cloud Messaging — API HTTP v1)
   // JSON du compte de service Firebase (une seule variable, tout le JSON).

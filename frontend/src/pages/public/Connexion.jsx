@@ -387,7 +387,7 @@ function StepForm({ type, onBack }) {
                   <div style={wrapSt}>
                     <User size={14} color={MUTED} />
                     <input value={loginId} onChange={e => setLoginId(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
-                      placeholder="MARB" required style={inpSt} />
+                      placeholder="Votre identifiant" required style={inpSt} />
                   </div>
                 </div>
                 <div>
@@ -395,7 +395,7 @@ function StepForm({ type, onBack }) {
                   <div style={wrapSt}>
                     <Lock size={14} color={MUTED} />
                     <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                      type={showPw ? "text" : "password"} placeholder="1209" inputMode="numeric" required style={inpSt} />
+                      type={showPw ? "text" : "password"} placeholder="0000" inputMode="numeric" required style={inpSt} />
                     <button type="button" onClick={() => setShowPw(p => !p)}
                       style={{ background: "transparent", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 0 }}>
                       {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -411,7 +411,7 @@ function StepForm({ type, onBack }) {
                 <User size={14} color={MUTED} />
                 <input value={identifier} onChange={e => setIdentifier(e.target.value)}
                   type="text" inputMode="email" autoComplete="username"
-                  placeholder="07 00 00 00 00 ou vous@exemple.com" required style={inpSt} />
+                  placeholder="07 07 07 07 07" required style={inpSt} />
               </div>
               <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>
                 Numéro hors Côte d'Ivoire : ajoutez l'indicatif (ex : +221 …).
@@ -528,5 +528,5 @@ const wrapSt = {
 };
 const inpSt = {
   border: "none", background: "transparent", fontSize: 13,
-  outline: "none", flex: 1, color: DARK, fontFamily: FONT,
+  outline: "none", flex: 1, minWidth: 0, width: "100%", color: DARK, fontFamily: FONT,
 };

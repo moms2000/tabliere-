@@ -160,6 +160,7 @@ export default function HomeMobile() {
 
   const PAGE_SIZE = 30;
   const [restaurants, setRestaurants] = useState([]);
+  const [vitrines,    setVitrines]    = useState([]); // « Bonnes adresses » (mode vitrine)
   const [total,       setTotal]       = useState(0);
   const [page,        setPage]        = useState(saved.page || 1);
   const [loading,     setLoading]     = useState(true);
@@ -262,6 +263,14 @@ export default function HomeMobile() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
     return () => clearTimeout(t);
   }, [search]);
+
+  // « Bonnes adresses » (lieux en mode vitrine, sans réservation) — chargées une
+  // fois, indépendamment des filtres de réservation.
+  useEffect(() => {
+    restaurantsService.list({ mode: "vitrine", limit: 12, sort: "recent" })
+      .then(res => setVitrines(res.data || []))
+      .catch(() => {});
+  }, []);
 
   // Un seul effet : si un filtre change → repartir page 1 ; sinon charger la page.
   // Au 1er rendu, prevKey == filterKey → on garde la page restaurée (retour fiche).
@@ -976,6 +985,46 @@ export default function HomeMobile() {
           </div>
         );
       })()}
+
+      {/* ── Bonnes adresses (lieux vitrine, sans réservation) ── */}
+      {view === "list" && vitrines.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <div style={{ padding: "0 16px 10px" }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: DARK }}>Bonnes adresses</div>
+            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>Food trucks, kiosques et maquis — sans réservation</div>
+          </div>
+          <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "2px 16px 6px", WebkitOverflowScrolling: "touch" }}>
+            {vitrines.map((r, i) => {
+              const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
+              const imgSrc = photos ? photos[0] : r.logo_url;
+              return (
+                <div key={r.id || i}
+                  onClick={() => { saveHomeState(); navigate(`/restaurants/${r.slug}`); }}
+                  style={{ flex: "0 0 200px", background: WHITE, borderRadius: 16, border: `0.5px solid ${BORDER}`,
+                    overflow: "hidden", cursor: "pointer", boxShadow: "0 2px 14px rgba(30,46,40,.05)" }}>
+                  <div style={{ position: "relative", height: 118, background: BG, display: "flex",
+                    alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {imgSrc
+                      ? <img src={imgSrc} alt={r.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                      : <UtensilsCrossed size={34} color={P} style={{ opacity: 0.35 }} />}
+                    <span style={{ position: "absolute", top: 8, left: 8, fontSize: 9.5, fontWeight: 700,
+                      color: "#1A1000", background: "rgba(255,255,255,.92)", padding: "3px 9px", borderRadius: 20 }}>
+                      Bonne adresse
+                    </span>
+                  </div>
+                  <div style={{ padding: "10px 12px 12px" }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center", marginTop: 4, color: MUTED, fontSize: 12 }}>
+                      {r.quartier && <><MapPin size={11} /><span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.quartier}</span></>}
+                      {r.cuisine_type && <><span style={{ color: BORDER }}>·</span><span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.cuisine_type}</span></>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Footer mobile ── */}
       <footer style={{ background: DARK, marginTop: 28, padding: "28px 20px 100px", fontFamily: FONT }}>

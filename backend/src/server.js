@@ -70,6 +70,12 @@ async function runBusinessMigrations() {
     // la liste publique le temps de finir la configuration.
     `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE`,
 
+    // Mode d'affichage : 'restaurant' (réservable, défaut) ou 'vitrine' (page
+    // sans réservation, rangée dans « Bonnes adresses »). DOIT exister dès le
+    // démarrage : la liste publique et le garde-fou de réservation lisent cette
+    // colonne. Défaut 'restaurant' → tous les restos existants inchangés.
+    `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS listing_mode VARCHAR(20) DEFAULT 'restaurant'`,
+
     // Email vérification (TRUE par défaut pour les comptes existants)
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified     BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_token        VARCHAR(64)`,

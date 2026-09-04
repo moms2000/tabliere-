@@ -27,7 +27,7 @@ const CUISINES = [
 const ZONES = ["Cocody","Plateau","Treichville","Yopougon","Marcory","Abobo","Adjamé","Bingerville","Port-Bouët","Grand-Bassam"];
 
 export default function RestProfil() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [resto,   setResto]   = useState(null);
   const [form,    setForm]    = useState({});
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,22 @@ export default function RestProfil() {
     } catch (e) {
       setError("Impossible de changer la visibilité. Réessayez.");
     } finally { setPubBusy(false); }
+  };
+
+  // Mode Vitrine : bascule réservable ↔ vitrine (sans réservation) et enregistre
+  // aussitôt. On rafraîchit ensuite l'utilisateur pour que le menu latéral
+  // (Réservations / Plan de salle) se mette à jour immédiatement.
+  const [vitrineBusy, setVitrineBusy] = useState(false);
+  const toggleVitrine = async () => {
+    const next = form.listing_mode === "vitrine" ? "restaurant" : "vitrine";
+    setVitrineBusy(true); setError("");
+    try {
+      await restaurantsService.update(user.resto_id, { listing_mode: next });
+      setForm(p => ({ ...p, listing_mode: next }));
+      await refreshUser?.();
+    } catch (e) {
+      setError("Impossible de changer le mode. Réessayez.");
+    } finally { setVitrineBusy(false); }
   };
 
   useEffect(() => {
@@ -90,6 +106,7 @@ export default function RestProfil() {
           latitude:          r.latitude ?? "",
           longitude:         r.longitude ?? "",
           is_published:      r.is_published !== false, // défaut : en ligne
+          listing_mode:      r.listing_mode || "restaurant", // 'restaurant' | 'vitrine'
         });
       })
       .catch(console.error)
@@ -221,6 +238,34 @@ export default function RestProfil() {
               cursor: pubBusy ? "default" : "pointer", flexShrink: 0, opacity: pubBusy ? 0.6 : 1,
               transition: "background .2s", background: form.is_published ? "#1D9E75" : "#ccc" }}>
             <span style={{ position: "absolute", top: 3, left: form.is_published ? 23 : 3,
+              width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left .2s" }} />
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Mode Vitrine — lieu sans réservation (food truck, kiosque, maquis) */}
+      <motion.div variants={fadeUp}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          padding: "13px 16px", marginBottom: 14, borderRadius: 12,
+          background: form.listing_mode === "vitrine" ? "#FEF6EC" : "#FAFAF7",
+          border: `0.5px solid ${form.listing_mode === "vitrine" ? "#F0C98A" : BORDER}` }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e2e28", display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%",
+                background: form.listing_mode === "vitrine" ? "#E8A045" : "#ccc" }} />
+              Mode Vitrine {form.listing_mode === "vitrine" ? "· activé" : ""}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#888", marginTop: 3, lineHeight: 1.5 }}>
+              {form.listing_mode === "vitrine"
+                ? "Votre lieu apparaît dans « Bonnes adresses », sans réservation de table. Menu, horaires et emplacement restent visibles."
+                : "Pour un lieu sans réservation (food truck, kiosque, maquis) : vous quittez la liste des restaurants réservables pour « Bonnes adresses », et les réservations de table sont désactivées."}
+            </div>
+          </div>
+          <button type="button" onClick={toggleVitrine} disabled={vitrineBusy}
+            style={{ position: "relative", width: 46, height: 26, borderRadius: 13, border: "none",
+              cursor: vitrineBusy ? "default" : "pointer", flexShrink: 0, opacity: vitrineBusy ? 0.6 : 1,
+              transition: "background .2s", background: form.listing_mode === "vitrine" ? "#E8A045" : "#ccc" }}>
+            <span style={{ position: "absolute", top: 3, left: form.listing_mode === "vitrine" ? 23 : 3,
               width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left .2s" }} />
           </button>
         </div>

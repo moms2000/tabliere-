@@ -334,12 +334,13 @@ export const login = asyncHandler(async (req, res) => {
   // Recherche par owner_id (plus fiable que restaurant_id qui peut être null)
   if (user.role === "restaurateur") {
     const { rows: [resto] } = await query(
-      "SELECT id, slug, name FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
+      "SELECT id, slug, name, COALESCE(listing_mode, 'restaurant') AS listing_mode FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
     ).catch(() => ({ rows: [] }));
     if (resto) {
       safeUser.resto_id   = resto.id;
       safeUser.resto_slug = resto.slug;
       safeUser.resto_name = resto.name;
+      safeUser.resto_mode = resto.listing_mode; // 'restaurant' | 'vitrine'
     }
   }
 
@@ -390,12 +391,13 @@ export const me = asyncHandler(async (req, res) => {
   // Ajouter resto_id / resto_slug / resto_name pour les restaurateurs
   if (user?.role === "restaurateur") {
     const { rows: [resto] } = await query(
-      "SELECT id, slug, name FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
+      "SELECT id, slug, name, COALESCE(listing_mode, 'restaurant') AS listing_mode FROM restaurants WHERE owner_id = $1 LIMIT 1", [user.id]
     ).catch(() => ({ rows: [] }));
     if (resto) {
       user.resto_id   = resto.id;
       user.resto_slug = resto.slug;
       user.resto_name = resto.name;
+      user.resto_mode = resto.listing_mode; // 'restaurant' | 'vitrine'
     }
   }
 

@@ -77,7 +77,13 @@ function SidebarContent({ navigate, user, logout, onClose }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "10px 8px" }}>
-        {(user?.is_staff ? NAV.filter(n => !n.ownerOnly && (user.permissions || []).includes(n.key)) : NAV)
+        {/* Mode vitrine : pas de réservation de table → on masque Réservations et
+            Plan de salle (le garde-fou serveur bloque de toute façon les résas). */}
+        {(() => {
+          const isVitrine = user?.resto_mode === "vitrine";
+          const base = isVitrine ? NAV.filter(n => n.key !== "reservations" && n.key !== "plan") : NAV;
+          return user?.is_staff ? base.filter(n => !n.ownerOnly && (user.permissions || []).includes(n.key)) : base;
+        })()
           .map(({ to, label, icon: Icon, end, highlight }) => (
           <NavLink key={to} to={to} end={end} style={{ textDecoration: "none" }}
             onClick={() => { if (onClose) onClose(); }}>

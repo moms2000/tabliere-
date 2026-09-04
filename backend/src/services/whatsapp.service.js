@@ -9,6 +9,7 @@
 import axios  from "axios";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
+import { isInfobipConfigured, sendOtpWhatsApp } from "./infobip.service.js";
 
 const BASE_URL = `https://graph.facebook.com/v19.0/${env.WHATSAPP_PHONE_ID}/messages`;
 
@@ -183,6 +184,10 @@ async function sendText(to, body) {
 async function sendOtpCode(to, code) {
   const phone = String(to || "").replace(/[^\d]/g, "");
   if (!phone) return { skipped: true };
+  // Fournisseur préféré : Infobip (quand configuré). Sinon Meta. Sinon mock.
+  if (isInfobipConfigured()) {
+    return sendOtpWhatsApp(phone, code);
+  }
   if (!env.WHATSAPP_TOKEN) {
     logger.info(`[WhatsApp MOCK][OTP] → ${phone} | code: ${code}`);
     return { messageId: `mock-otp-${Date.now()}` };

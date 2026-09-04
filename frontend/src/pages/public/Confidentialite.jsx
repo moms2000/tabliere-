@@ -6,14 +6,18 @@ const FONT = "'Avenir Next','Avenir','Century Gothic',sans-serif";
 
 export default function Confidentialite() {
   const navigate = useNavigate();
+  // Retour robuste : revenir en arrière s'il y a un historique, sinon accueil
+  // (une page légale ouverte par lien direct n'a pas de précédent).
+  const goBack = () => { if (window.history.length > 1) navigate(-1); else navigate("/"); };
   return (
     <div style={{ fontFamily: FONT, background: "#F8F5EF", minHeight: "100vh" }}>
       <nav style={{ background: "white", borderBottom: "0.5px solid #E4DFD8",
-        padding: "14px 24px", display: "flex", alignItems: "center", gap: 12,
+        padding: "calc(env(safe-area-inset-top, 0px) + 14px) 24px 14px",
+        display: "flex", alignItems: "center", gap: 12,
         position: "sticky", top: 0, zIndex: 20 }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={goBack}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
-            border: "none", cursor: "pointer", color: MUTED, fontSize: 13 }}>
+            border: "none", cursor: "pointer", color: MUTED, fontSize: 13, padding: "4px 2px" }}>
           <ArrowLeft size={15} /> Retour
         </button>
         <span style={{ fontSize: 15, fontWeight: 700, color: DARK }}>

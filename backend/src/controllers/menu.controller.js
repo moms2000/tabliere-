@@ -17,6 +17,10 @@ async function ensureMenuColumns() {
   try {
     await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS options JSONB`);
     await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS subcategory VARCHAR(80)`);
+    // Tailles groupées (menu vitrine)
+    await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS size_label    VARCHAR(24)`);
+    await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS base_name     VARCHAR(140)`);
+    await query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS variant_group VARCHAR(200)`);
     // Élargir image_url : VARCHAR(500) → TEXT (base64 images = 50k+ chars)
     await query(`ALTER TABLE menu_items ALTER COLUMN image_url TYPE TEXT`);
     // Pareil pour logo_url
@@ -64,7 +68,10 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
                 'is_available', mi.is_available,
                 'position',     mi.position,
                 'subcategory',  mi.subcategory,
-                'options',      mi.options
+                'options',      mi.options,
+                'size_label',   mi.size_label,
+                'base_name',    mi.base_name,
+                'variant_group', mi.variant_group
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
      FROM menu_categories mc
@@ -102,7 +109,10 @@ export const getFullMenu = asyncHandler(async (req, res) => {
                 'is_available', mi.is_available,
                 'position',     mi.position,
                 'subcategory',  mi.subcategory,
-                'options',      mi.options
+                'options',      mi.options,
+                'size_label',   mi.size_label,
+                'base_name',    mi.base_name,
+                'variant_group', mi.variant_group
               ) ORDER BY mi.position
             ) FILTER (WHERE mi.id IS NOT NULL), '[]') AS items
      FROM menu_categories mc
@@ -254,14 +264,22 @@ export const importMenu = asyncHandler(async (req, res) => {
         const price = Math.max(0, Math.round(Number(it?.price) || 0));
         const desc  = it?.description ? String(it.description).slice(0, 500) : null;
         const sub   = it?.subcategory ? String(it.subcategory).trim().slice(0, 80) : null;
+        // Tailles : la taille + le nom de base viennent du modèle Excel ; à défaut
+        // on les déduit du nom (« Nom (M) »). La clé de groupe = catégorie + sous-
+        // catégorie + nom de base → regroupe les tailles d'un même article (vitrine).
+        const sizeLabel = it?.size ? String(it.size).trim().slice(0, 24) : null;
+        const m = iname.match(/^(.*?)\s*\(([^()]{1,24})\)\s*$/);
+        const baseName = (it?.base_name ? String(it.base_name).trim()
+                          : (m ? m[1].trim() : iname)).slice(0, 140);
+        const variantGroup = `${catId}|${(sub || "").toLowerCase()}|${baseName.toLowerCase()}`.slice(0, 200);
         const { rows: [dup] } = await client.query(
           "SELECT 1 FROM menu_items WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1", [catId, iname]
         );
         if (dup) continue;
         await client.query(
-          `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, subcategory, is_active, position)
-           VALUES ($1, $2, $3, $4, $5, $6, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
-          [catId, restoId, iname, desc, price, sub]
+          `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, subcategory, size_label, base_name, variant_group, is_active, position)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
+          [catId, restoId, iname, desc, price, sub, sizeLabel || (m ? m[2].trim() : null), baseName, variantGroup]
         );
         itemAdded++;
       }

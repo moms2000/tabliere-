@@ -106,6 +106,24 @@ async function runBusinessMigrations() {
     `UPDATE users SET email_verified = TRUE
        WHERE email_verified = FALSE AND created_at < TIMESTAMPTZ '2026-09-02 00:00:00+00'`,
 
+    // ── Tailles groupées (menu vitrine) ────────────────────────────────────
+    // Un article en plusieurs tailles (« Bœuf seul (M/L/XL) ») est regroupé sous
+    // une seule carte côté client (mode vitrine). On stocke explicitement la
+    // taille, le nom de base et une clé de groupe (portée : catégorie + sous-cat
+    // + nom de base). Le nom complet reste inchangé pour la cuisine/les reçus.
+    `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS size_label    VARCHAR(24)`,
+    `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS base_name     VARCHAR(140)`,
+    `ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS variant_group VARCHAR(200)`,
+    // Reprise UNE FOIS des plats déjà importés (uniquement les lignes non encore
+    // traitées → idempotent). On lit un éventuel « (…) » de fin comme la taille,
+    // le reste comme nom de base ; la clé de groupe inclut catégorie + sous-cat.
+    `UPDATE menu_items SET
+        size_label    = NULLIF(substring(name from '\\(([^()]{1,24})\\)\\s*$'), ''),
+        base_name     = btrim(regexp_replace(name, '\\s*\\([^()]{1,24}\\)\\s*$', '')),
+        variant_group = category_id::text || '|' || lower(coalesce(subcategory,'')) || '|'
+                        || lower(btrim(regexp_replace(name, '\\s*\\([^()]{1,24}\\)\\s*$', '')))
+      WHERE variant_group IS NULL`,
+
     // Table avis clients
     `CREATE TABLE IF NOT EXISTS reviews (
        id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

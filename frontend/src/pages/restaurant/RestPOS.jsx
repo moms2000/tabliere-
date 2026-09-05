@@ -99,7 +99,7 @@ function ProductCard({ item, qty, onAdd, onRemove, color, hasOptions }) {
       {/* Infos */}
       <div style={{ padding: "8px 10px 10px", flex: 1 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: DARK, lineHeight: 1.3, marginBottom: 4 }}>
-          {item.name}
+          {item._grp > 1 ? item._label : item.name}
         </div>
         {item.description && (
           <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.4, marginBottom: 4,
@@ -107,7 +107,7 @@ function ProductCard({ item, qty, onAdd, onRemove, color, hasOptions }) {
             {item.description}
           </div>
         )}
-        <div style={{ fontSize: 13, fontWeight: 700, color: color }}>{fmt(item.price)}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: color }}>{item._grp > 1 ? "dès " + fmt(item._min) : fmt(item.price)}</div>
       </div>
 
       {/* Contrôles +/- si en panier (pas pour les plats à options : géré au panier) */}
@@ -155,6 +155,8 @@ export default function RestPOS() {
   const [showNote,    setShowNote]    = useState(false);
   const [optItem,     setOptItem]     = useState(null); // plat en cours de choix d'options
   const [optChoice,   setOptChoice]   = useState({ cuisson: null, accompagnements: [] });
+  const [comboSize,   setComboSize]   = useState(null); // vitrine : taille choisie (plat réel)
+  const [comboExtras, setComboExtras] = useState({});   // vitrine : accompagnements/boissons {id: item}
   // Vue par table
   const [posTab,      setPosTab]      = useState("commande"); // "commande" | "tables"
   const [orders,      setOrders]      = useState([]);
@@ -217,7 +219,18 @@ export default function RestPOS() {
       return { ...p, [key]: { ...p[key], qty } };
     }), []);
   // Depuis la grille : ouvre le choix d'options si le plat en a, sinon ajoute direct
-  const openAdd = useCallback((item) => {
+  const openAdd = (item) => {
+    // Vitrine, plat principal avec taille(s) → fiche combo (taille + extras payants)
+    if (isVitrine && !activeCatIsAddon && (item._grp > 1 || item.variant_group)) {
+      const sizes = item.variant_group
+        ? allMenuItems.filter(i => i.variant_group === item.variant_group).slice().sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))
+        : [item];
+      setComboSize(sizes[0] || item);
+      setComboExtras({});
+      setOptItem(item); // ouvre la modale (branche vitrine)
+      return;
+    }
+    setComboSize(null); // pas un combo → chemin options classique
     if (hasItemOptions(item)) {
       const o = itemOptions(item);
       setOptChoice({ cuisson: o.cuissons[0] || null, accompagnements: [] });
@@ -225,8 +238,15 @@ export default function RestPOS() {
     } else {
       addLine(item, null);
     }
-  }, [addLine]);
+  };
   const confirmOptions = () => {
+    // Vitrine : la taille + chaque extra deviennent des lignes réelles (re-tarifées serveur)
+    if (isVitrine && comboSize) {
+      addLine(comboSize, null);
+      for (const ex of comboExtrasList) addLine(ex, null);
+      setOptItem(null); setComboSize(null); setComboExtras({});
+      return;
+    }
     if (optItem) addLine(optItem, { cuisson: optChoice.cuisson || null, accompagnements: optChoice.accompagnements || [] });
     setOptItem(null);
   };
@@ -341,6 +361,32 @@ export default function RestPOS() {
 
   const activeCatItems = categories.find(c => c.id === activeCat)?.items?.filter(i => i.is_active !== false) || [];
   const activeCatIndex = categories.findIndex(c => c.id === activeCat);
+
+  /* ── Vitrine : regroupement des tailles + accompagnements/boissons payants ── */
+  const isVitrine = user?.resto_mode === "vitrine";
+  const stripA = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const allMenuItems = categories.flatMap(c => (c.items || []).filter(i => i.is_active !== false));
+  const accompItems = isVitrine ? categories.filter(c => /accompagn/.test(stripA(c.name)))
+    .flatMap(c => (c.items || []).filter(i => i.is_active !== false)) : [];
+  const drinkItems = isVitrine ? categories.filter(c => /boisson|drink/.test(stripA(c.name)))
+    .flatMap(c => (c.items || []).filter(i => i.is_active !== false)) : [];
+  const activeCatIsAddon = /accompagn|boisson|drink/.test(stripA(categories.find(c => c.id === activeCat)?.name));
+  // Cartes affichées : en vitrine, on regroupe les tailles en une seule carte.
+  const displayCatItems = (() => {
+    if (!isVitrine) return activeCatItems;
+    const seen = new Set(), out = [];
+    for (const it of activeCatItems) {
+      const g = it.variant_group || it.id;
+      if (seen.has(g)) continue;
+      seen.add(g);
+      const grp = activeCatItems.filter(x => (x.variant_group || x.id) === g);
+      const rep = grp.reduce((a, b) => (Number(b.price) || 0) < (Number(a.price) || 0) ? b : a, grp[0]);
+      out.push({ ...rep, _grp: grp.length, _min: Math.min(...grp.map(x => Number(x.price) || 0)), _label: rep.base_name || rep.name });
+    }
+    return out;
+  })();
+  const comboExtrasList = Object.values(comboExtras);
+  const toggleExtra = (it) => setComboExtras(p => { const n = { ...p }; if (n[it.id]) delete n[it.id]; else n[it.id] = it; return n; });
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
@@ -705,15 +751,15 @@ export default function RestPOS() {
               style={{ display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
                 gap: 10 }}>
-              {activeCatItems.map(item => (
+              {displayCatItems.map(item => (
                 <ProductCard key={item.id} item={item}
-                  qty={itemQty(item.id)}
-                  hasOptions={hasItemOptions(item)}
+                  qty={item._grp > 1 ? 0 : itemQty(item.id)}
+                  hasOptions={item._grp > 1 ? true : hasItemOptions(item)}
                   onAdd={() => openAdd(item)}
                   onRemove={() => removeLine(String(item.id))}
                   color={catColor(activeCatIndex)} />
               ))}
-              {activeCatItems.length === 0 && (
+              {displayCatItems.length === 0 && (
                 <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "40px 0",
                   color: MUTED, fontSize: 14 }}>
                   Aucun plat disponible dans cette catégorie
@@ -787,9 +833,66 @@ export default function RestPOS() {
               style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
                 width: "min(360px, 92vw)", maxHeight: "80vh", overflowY: "auto", background: "white",
                 borderRadius: 16, zIndex: 61, padding: 20, fontFamily: FONT, boxShadow: "0 10px 40px rgba(0,0,0,.2)" }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: DARK, marginBottom: 2 }}>{optItem.name}</div>
-              <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>Choisissez les options</div>
-              {(() => { const o = itemOptions(optItem); return (
+              <div style={{ fontSize: 16, fontWeight: 700, color: DARK, marginBottom: 2 }}>
+                {(isVitrine && comboSize) ? (optItem.base_name || optItem._label || optItem.name) : optItem.name}
+              </div>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
+                {(isVitrine && comboSize) ? "Taille, accompagnements et boissons" : "Choisissez les options"}
+              </div>
+
+              {/* ── VITRINE : taille + accompagnements/boissons payants ── */}
+              {isVitrine && comboSize && (() => {
+                const sizes = comboSize.variant_group
+                  ? allMenuItems.filter(i => i.variant_group === comboSize.variant_group).slice().sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))
+                  : [comboSize];
+                const pill = (on) => ({ padding: "8px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
+                  border: `1px solid ${on ? P : BORDER}`, background: on ? PL : "white", color: on ? "#C47D1A" : DARK, fontSize: 13, fontWeight: on ? 700 : 500 });
+                const lbl = { fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 };
+                const total = (Number(comboSize.price) || 0) + comboExtrasList.reduce((s, x) => s + (Number(x.price) || 0), 0);
+                return (
+                  <>
+                    {sizes.length > 1 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={lbl}>Taille</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {sizes.map(sz => (
+                            <button key={sz.id} type="button" onClick={() => setComboSize(sz)} style={pill(sz.id === comboSize.id)}>
+                              {(sz.size_label || sz.name)} · {fmt(sz.price)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {accompItems.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={lbl}>Accompagnements</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {accompItems.map(a => (
+                            <button key={a.id} type="button" onClick={() => toggleExtra(a)} style={pill(!!comboExtras[a.id])}>
+                              {comboExtras[a.id] ? "✓ " : ""}{a.name} · +{fmt(a.price)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {drinkItems.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={lbl}>Boissons</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {drinkItems.map(d => (
+                            <button key={d.id} type="button" onClick={() => toggleExtra(d)} style={pill(!!comboExtras[d.id])}>
+                              {comboExtras[d.id] ? "✓ " : ""}{d.name} · +{fmt(d.price)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ fontSize: 14, fontWeight: 800, color: DARK, marginBottom: 6 }}>Total : {fmt(total)}</div>
+                  </>
+                );
+              })()}
+
+              {!(isVitrine && comboSize) && (() => { const o = itemOptions(optItem); return (
                 <>
                   {o.cuissons.length > 0 && (
                     <div style={{ marginBottom: 14 }}>

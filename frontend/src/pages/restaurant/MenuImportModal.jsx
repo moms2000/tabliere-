@@ -140,6 +140,7 @@ export default function MenuImportModal({ onClose, onImported }) {
         for (const v of variants) {
           map[key].items.push({
             name: (v.size ? `${name} (${v.size})` : name).slice(0, 120),
+            base_name: name.slice(0, 140), // nom sans la taille → regroupement
             size: v.size || "",
             subcategory,
             price: v.price,

@@ -264,6 +264,7 @@ export default function ClientMenu() {
   const [itemCuisson, setItemCuisson] = useState("");
   const [itemAccomp,  setItemAccomp]  = useState("");
   const [itemNote,    setItemNote]    = useState("");
+  const [comboExtras, setComboExtras] = useState({}); // vitrine : accompagnements/boissons payants sélectionnés {id: item}
 
   const loadMenu = useCallback(() => {
     if (!slug) { setLoading(false); setLoadErr(true); return; }
@@ -313,6 +314,7 @@ export default function ClientMenu() {
     setItemCuisson(cart[item.id]?.options?.cuisson || (opts?.cuissons?.[0] || ""));
     setItemAccomp(cart[item.id]?.options?.accompagnement || "");
     setItemNote(cart[item.id]?.note || "");
+    setComboExtras({}); // vitrine : repartir sans extras à chaque ouverture
     setStep("item");
   };
 
@@ -338,18 +340,27 @@ export default function ClientMenu() {
 
   const addItemToCart = () => {
     const item = activeItem;
-    setCart(p => ({
-      ...p,
-      [item.id]: {
-        item,
-        qty: itemQty,
-        note: itemNote,
-        options: {
-          ...(itemCuisson ? { cuisson: itemCuisson } : {}),
-          ...(itemAccomp  ? { accompagnement: itemAccomp } : {}),
+    setCart(p => {
+      const next = {
+        ...p,
+        [item.id]: {
+          item,
+          qty: itemQty,
+          note: itemNote,
+          options: {
+            ...(itemCuisson ? { cuisson: itemCuisson } : {}),
+            ...(itemAccomp  ? { accompagnement: itemAccomp } : {}),
+          },
         },
-      },
-    }));
+      };
+      // Vitrine : les accompagnements/boissons choisis deviennent des lignes à
+      // part entière (chacun un plat réel avec son prix). Le moteur de commande
+      // re-tarife chaque ligne côté serveur — rien à calculer ici.
+      for (const ex of comboExtrasList) {
+        next[ex.id] = { item: ex, qty: (next[ex.id]?.qty || 0) + 1, note: "", options: {} };
+      }
+      return next;
+    });
     setStep("menu");
   };
 
@@ -379,6 +390,47 @@ export default function ClientMenu() {
       return matchCat && matchSearch;
     });
   }, [allItems, selectedCat, search]);
+
+  /* ── Vitrine : regroupement des tailles + accompagnements/boissons payants ── */
+  const isVitrine = resto?.listing_mode === "vitrine";
+  const stripA = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const allMenuItems = useMemo(() => categories.flatMap(c =>
+    (c.items || []).filter(i => i.is_active !== false && i.is_available !== false)), [categories]);
+  const accompItems = useMemo(() => !isVitrine ? [] :
+    categories.filter(c => /accompagn/.test(stripA(c.name)))
+      .flatMap(c => (c.items || []).filter(i => i.is_active !== false && i.is_available !== false)), [categories, isVitrine]);
+  const drinkItems = useMemo(() => !isVitrine ? [] :
+    categories.filter(c => /boisson|drink/.test(stripA(c.name)))
+      .flatMap(c => (c.items || []).filter(i => i.is_active !== false && i.is_available !== false)), [categories, isVitrine]);
+  const activeCatName = useMemo(() =>
+    categories.find(c => (c.items || []).some(i => i.id === activeItem?.id))?.name || "", [categories, activeItem]);
+  const activeIsAddon = /accompagn|boisson|drink/.test(stripA(activeCatName));
+  // Les tailles du même article (même variant_group)
+  const sizeGroup = useMemo(() => {
+    if (!activeItem) return [];
+    const g = activeItem.variant_group;
+    const grp = g ? allMenuItems.filter(i => i.variant_group === g) : [activeItem];
+    return grp.slice().sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+  }, [activeItem, allMenuItems]);
+  // Liste affichée : en vitrine, on regroupe les tailles en UNE carte
+  const displayItems = useMemo(() => {
+    if (!isVitrine) return filteredItems;
+    const seen = new Set(), out = [];
+    for (const it of filteredItems) {
+      const g = it.variant_group || it.id;
+      if (seen.has(g)) continue;
+      seen.add(g);
+      const grp = filteredItems.filter(x => (x.variant_group || x.id) === g);
+      const rep = grp.reduce((a, b) => (Number(b.price) || 0) < (Number(a.price) || 0) ? b : a, grp[0]);
+      out.push({ ...rep, _grp: grp.length, _min: Math.min(...grp.map(x => Number(x.price) || 0)), _label: rep.base_name || rep.name });
+    }
+    return out;
+  }, [isVitrine, filteredItems]);
+  const toggleExtra = (it) => setComboExtras(p => {
+    const n = { ...p }; if (n[it.id]) delete n[it.id]; else n[it.id] = it; return n;
+  });
+  const comboExtrasList = Object.values(comboExtras);
+  const extrasTotal = comboExtrasList.reduce((s, x) => s + (Number(x.price) || 0), 0);
 
   /* ── Commande ── */
   const placeOrder = async () => {
@@ -609,13 +661,15 @@ export default function ClientMenu() {
 
       {/* Liste des plats — style BBR */}
       <div style={{ background: WHITE }}>
-        {filteredItems.length === 0 ? (
+        {displayItems.length === 0 ? (
           <div style={{ textAlign: "center", padding: "50px 20px", color: MUTED, fontSize: 14 }}>
             Aucun plat trouvé
           </div>
-        ) : filteredItems.map((item, idx) => {
-          const inCart = cart[item.id]?.qty || 0;
-          const prev = filteredItems[idx-1];
+        ) : displayItems.map((item, idx) => {
+          // Carte groupée (vitrine, plusieurs tailles) : pas de quantité en ligne,
+          // le « + » ouvre la fiche pour choisir la taille + les extras.
+          const inCart = item._grp > 1 ? 0 : (cart[item.id]?.qty || 0);
+          const prev = displayItems[idx-1];
           const isFirst = idx === 0 || prev?.catName !== item.catName;
           const subcat = (item.subcategory || "").trim();
           const showSubcat = subcat && (isFirst || (prev?.subcategory || "").trim() !== subcat);
@@ -660,7 +714,7 @@ export default function ClientMenu() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: DARK,
                     fontFamily: FS, marginBottom: 3, lineHeight: 1.3 }}>
-                    {item.name}
+                    {item._grp > 1 ? item._label : item.name}
                   </div>
                   {item.description && (
                     <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.45, marginBottom: 5,
@@ -670,7 +724,7 @@ export default function ClientMenu() {
                     </div>
                   )}
                   <div style={{ fontSize: 14, fontWeight: 700, color: BROWN, fontFamily: FS, fontStyle: "italic" }}>
-                    {fmt(item.price)}
+                    {item._grp > 1 ? "dès " + fmt(item._min) : fmt(item.price)}
                   </div>
                 </div>
 
@@ -743,6 +797,12 @@ export default function ClientMenu() {
     const catName = categories.find(c => (c.items||[]).some(i => i.id === activeItem.id))?.name || "";
     const catItems = categories.find(c => (c.items||[]).some(i => i.id === activeItem.id))?.items || [];
     const itemIdx = catItems.findIndex(i => i.id === activeItem.id);
+    // Styles des « pilules » (taille / accompagnements / boissons) — vitrine
+    const LBL = { fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 };
+    const pill = (on) => ({ padding: "7px 16px", borderRadius: 20, cursor: "pointer",
+      border: `1px solid ${on ? BROWN : BORDER}`, background: on ? BROWN : WHITE,
+      color: on ? WHITE : DARK, fontSize: 13, fontFamily: FN, fontWeight: on ? 700 : 400 });
+    const showCombo = isVitrine && !activeIsAddon;
 
     return (
       <div style={{ minHeight: "100vh", background: CREAM, maxWidth: 480,
@@ -794,6 +854,48 @@ export default function ClientMenu() {
             <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, margin: "0 0 20px" }}>
               {activeItem.description}
             </p>
+          )}
+
+          {/* ── VITRINE : taille (regroupée) ── */}
+          {showCombo && sizeGroup.length > 1 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={LBL}>Taille <span style={{ color: "#B0A090", fontWeight: 400 }}>(Requis)</span></div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {sizeGroup.map(sz => (
+                  <button key={sz.id} onClick={() => setActiveItem(sz)} style={pill(sz.id === activeItem.id)}>
+                    {(sz.size_label || sz.name)} · {fmt(sz.price)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── VITRINE : accompagnements payants ── */}
+          {showCombo && accompItems.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={LBL}>Accompagnements <span style={{ color: "#B0A090", fontWeight: 400 }}>(optionnel)</span></div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {accompItems.map(a => (
+                  <button key={a.id} onClick={() => toggleExtra(a)} style={pill(!!comboExtras[a.id])}>
+                    {a.name} · +{fmt(a.price)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── VITRINE : boissons payantes ── */}
+          {showCombo && drinkItems.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={LBL}>Boissons <span style={{ color: "#B0A090", fontWeight: 400 }}>(optionnel)</span></div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {drinkItems.map(d => (
+                  <button key={d.id} onClick={() => toggleExtra(d)} style={pill(!!comboExtras[d.id])}>
+                    {d.name} · +{fmt(d.price)}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Cuisson */}
@@ -863,7 +965,7 @@ export default function ClientMenu() {
           borderTop: `0.5px solid ${BORDER}`, padding: "12px 16px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: DARK, fontFamily: FS, fontStyle: "italic" }}>
-              {fmt(activeItem.price * itemQty)}
+              {fmt(activeItem.price * itemQty + extrasTotal)}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <button onClick={() => setItemQty(q => Math.max(1, q-1))}

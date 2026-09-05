@@ -49,7 +49,8 @@ export const getPublicMenu = asyncHandler(async (req, res) => {
   // table. On exige seulement un restaurant non suspendu.
   const { rows: [resto] } = await query(
     `SELECT id, name, slug, description, cuisine_type, address, quartier,
-            opening_hours, phone, theme_color, qr_active
+            opening_hours, phone, theme_color, qr_active,
+            COALESCE(listing_mode, 'restaurant') AS listing_mode
      FROM restaurants WHERE slug = $1 AND status IN ('actif', 'en_attente')`,
     [req.params.slug]
   );

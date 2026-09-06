@@ -1384,7 +1384,7 @@ export default function Home() {
                 style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
                 {restaurants.map((r) => {
                   const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-                  const imgSrc = photos ? photos[0] : r.logo_url;
+                  const imgSrc = r.logo_url || (photos ? photos[0] : null);
                   const b = cardBadge(r);
                   const saved = isFav(r.slug);
                   const slots = dynamicSlots(resaTime);
@@ -1526,7 +1526,7 @@ export default function Home() {
             <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
               {vitrines.map((r, i) => {
                 const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-                const imgSrc = photos ? photos[0] : r.logo_url;
+                const imgSrc = r.logo_url || (photos ? photos[0] : null);
                 return (
                   <motion.div key={r.id || i} whileHover={{ y: -3, boxShadow: "0 4px 16px rgba(30,46,40,.07)" }}
                     onClick={() => { saveHomeState(); navigate(`/restaurants/${r.slug}`); }}

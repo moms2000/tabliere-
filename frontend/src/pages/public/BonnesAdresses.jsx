@@ -51,7 +51,7 @@ export default function BonnesAdresses() {
           gap: 14, padding: "6px 16px 8px", maxWidth: 900, margin: "0 auto" }}>
           {items.map((r, i) => {
             const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-            const imgSrc = photos ? photos[0] : r.logo_url;
+            const imgSrc = r.logo_url || (photos ? photos[0] : null);
             return (
               <motion.div key={r.id || i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(i * 0.04, 0.3) }}

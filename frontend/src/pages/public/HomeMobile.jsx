@@ -771,8 +771,8 @@ export default function HomeMobile() {
                   boxShadow: "0 12px 30px rgba(30,46,40,.25)" }}>
                 <div style={{ width: 76, height: 76, borderRadius: 12, overflow: "hidden",
                   flexShrink: 0, background: "#EFEAE2", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {((Array.isArray(mapResto.photos) && mapResto.photos[0]) || mapResto.logo_url)
-                    ? <img src={(Array.isArray(mapResto.photos) && mapResto.photos[0]) || mapResto.logo_url} alt=""
+                  {(mapResto.logo_url || (Array.isArray(mapResto.photos) && mapResto.photos[0]))
+                    ? <img src={mapResto.logo_url || (Array.isArray(mapResto.photos) && mapResto.photos[0])} alt=""
                         style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     : <UtensilsCrossed size={26} color={MUTED} />}
                 </div>
@@ -844,7 +844,7 @@ export default function HomeMobile() {
           </div>
         ) : filtered.map((r, idx) => {
           const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-          const imgSrc = photos ? photos[0] : r.logo_url;
+          const imgSrc = r.logo_url || (photos ? photos[0] : null);
           const b = cardBadge(r);
           const saved = favorites.some(f => f.slug === r.slug);
           const slots = dynamicSlots(selTime);
@@ -996,7 +996,7 @@ export default function HomeMobile() {
           <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "2px 16px 6px", WebkitOverflowScrolling: "touch" }}>
             {vitrines.map((r, i) => {
               const photos = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : null;
-              const imgSrc = photos ? photos[0] : r.logo_url;
+              const imgSrc = r.logo_url || (photos ? photos[0] : null);
               return (
                 <div key={r.id || i}
                   onClick={() => { saveHomeState(); navigate(`/restaurants/${r.slug}`); }}

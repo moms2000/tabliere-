@@ -976,6 +976,50 @@ export default function RestaurantDetail() {
                 </div>
               </div>
             );
+            // Regroupe les tailles d'un même article (variant_group) : renvoie des
+            // paquets [ [item], [tailleM, tailleL, tailleXL], … ] dans l'ordre.
+            const collapseSizes = (items) => {
+              const seen = new Set(), out = [];
+              for (const it of items) {
+                const g = it.variant_group || it.id;
+                if (seen.has(g)) continue;
+                seen.add(g);
+                out.push(items.filter(x => (x.variant_group || x.id) === g));
+              }
+              return out;
+            };
+            // Une carte par article ; si plusieurs tailles, elles sont listées en
+            // pastilles « Taille · prix » sous le nom (une seule photo/description).
+            const renderGroup = (grp) => {
+              if (grp.length <= 1) return renderItem(grp[0]);
+              const sizes = grp.slice().sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+              const rep = sizes[0];
+              const base = rep.base_name || String(rep.name).replace(/\s*\([^()]{1,24}\)\s*$/, "").trim();
+              return (
+                <div key={rep.variant_group || rep.id} style={{ background: "white", border: `0.5px solid ${BORDER}`,
+                  borderRadius: 12, overflow: "hidden", display: "flex", gap: 12 }}>
+                  {rep.image_url && (
+                    <img src={rep.image_url} alt={base} loading="lazy"
+                      style={{ width: 92, height: 92, objectFit: "cover", flexShrink: 0 }} />
+                  )}
+                  <div style={{ flex: 1, padding: "12px 14px", minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: DARK, overflowWrap: "anywhere" }}>{base}</div>
+                    {rep.description && (
+                      <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5, overflowWrap: "anywhere" }}>{rep.description}</div>
+                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                      {sizes.map(sz => (
+                        <span key={sz.id} style={{ display: "inline-flex", alignItems: "center", gap: 6,
+                          background: "#FEF6EC", border: `0.5px solid ${P}44`, borderRadius: 8, padding: "4px 9px", fontSize: 12 }}>
+                          <span style={{ fontWeight: 700, color: DARK }}>{sz.size_label || sz.name}</span>
+                          <span style={{ fontWeight: 700, color: P }}>{Number(sz.price).toLocaleString("fr-FR")} F</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            };
             const shown = menu.filter(cat => menuCat === "all" || cat.id === menuCat);
             return (
               <div>
@@ -1006,7 +1050,7 @@ export default function RestaurantDetail() {
                         <div key={key || "__none"}>
                           {key && <div style={{ fontSize: 12, fontWeight: 700, color: "#8a5a10", margin: "8px 0 8px" }}>{key}</div>}
                           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(0, 1fr)", gap: 14, marginBottom: 6 }}>
-                            {groups[key].map(renderItem)}
+                            {collapseSizes(groups[key]).map(renderGroup)}
                           </div>
                         </div>
                       ))}

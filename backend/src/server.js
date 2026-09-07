@@ -123,6 +123,19 @@ async function runBusinessMigrations() {
         variant_group = category_id::text || '|' || lower(coalesce(subcategory,'')) || '|'
                         || lower(btrim(regexp_replace(name, '\\s*\\([^()]{1,24}\\)\\s*$', '')))
       WHERE variant_group IS NULL`,
+    // Élargir size_label : les libellés de taille peuvent être personnalisés
+    // (« Tester-Goûter (M) », « Amonan c'est Cuit (XL) »).
+    `ALTER TABLE menu_items ALTER COLUMN size_label TYPE VARCHAR(80)`,
+    // Reprise v2 (UNE FOIS, drapeau platform_settings) : re-parse de TOUS les plats
+    // en gérant les parenthèses IMBRIQUÉES « Base (Libellé (M)) » et clé de groupe
+    // = catégorie + nom de base (sans sous-catégorie) → regroupe « Bœuf en menu »
+    // et ses tailles même si le format du nom est complexe.
+    `UPDATE menu_items SET
+        base_name     = btrim(regexp_replace(name, '\\s*\\(.*\\)\\s*$', '')),
+        size_label    = left(substring(name from '\\((.*)\\)\\s*$'), 80),
+        variant_group = category_id::text || '|' || lower(btrim(regexp_replace(name, '\\s*\\(.*\\)\\s*$', '')))
+      WHERE NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'menu_variant_reparse_v2')`,
+    `INSERT INTO platform_settings (key, value) VALUES ('menu_variant_reparse_v2', 'done') ON CONFLICT (key) DO NOTHING`,
 
     // Table avis clients
     `CREATE TABLE IF NOT EXISTS reviews (

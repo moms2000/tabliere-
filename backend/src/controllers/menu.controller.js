@@ -195,6 +195,19 @@ export const deleteCategory = asyncHandler(async (req, res) => {
   return ok(res, null, "Catégorie supprimée");
 });
 
+// Déduit taille / nom de base / clé de groupe depuis le nom d'un plat.
+// Gère « Base (M) » ET « Base (Libellé (M)) » (parenthèses imbriquées) : on retire
+// le groupe de parenthèses de fin (du 1er « ( » jusqu'au dernier « ) »), le reste
+// = nom de base. Clé de groupe = catégorie + nom de base (regroupe les tailles).
+export function deriveVariant(name, categoryId, providedBase) {
+  const raw = String(name || "");
+  const m = raw.match(/^(.*?)\s*\((.*)\)\s*$/);
+  const base = String(providedBase || (m ? m[1] : raw)).trim().slice(0, 140);
+  const size = m ? m[2].trim().slice(0, 80) : null;
+  const group = `${categoryId}|${base.toLowerCase()}`.slice(0, 200);
+  return { base_name: base || null, size_label: size, variant_group: group };
+}
+
 // ── POST /menu/items ──────────────────────────────────────────────────────────
 export const createItem = asyncHandler(async (req, res) => {
   await ensureMenuColumns();
@@ -215,12 +228,13 @@ export const createItem = asyncHandler(async (req, res) => {
     optionsVal = typeof options === "object" ? JSON.stringify(options) : options;
   }
 
+  const v = deriveVariant(name, category_id);
   const { rows: [item] } = await query(
     `INSERT INTO menu_items
-       (category_id, restaurant_id, name, description, price, image_url, is_active, position, options, subcategory)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (category_id, restaurant_id, name, description, price, image_url, is_active, position, options, subcategory, base_name, size_label, variant_group)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
-    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position, optionsVal, subcategory]
+    [category_id, cat.restaurant_id, name, description || null, price, image_url || null, is_active, position, optionsVal, subcategory, v.base_name, v.size_label, v.variant_group]
   );
 
   await cache.delPattern(`menu:public:*`).catch(() => {});
@@ -265,14 +279,11 @@ export const importMenu = asyncHandler(async (req, res) => {
         const price = Math.max(0, Math.round(Number(it?.price) || 0));
         const desc  = it?.description ? String(it.description).slice(0, 500) : null;
         const sub   = it?.subcategory ? String(it.subcategory).trim().slice(0, 80) : null;
-        // Tailles : la taille + le nom de base viennent du modèle Excel ; à défaut
-        // on les déduit du nom (« Nom (M) »). La clé de groupe = catégorie + sous-
-        // catégorie + nom de base → regroupe les tailles d'un même article (vitrine).
-        const sizeLabel = it?.size ? String(it.size).trim().slice(0, 24) : null;
-        const m = iname.match(/^(.*?)\s*\(([^()]{1,24})\)\s*$/);
-        const baseName = (it?.base_name ? String(it.base_name).trim()
-                          : (m ? m[1].trim() : iname)).slice(0, 140);
-        const variantGroup = `${catId}|${(sub || "").toLowerCase()}|${baseName.toLowerCase()}`.slice(0, 200);
+        // Taille / nom de base / clé de groupe (regroupe les tailles). Le modèle
+        // Excel fournit base_name/size ; à défaut on déduit du nom (parenthèses,
+        // imbriquées gérées). Clé = catégorie + nom de base.
+        const v = deriveVariant(iname, catId, it?.base_name);
+        const sizeLabel = it?.size ? String(it.size).trim().slice(0, 80) : v.size_label;
         const { rows: [dup] } = await client.query(
           "SELECT 1 FROM menu_items WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1", [catId, iname]
         );
@@ -280,7 +291,7 @@ export const importMenu = asyncHandler(async (req, res) => {
         await client.query(
           `INSERT INTO menu_items (category_id, restaurant_id, name, description, price, subcategory, size_label, base_name, variant_group, is_active, position)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, COALESCE((SELECT MAX(position) + 1 FROM menu_items WHERE category_id = $1), 0))`,
-          [catId, restoId, iname, desc, price, sub, sizeLabel || (m ? m[2].trim() : null), baseName, variantGroup]
+          [catId, restoId, iname, desc, price, sub, sizeLabel, v.base_name, v.variant_group]
         );
         itemAdded++;
       }
@@ -325,6 +336,16 @@ export const updateItem = asyncHandler(async (req, res) => {
     }
     values.push(val);
     updates.push(`${field} = $${values.length}`);
+  }
+  // Recalcule taille / nom de base / clé de groupe si le nom OU la catégorie
+  // change — sinon un plat renommé « … (L) » ne se regrouperait pas.
+  if (req.body.name !== undefined || req.body.category_id !== undefined) {
+    const newName = req.body.name !== undefined ? req.body.name : item.name;
+    const newCat  = req.body.category_id !== undefined ? req.body.category_id : item.category_id;
+    const v = deriveVariant(newName, newCat);
+    for (const [f, val] of [["base_name", v.base_name], ["size_label", v.size_label], ["variant_group", v.variant_group]]) {
+      values.push(val); updates.push(`${f} = $${values.length}`);
+    }
   }
   if (!updates.length) throw new AppError("Aucun champ à mettre à jour", 400);
 

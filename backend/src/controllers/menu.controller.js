@@ -199,12 +199,15 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 // Gère « Base (M) » ET « Base (Libellé (M)) » (parenthèses imbriquées) : on retire
 // le groupe de parenthèses de fin (du 1er « ( » jusqu'au dernier « ) »), le reste
 // = nom de base. Clé de groupe = catégorie + nom de base (regroupe les tailles).
-export function deriveVariant(name, categoryId, providedBase) {
+export function deriveVariant(name, categoryId, subcategory, providedBase) {
   const raw = String(name || "");
   const m = raw.match(/^(.*?)\s*\((.*)\)\s*$/);
   const base = String(providedBase || (m ? m[1] : raw)).trim().slice(0, 140);
   const size = m ? m[2].trim().slice(0, 80) : null;
-  const group = `${categoryId}|${base.toLowerCase()}`.slice(0, 200);
+  // Clé = catégorie + SOUS-CATÉGORIE + nom de base. La sous-catégorie est
+  // indispensable : « Bœuf » en « Pain brochette » (sandwich) et « Bœuf » en
+  // « Brochette » (brochettes seules) sont DEUX produits distincts à ne pas fusionner.
+  const group = `${categoryId}|${String(subcategory || "").toLowerCase()}|${base.toLowerCase()}`.slice(0, 200);
   return { base_name: base || null, size_label: size, variant_group: group };
 }
 
@@ -228,7 +231,7 @@ export const createItem = asyncHandler(async (req, res) => {
     optionsVal = typeof options === "object" ? JSON.stringify(options) : options;
   }
 
-  const v = deriveVariant(name, category_id);
+  const v = deriveVariant(name, category_id, subcategory);
   const { rows: [item] } = await query(
     `INSERT INTO menu_items
        (category_id, restaurant_id, name, description, price, image_url, is_active, position, options, subcategory, base_name, size_label, variant_group)
@@ -282,7 +285,7 @@ export const importMenu = asyncHandler(async (req, res) => {
         // Taille / nom de base / clé de groupe (regroupe les tailles). Le modèle
         // Excel fournit base_name/size ; à défaut on déduit du nom (parenthèses,
         // imbriquées gérées). Clé = catégorie + nom de base.
-        const v = deriveVariant(iname, catId, it?.base_name);
+        const v = deriveVariant(iname, catId, sub, it?.base_name);
         const sizeLabel = it?.size ? String(it.size).trim().slice(0, 80) : v.size_label;
         const { rows: [dup] } = await client.query(
           "SELECT 1 FROM menu_items WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1", [catId, iname]
@@ -342,7 +345,8 @@ export const updateItem = asyncHandler(async (req, res) => {
   if (req.body.name !== undefined || req.body.category_id !== undefined) {
     const newName = req.body.name !== undefined ? req.body.name : item.name;
     const newCat  = req.body.category_id !== undefined ? req.body.category_id : item.category_id;
-    const v = deriveVariant(newName, newCat);
+    const newSub  = req.body.subcategory !== undefined ? req.body.subcategory : item.subcategory;
+    const v = deriveVariant(newName, newCat, newSub);
     for (const [f, val] of [["base_name", v.base_name], ["size_label", v.size_label], ["variant_group", v.variant_group]]) {
       values.push(val); updates.push(`${f} = $${values.length}`);
     }

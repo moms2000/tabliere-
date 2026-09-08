@@ -8,6 +8,9 @@ export const promotionsService = {
   async createCampaign(body) {
     return (await api.post("/promotions/campaigns", body)).data.data; // { campaign }
   },
+  async updateCampaign(id, body) {
+    return (await api.patch(`/promotions/campaigns/${id}`, body)).data.data; // { campaign }
+  },
   async draw(id) {
     return (await api.post(`/promotions/campaigns/${id}/draw`)).data; // { data:{issued,...}, message }
   },

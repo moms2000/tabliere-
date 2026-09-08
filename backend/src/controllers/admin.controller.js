@@ -1395,6 +1395,17 @@ export const broadcastPush = asyncHandler(async (req, res) => {
   const route = /^\/(?!\/)[A-Za-z0-9/_-]*$/.test(rawRoute) ? rawRoute : "";
   const data = route ? { route } : {};
   const result = await sendPushToRoles(roles, { title, body, data });
+
+  // Persister dans le centre de notifications (onglet « Notifs ») pour que ceux
+  // qui n'ont pas vu le push sur le moment puissent le relire plus tard. Une
+  // ligne par destinataire (compte actif du bon rôle), en un seul insert.
+  await query(
+    `INSERT INTO user_notifications (user_id, type, title, body, meta)
+     SELECT id, 'annonce', $1, $2, $3::jsonb
+       FROM users WHERE role = ANY($4) AND status = 'actif'`,
+    [title.slice(0, 120), body, route ? JSON.stringify({ route }) : null, roles]
+  ).catch((e) => logger.warn("[Admin] persistance notif diffusion échouée", { error: e.message }));
+
   logger.info("[Admin] Diffusion push", { by: req.user?.id, roles, ...result });
   return ok(res, result, `Notification envoyée à ${result.recipients} destinataire(s).`);
 });

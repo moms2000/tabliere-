@@ -97,14 +97,22 @@ export async function sendPushToRoles(roles, { title, body, data = {} }) {
     .filter((r) => ["client", "restaurateur", "organisateur"].includes(r));
   if (!valid.length || !title) return { recipients: 0, devices: 0, ok: 0, ko: 0 };
 
+  // Cibler « client » inclut AUSSI les appareils anonymes (app installée mais non
+  // connectée) : ce sont des clients potentiels, et l'attente est que toute
+  // personne ayant l'app reçoive les annonces clients.
+  const includeAnon = valid.includes("client");
   const { rows } = await query(
     `SELECT DISTINCT dt.token, dt.user_id
        FROM device_tokens dt
-       JOIN users u ON u.id = dt.user_id
-      WHERE u.role = ANY($1) AND u.status = 'actif'`, [valid]
+       LEFT JOIN users u ON u.id = dt.user_id
+      WHERE (u.role = ANY($1) AND u.status = 'actif')
+         ${includeAnon ? "OR dt.user_id IS NULL" : ""}`, [valid]
   ).catch(() => ({ rows: [] }));
 
-  const recipients = new Set(rows.map((r) => r.user_id)).size;
+  // Destinataires = comptes distincts touchés + appareils anonymes.
+  const users = new Set(rows.filter((r) => r.user_id).map((r) => r.user_id));
+  const anonDevices = rows.filter((r) => !r.user_id).length;
+  const recipients = users.size + anonDevices;
   if (!rows.length) {
     logger.info("[Push] diffusion : aucun appareil", { roles: valid });
     return { recipients: 0, devices: 0, ok: 0, ko: 0 };

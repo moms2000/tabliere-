@@ -17,7 +17,13 @@ export async function initPushNotifications() {
 
     const saveToken = (token) => {
       if (!token) return;
-      api.post("/users/me/device-token", { token, platform: Capacitor.getPlatform() }).catch(() => {});
+      // Connecté → route authentifiée (rattache le jeton au compte).
+      // Non connecté → route publique (appareil anonyme) : on reçoit quand même
+      // les diffusions, et le jeton se rattachera au compte à la connexion.
+      let loggedIn = false;
+      try { loggedIn = !!localStorage.getItem("access_token"); } catch (_) {}
+      const url = loggedIn ? "/users/me/device-token" : "/notifications/device";
+      api.post(url, { token, platform: Capacitor.getPlatform() }).catch(() => {});
     };
 
     // Token courant

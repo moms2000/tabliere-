@@ -21,7 +21,8 @@ export default function NotificationPrompt() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    // On propose les notifications à TOUTE personne sur l'app native, connectée
+    // ou non : un appareil anonyme peut aussi recevoir les annonces.
     if (!Capacitor?.isNativePlatform?.()) return; // web → jamais
     let asked = null;
     try { asked = localStorage.getItem("tci_notif_optin"); } catch {}

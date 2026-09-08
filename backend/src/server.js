@@ -221,6 +221,10 @@ async function runBusinessMigrations() {
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id)`,
+    // Appareils ANONYMES : un téléphone qui a l'app mais n'est pas connecté peut
+    // enregistrer son jeton (user_id NULL) pour recevoir les diffusions. Quand la
+    // personne se connecte, le jeton se rattache à son compte.
+    `ALTER TABLE device_tokens ALTER COLUMN user_id DROP NOT NULL`,
   ];
 
   for (const sql of stmts) {

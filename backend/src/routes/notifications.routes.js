@@ -1,9 +1,14 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.js";
-import { listNotifications, markAllRead, markOneRead } from "../controllers/notifications.controller.js";
+import { listNotifications, markAllRead, markOneRead, registerDeviceAnon } from "../controllers/notifications.controller.js";
 import { addConnection, removeConnection } from "../utils/sse.js";
 
 const router = Router();
+
+// PUBLIC (avant authenticate) : enregistrement d'un appareil anonyme pour les
+// notifications, même sans être connecté.
+router.post("/device", registerDeviceAnon);
+
 router.use(authenticate);
 
 router.get("/",                  listNotifications);

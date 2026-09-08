@@ -185,6 +185,63 @@ export const createCampaign = asyncHandler(async (req, res) => {
   return created(res, { campaign: c }, "Campagne créée.");
 });
 
+// ── ADMIN : modifier une campagne EN COURS ───────────────────────────────────
+// Champs modifiables : nom, récompense, nb de gagnants (jamais < gagnants déjà
+// tirés), validité, mode de tirage, ratio auto, statut. Immuables : restaurant,
+// ref_code (le QR), type. Modifier la récompense n'affecte QUE les futurs bons
+// (les bons déjà émis gardent leur libellé figé au moment du tirage).
+export const updateCampaign = asyncHandler(async (req, res) => {
+  await ensureTables();
+  const id = parseInt(req.params.id);
+  if (!id) throw new AppError("Campagne introuvable.", 404);
+  const { rows: [c] } = await query("SELECT * FROM campaigns WHERE id = $1", [id]);
+  if (!c) throw new AppError("Campagne introuvable.", 404);
+
+  const b = req.body || {};
+  const sets = [], vals = [];
+  const add = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+
+  if (b.name !== undefined) {
+    const name = String(b.name).trim().slice(0, 120);
+    if (name.length < 2) throw new AppError("Nom de campagne requis.", 400);
+    add("name", name);
+  }
+  if (b.reward_label !== undefined) {
+    const reward = String(b.reward_label).trim().slice(0, 160);
+    if (reward.length < 2) throw new AppError("Décrivez la récompense.", 400);
+    add("reward_label", reward);
+  }
+  if (b.winners_count !== undefined) {
+    const winners = Math.max(0, Math.min(5000, parseInt(b.winners_count) || 0));
+    const { rows: [{ issued }] } = await query(
+      "SELECT COUNT(*)::int AS issued FROM vouchers WHERE campaign_id = $1", [id]);
+    if (winners < issued) throw new AppError(`Il y a déjà ${issued} gagnant(s) tiré(s). Le nombre de gagnants ne peut pas être inférieur.`, 400);
+    add("winners_count", winners);
+  }
+  if (b.voucher_expires_days !== undefined) {
+    add("voucher_expires_days", Math.max(1, Math.min(365, parseInt(b.voucher_expires_days) || 30)));
+  }
+  if (b.draw_mode !== undefined) {
+    add("draw_mode", b.draw_mode === "auto" ? "auto" : "manual");
+  }
+  const newBatch = b.auto_batch_size !== undefined
+    ? Math.max(1, Math.min(1000, parseInt(b.auto_batch_size) || 10)) : c.auto_batch_size;
+  if (b.auto_batch_size !== undefined) add("auto_batch_size", newBatch);
+  if (b.auto_per_batch !== undefined) {
+    add("auto_per_batch", Math.max(1, Math.min(newBatch, parseInt(b.auto_per_batch) || 4)));
+  }
+  if (b.status !== undefined && ["open", "closed"].includes(b.status)) {
+    add("status", b.status);
+  }
+  if (!sets.length) throw new AppError("Rien à modifier.", 400);
+
+  const { rows: [updated] } = await query(
+    `UPDATE campaigns SET ${sets.join(", ")} WHERE id = $${vals.length + 1} RETURNING *`,
+    [...vals, id]);
+  logger.info("[Promo] Campagne modifiée", { id, by: req.user.id });
+  return ok(res, { campaign: updated }, "Jeu mis à jour.");
+});
+
 // ── ADMIN : lister les campagnes (avec compteurs) ────────────────────────────
 export const listCampaigns = asyncHandler(async (_req, res) => {
   await ensureTables();

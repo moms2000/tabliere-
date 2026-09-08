@@ -9,6 +9,7 @@ router.use(authenticate);
 // ── Admin : gestion des campagnes et cadeaux ─────────────────────────────────
 const admin = authorize("admin");
 router.post("/campaigns",             admin, ctrl.createCampaign);
+router.patch("/campaigns/:id",        admin, ctrl.updateCampaign);
 router.get ("/campaigns",             admin, ctrl.listCampaigns);
 router.post("/campaigns/:id/draw",    admin, ctrl.drawCampaign);
 router.get ("/campaigns/:id/winners", admin, ctrl.listWinners);

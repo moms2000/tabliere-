@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import QRCode from "react-qr-code";
-import { Gift, Dices, Plus, Trophy, Download, Copy, Check, X, Sparkles, RefreshCw, Trash2, Zap, Search } from "lucide-react";
+import { Gift, Dices, Plus, Trophy, Download, Copy, Check, X, Sparkles, RefreshCw, Trash2, Zap, Search, Pencil } from "lucide-react";
 import { Card, PageTitle } from "../../components/ui";
 import { promotionsService } from "../../services/promotions.service.js";
 import { adminService } from "../../services/admin.service.js";
@@ -20,6 +20,7 @@ export default function CadeauxJeux() {
   const [restos, setRestos]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showNew, setShowNew]   = useState(false);
+  const [editing, setEditing]   = useState(null); // campagne en cours de modification
   const [winners, setWinners]   = useState(null); // { campaign, list }
   const [msg, setMsg]           = useState("");
 
@@ -98,7 +99,7 @@ export default function CadeauxJeux() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 14 }}>
               {campaigns.filter(c => c.type === "lottery").map(c => (
-                <CampaignCard key={c.id} c={c} onDraw={() => runDraw(c)} onWinners={() => openWinners(c)} onDelete={() => runDelete(c)} />
+                <CampaignCard key={c.id} c={c} onDraw={() => runDraw(c)} onWinners={() => openWinners(c)} onDelete={() => runDelete(c)} onEdit={() => setEditing(c)} />
               ))}
             </div>
           )}
@@ -111,13 +112,15 @@ export default function CadeauxJeux() {
         </motion.div>
       )}
 
-      {showNew && <NewCampaign restos={restos} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); load(); }} />}
+      {(showNew || editing) && <NewCampaign restos={restos} editing={editing}
+        onClose={() => { setShowNew(false); setEditing(null); }}
+        onCreated={() => { const wasEdit = !!editing; setShowNew(false); setEditing(null); setMsg(wasEdit ? "Jeu mis à jour." : "Jeu créé."); load(); }} />}
       {winners && <WinnersModal data={winners} onClose={() => setWinners(null)} />}
     </motion.div>
   );
 }
 
-function CampaignCard({ c, onDraw, onWinners, onDelete }) {
+function CampaignCard({ c, onDraw, onWinners, onDelete, onEdit }) {
   const [copied, setCopied] = useState(false);
   const isAuto = c.draw_mode === "auto";
   const qrRef = useRef(null);
@@ -148,6 +151,10 @@ function CampaignCard({ c, onDraw, onWinners, onDelete }) {
             background: c.status === "drawn" ? "#e1f5ee" : PL, color: c.status === "drawn" ? GREEN : "#C47D1A" }}>
             {c.status === "drawn" ? "Tiré" : "Ouvert"}
           </span>
+          <button onClick={onEdit} title="Modifier le jeu"
+            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, display: "flex" }}>
+            <Pencil size={14} color={MUTED} />
+          </button>
           <button onClick={onDelete} title="Supprimer le jeu"
             style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, display: "flex" }}>
             <Trash2 size={14} color="#dc2626" />
@@ -195,28 +202,54 @@ function CampaignCard({ c, onDraw, onWinners, onDelete }) {
   );
 }
 
-function NewCampaign({ restos, onClose, onCreated }) {
-  const [f, setF] = useState({ restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30, draw_mode: "manual", auto_per_batch: 4, auto_batch_size: 10 });
+function NewCampaign({ restos, onClose, onCreated, editing }) {
+  const isEdit = !!editing;
+  const [f, setF] = useState(() => isEdit
+    ? {
+        restaurant_id: editing.restaurant_id || "",
+        name: editing.name || "",
+        reward_label: editing.reward_label || "",
+        winners_count: editing.winners_count ?? 50,
+        voucher_expires_days: editing.voucher_expires_days ?? 30,
+        draw_mode: editing.draw_mode || "manual",
+        auto_per_batch: editing.auto_per_batch ?? 4,
+        auto_batch_size: editing.auto_batch_size ?? 10,
+      }
+    : { restaurant_id: "", name: "", reward_label: "", winners_count: 50, voucher_expires_days: 30, draw_mode: "manual", auto_per_batch: 4, auto_batch_size: 10 });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const submit = async () => {
     setErr("");
-    if (!f.restaurant_id) return setErr("Choisissez un restaurant.");
+    if (!isEdit && !f.restaurant_id) return setErr("Choisissez un restaurant.");
     if (f.name.trim().length < 2) return setErr("Nom du jeu requis.");
     if (f.reward_label.trim().length < 2) return setErr("Décrivez la récompense.");
     setBusy(true);
-    try { await promotionsService.createCampaign({ ...f, type: "lottery" }); onCreated(); }
-    catch (e) { setErr(e.response?.data?.message || "Création impossible."); setBusy(false); }
+    try {
+      if (isEdit) {
+        // Le restaurant et le QR ne changent pas : on n'envoie que les champs modifiables.
+        const { restaurant_id, ...editable } = f;
+        await promotionsService.updateCampaign(editing.id, editable);
+      } else {
+        await promotionsService.createCampaign({ ...f, type: "lottery" });
+      }
+      onCreated();
+    }
+    catch (e) { setErr(e.response?.data?.message || (isEdit ? "Modification impossible." : "Création impossible.")); setBusy(false); }
   };
   return (
-    <Overlay onClose={onClose} title="Nouveau jeu (tirage au sort)">
+    <Overlay onClose={onClose} title={isEdit ? "Modifier le jeu" : "Nouveau jeu (tirage au sort)"}>
       {err && <ErrBox>{err}</ErrBox>}
       <Field label="Restaurant">
-        <select value={f.restaurant_id} onChange={e => set("restaurant_id", e.target.value)} style={inp}>
-          <option value="">Choisir…</option>
-          {restos.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
+        {isEdit ? (
+          <input value={editing.restaurant_name || ""} disabled
+            style={{ ...inp, background: "#F5F2EC", color: MUTED }} />
+        ) : (
+          <select value={f.restaurant_id} onChange={e => set("restaurant_id", e.target.value)} style={inp}>
+            <option value="">Choisir…</option>
+            {restos.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
       </Field>
       <Field label="Nom du jeu"><input value={f.name} onChange={e => set("name", e.target.value)} placeholder="Ex : Jeu Pain Bro" style={inp} /></Field>
       <Field label="Récompense (article offert)"><input value={f.reward_label} onChange={e => set("reward_label", e.target.value)} placeholder="Ex : 1 pain au chocolat offert" style={inp} /></Field>
@@ -257,10 +290,17 @@ function NewCampaign({ restos, onClose, onCreated }) {
           </div>
         </div>
       )}
-      <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
-        Un QR sera généré. Les gens qui s'inscrivent via ce QR entrent dans le tirage.
-      </div>
-      <ModalActions onClose={onClose} onSubmit={submit} busy={busy} submitLabel="Créer le jeu" />
+      {!isEdit && (
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
+          Un QR sera généré. Les gens qui s'inscrivent via ce QR entrent dans le tirage.
+        </div>
+      )}
+      {isEdit && (
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
+          Le restaurant et le QR ne changent pas. Modifier la récompense s'applique aux prochains gagnants ; les bons déjà distribués gardent leur valeur.
+        </div>
+      )}
+      <ModalActions onClose={onClose} onSubmit={submit} busy={busy} submitLabel={isEdit ? "Enregistrer" : "Créer le jeu"} />
     </Overlay>
   );
 }

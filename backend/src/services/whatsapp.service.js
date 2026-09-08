@@ -10,6 +10,7 @@ import axios  from "axios";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { isInfobipConfigured, sendOtpWhatsApp } from "./infobip.service.js";
+import { twilioService } from "./twilio.service.js";
 
 const BASE_URL = `https://graph.facebook.com/v19.0/${env.WHATSAPP_PHONE_ID}/messages`;
 
@@ -160,6 +161,10 @@ async function sendPaymentSuccess({ phone, name, amount, method }) {
 async function sendText(to, body) {
   const phone = String(to || "").replace(/[^\d]/g, "");
   if (!phone) return { skipped: true };
+  // Fournisseur préféré : Twilio (texte libre : Sandbox / fenêtre de session 24h).
+  if (twilioService.isTwilioConfigured()) {
+    return twilioService.sendWhatsAppText(phone, body);
+  }
   if (!env.WHATSAPP_TOKEN) {
     logger.info(`[WhatsApp MOCK] → ${phone} | texte`, { body: String(body).slice(0, 120) });
     return { messageId: `mock-${Date.now()}` };
@@ -184,7 +189,10 @@ async function sendText(to, body) {
 async function sendOtpCode(to, code) {
   const phone = String(to || "").replace(/[^\d]/g, "");
   if (!phone) return { skipped: true };
-  // Fournisseur préféré : Infobip (quand configuré). Sinon Meta. Sinon mock.
+  // Ordre de préférence : Twilio (quand configuré) → Infobip → Meta → mock.
+  if (twilioService.isTwilioConfigured()) {
+    return twilioService.sendOtpWhatsApp(phone, code);
+  }
   if (isInfobipConfigured()) {
     return sendOtpWhatsApp(phone, code);
   }

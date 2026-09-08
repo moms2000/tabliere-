@@ -49,6 +49,17 @@ export const env = {
   INFOBIP_WA_LANG:      optional("INFOBIP_WA_LANG", "fr"),
   INFOBIP_OTP_BUTTON:   optional("INFOBIP_OTP_BUTTON", "true"),
 
+  // Twilio (WhatsApp) — fournisseur préféré quand configuré (OTP + notifs).
+  // ACCOUNT_SID/AUTH_TOKEN = identifiants du compte (secrets, jamais commités).
+  // WA_FROM = expéditeur WhatsApp : "whatsapp:+14155238886" (Sandbox de test)
+  //           ou "whatsapp:+225…" (numéro validé Meta en production).
+  // OTP_CONTENT_SID = ContentSid (HX…) du template OTP approuvé (prod). Si vide,
+  //           l'OTP part en texte libre (fonctionne dans le Sandbox / fenêtre 24h).
+  TWILIO_ACCOUNT_SID:     optional("TWILIO_ACCOUNT_SID", ""),
+  TWILIO_AUTH_TOKEN:      optional("TWILIO_AUTH_TOKEN", ""),
+  TWILIO_WA_FROM:         optional("TWILIO_WA_FROM", ""),
+  TWILIO_OTP_CONTENT_SID: optional("TWILIO_OTP_CONTENT_SID", ""),
+
   // Notifications push (Firebase Cloud Messaging — API HTTP v1)
   // JSON du compte de service Firebase (une seule variable, tout le JSON).
   FCM_SERVICE_ACCOUNT: optional("FCM_SERVICE_ACCOUNT", ""),

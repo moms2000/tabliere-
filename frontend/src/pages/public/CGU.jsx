@@ -76,7 +76,7 @@ export default function CGU() {
           },
           {
             title: "12. Droit applicable et litiges",
-            content: `Les présentes CGU sont régies par le droit ivoirien. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, le litige sera soumis à la juridiction compétente d'Abidjan, Côte d'Ivoire.\n\nPour tout litige ou réclamation : contact@tabliereci.net ou +225 07 00 00 00 00.`
+            content: `Les présentes CGU sont régies par le droit ivoirien. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, le litige sera soumis à la juridiction compétente d'Abidjan, Côte d'Ivoire.\n\nPour tout litige ou réclamation : contact@tabliereci.net ou +225 07 47 17 36 49.`
           },
         ].map((s, i) => (
           <section key={i} style={{ marginBottom: 32 }}>

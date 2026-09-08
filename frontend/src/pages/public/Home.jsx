@@ -478,7 +478,7 @@ function Footer({ scrollTo, listRef, experiencesRef, howRef }) {
             </div>
             {[
               "contact@tabliereci.net",
-              "+225 07 00 00 00 00",
+              "+225 07 47 17 36 49",
               "Abidjan, Côte d'Ivoire",
             ].map((l, i) => (
               <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>{l}</div>

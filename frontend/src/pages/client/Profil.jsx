@@ -487,7 +487,7 @@ export default function Profil() {
                 {t("profile_contact_desc")}
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <a href="https://wa.me/2250700000000" target="_blank" rel="noreferrer"
+                <a href="https://wa.me/2250747173649" target="_blank" rel="noreferrer"
                   style={{ display: "flex", alignItems: "center", gap: 6, background: "#E1F5EE",
                     color: G, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
                   <MessageCircle size={14} /> WhatsApp

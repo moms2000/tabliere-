@@ -70,7 +70,7 @@ export default function Confidentialite() {
           },
           {
             title: "10. Contact",
-            content: `Pour toute question relative à la protection de vos données :\n\nTablièreCI — Délégué à la protection des données\nE-mail : privacy@tabliereci.net\nAdresse : Abidjan, Côte d'Ivoire\nTéléphone : +225 07 00 00 00 00\n\nVous pouvez également adresser une réclamation auprès de l'Autorité de Régulation des Télécommunications de Côte d'Ivoire (ARTCI).`
+            content: `Pour toute question relative à la protection de vos données :\n\nTablièreCI — Délégué à la protection des données\nE-mail : privacy@tabliereci.net\nAdresse : Abidjan, Côte d'Ivoire\nTéléphone : +225 07 47 17 36 49\n\nVous pouvez également adresser une réclamation auprès de l'Autorité de Régulation des Télécommunications de Côte d'Ivoire (ARTCI).`
           },
         ].map((s, i) => (
           <section key={i} style={{ marginBottom: 32 }}>

@@ -1190,9 +1190,9 @@ const SETTINGS_DEFAULTS = {
   // Informations de contact
   site_name:          "TablièreCI",
   contact_email:      "info@tabliereci.net",
-  contact_phone:      "+225 07 00 00 00 00",
+  contact_phone:      "+225 07 47 17 36 49",
   contact_address:    "Abidjan, Côte d'Ivoire",
-  contact_whatsapp:   "+225 07 00 00 00 00",
+  contact_whatsapp:   "+225 07 47 17 36 49",
   // Réseaux sociaux
   facebook_url:       "",
   instagram_url:      "",

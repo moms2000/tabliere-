@@ -32,7 +32,7 @@ export default function MentionsLegales() {
         {[
           {
             title: "Éditeur du site",
-            content: `Raison sociale : TablièreCI\nForme juridique : SARL (Société à Responsabilité Limitée)\nCapital social : [À compléter lors de l'immatriculation]\nSiège social : Abidjan, Plateau, Côte d'Ivoire\nRCCM : [À compléter lors de l'immatriculation]\nNuméro fiscal : [À compléter]\nDirecteur de la publication : Mohamed Coulibaly\nTéléphone : +225 07 00 00 00 00\nE-mail : contact@tabliereci.net`
+            content: `Raison sociale : TablièreCI\nForme juridique : SARL (Société à Responsabilité Limitée)\nCapital social : [À compléter lors de l'immatriculation]\nSiège social : Abidjan, Plateau, Côte d'Ivoire\nRCCM : [À compléter lors de l'immatriculation]\nNuméro fiscal : [À compléter]\nDirecteur de la publication : Mohamed Coulibaly\nTéléphone : +225 07 47 17 36 49\nE-mail : contact@tabliereci.net`
           },
           {
             title: "Hébergement",

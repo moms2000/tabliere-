@@ -1047,7 +1047,7 @@ export default function HomeMobile() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {[
               { icon: Mail,   text: "contact@tabliereci.net" },
-              { icon: Phone,  text: "+225 07 00 00 00 00"    },
+              { icon: Phone,  text: "+225 07 47 17 36 49"    },
               { icon: MapPin, text: "Abidjan, Côte d'Ivoire" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -61,9 +61,9 @@ export default function SiteParametres() {
   const [settings, setSettings] = useState({
     site_name:        "TablièreCI",
     contact_email:    "contact@tabliereci.net",
-    contact_phone:    "+225 07 00 00 00 00",
+    contact_phone:    "+225 07 47 17 36 49",
     contact_address:  "Abidjan, Côte d'Ivoire",
-    contact_whatsapp: "+225 07 00 00 00 00",
+    contact_whatsapp: "+225 07 47 17 36 49",
     facebook_url:     "",
     instagram_url:    "",
     logo_url:         "",
